@@ -154,11 +154,7 @@ const App = {
     this.state.currentGroupId = groupId;
     this.state.selected.clear();
     // 切换分组时退出批量模式，避免"批量栏显示但未选中"的困惑状态
-    if (this.state.batchMode) {
-      this.state.batchMode = false;
-      document.getElementById('btn-edit').classList.remove('active');
-      document.getElementById('batch-bar').style.display = 'none';
-    }
+    if (this.state.batchMode) this.toggleBatchMode();
     const cfg = await Storage.getBoardConfig(groupId);
     Object.assign(this.state, cfg);
     this.applySortSelect();
@@ -373,7 +369,7 @@ const App = {
     // 自动补全前缀
     code = code.toLowerCase();
     if (!/^(sh|sz)/.test(code)) {
-      code = (code.startsWith('6') || code.startsWith('5') || code.startsWith('11') || code.startsWith('13')) ? 'sh' + code : 'sz' + code;
+      code = (code.startsWith('6') || code.startsWith('5') || code.startsWith('11') || code.startsWith('12') || code.startsWith('13')) ? 'sh' + code : 'sz' + code;
     }
     // 校验代码格式：sh/sz + 6位数字
     if (!/^s[hz]\d{6}$/.test(code)) {
@@ -908,7 +904,13 @@ const App = {
 
   // ===== 自定义确认弹层（替代原生 confirm()，避免 popup 失焦关闭） =====
   _confirm(msg, { title = '确认', okText = '确认', danger = true } = {}) {
+    // 关闭前一个未完成的确认弹窗，防止并发导致 Promise 悬挂
+    if (this._confirmResolve) {
+      this._confirmResolve(false);
+      this._confirmCleanup?.();
+    }
     return new Promise((resolve) => {
+      this._confirmResolve = resolve;
       const modal = document.getElementById('confirm-modal');
       document.getElementById('confirm-title').textContent = title;
       document.getElementById('confirm-msg').textContent = msg;
@@ -917,11 +919,21 @@ const App = {
       okBtn.textContent = okText;
       okBtn.className = danger ? 'btn-danger' : 'btn-primary';
       modal.style.display = 'flex';
+      // 键盘支持：Escape 取消，Enter 确认
+      const onKeydown = (e) => {
+        if (e.key === 'Escape') { cleanup(); resolve(false); }
+        if (e.key === 'Enter')  { cleanup(); resolve(true); }
+      };
+      document.addEventListener('keydown', onKeydown);
       const cleanup = () => {
         modal.style.display = 'none';
         okBtn.onclick = null;
         cancelBtn.onclick = null;
+        document.removeEventListener('keydown', onKeydown);
+        this._confirmResolve = null;
+        this._confirmCleanup = null;
       };
+      this._confirmCleanup = cleanup;
       okBtn.onclick = () => { cleanup(); resolve(true); };
       cancelBtn.onclick = () => { cleanup(); resolve(false); };
     });
@@ -1004,10 +1016,13 @@ const App = {
     document.querySelectorAll('.modal-mask').forEach(m => {
       m.addEventListener('click', (e) => { if (e.target === m) m.style.display = 'none'; });
     });
-    // 确认弹层遮罩点击 = 取消（需 resolve false）
+    // 确认弹层遮罩点击 = 取消（阻止冒泡，避免通用 .modal-mask handler 干扰）
     const confirmMask = document.getElementById('confirm-modal');
     confirmMask.addEventListener('click', (e) => {
-      if (e.target === confirmMask) document.getElementById('confirm-cancel').click();
+      if (e.target === confirmMask) {
+        e.stopImmediatePropagation();
+        document.getElementById('confirm-cancel').click();
+      }
     });
   }
 };

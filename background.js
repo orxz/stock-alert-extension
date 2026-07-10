@@ -33,11 +33,13 @@ function formatTooltipLine(stock, quote) {
 
 // 重入保护：防止 alarms 和 storage.onChanged 同时触发导致并发
 let _updating = false;
+let _pending = false;  // 标记是否有被跳过的更新需要重试
 
 // 核心更新逻辑
 async function updateBadgeAndTitle() {
-  if (_updating) return;  // 已有更新在进行中，跳过
+  if (_updating) { _pending = true; return; }  // 已有更新在进行中，标记待重试
   _updating = true;
+  _pending = false;
   try {
     const data = await Storage.loadAll();
     const watchlist = data.watchlist || [];
@@ -86,6 +88,11 @@ async function updateBadgeAndTitle() {
     console.warn('[bg] update failed:', e.message);
   } finally {
     _updating = false;
+    // 如果在更新期间又有新变更触发，立即执行一次补偿更新
+    if (_pending) {
+      _pending = false;
+      updateBadgeAndTitle();
+    }
   }
 }
 

@@ -202,7 +202,10 @@ const Storage = {
     // 取消置顶时删除 key 而非置 false，避免数据残留膨胀
     if (stock.pinned[groupId]) {
       delete stock.pinned[groupId];
+      // 当 pinned 变为空对象时整体删除
+      if (Object.keys(stock.pinned).length === 0) delete stock.pinned;
     } else {
+      if (!stock.pinned) stock.pinned = {};
       stock.pinned[groupId] = true;
     }
     await this.saveWatchlist(watchlist);

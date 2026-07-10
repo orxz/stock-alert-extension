@@ -97,7 +97,7 @@ const Quotes = {
   _toSecids(codes) {
     return codes.map(code => {
       const c = code.toLowerCase();
-      if (c.startsWith('sh') || c.startsWith('6') || c.startsWith('5') || c.startsWith('11') || c.startsWith('13')) return '1.' + code.replace(/^(sh|sz)/i, '');
+      if (c.startsWith('sh') || c.startsWith('6') || c.startsWith('5') || c.startsWith('11') || c.startsWith('12') || c.startsWith('13')) return '1.' + code.replace(/^(sh|sz)/i, '');
       return '0.' + code.replace(/^(sh|sz)/i, '');
     });
   },
