@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "股票提醒助手 - 自选股分组与看板",
-  "version": "1.0.0",
+  "version": "3.14.0",
   "description": "自选股分组与看板管理：分组、排序、自定义列、实时行情、智能搜索。",
   "action": {
     "default_title": "股票提醒助手",
