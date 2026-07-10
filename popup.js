@@ -810,11 +810,13 @@ const App = {
   async toggleColumn(field, checked) {
     if (checked) {
       if (!this.state.columns.includes(field)) this.state.columns.push(field);
+      // 同步维护 columnOrder：新字段追加到末尾，确保 renderList 能命中
+      if (!this.state.columnOrder.includes(field)) this.state.columnOrder.push(field);
     } else {
       if (this.state.columns.length <= 1) { this.toast('至少保留 1 个字段'); this.renderColPanel(); return; }
       this.state.columns = this.state.columns.filter(c => c !== field);
     }
-    this._scheduleBoardSave(this.state.currentGroupId, { columns: this.state.columns });
+    this._scheduleBoardSave(this.state.currentGroupId, { columns: this.state.columns, columnOrder: this.state.columnOrder });
     this.renderBoard();
   },
 
