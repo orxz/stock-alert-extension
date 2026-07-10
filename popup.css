@@ -134,7 +134,7 @@ body {
 .card-menu-divider { height: 1px; background: #F0F2F5; }
 
 /* 列表行虚拟滚动（PRD 4.1：超过 50 只时启用，跳过屏幕外渲染） */
-.list-row.virtual { content-visibility: auto; contain-intrinsic-size: 28px; }
+.list-row.virtual { content-visibility: auto; contain-intrinsic-size: 25px; }
 
 /* 列表视图 */
 .list-view { width: 100%; }

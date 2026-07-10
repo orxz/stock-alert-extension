@@ -219,7 +219,7 @@ const Storage = {
 
   async saveBoardConfigForGroup(groupId, cfg) {
     const { boardConfig } = await this.loadAll();
-    boardConfig[groupId] = { ...boardConfig[groupId], ...cfg };
+    boardConfig[groupId] = { ...(boardConfig[groupId] || {}), ...cfg };
     await this.saveBoardConfig(boardConfig);
   }
 };

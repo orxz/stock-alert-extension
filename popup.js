@@ -88,9 +88,13 @@ const App = {
     this._timer = setInterval(() => {
       this.refreshQuotes().then(() => this.renderBoard()).catch(() => {});
     }, 10000);
-    // popup 关闭时清除定时器，防止访问已销毁的 DOM
+    // popup 关闭时清除定时器 + flush 待保存配置，防止 DOM 访问 + 数据丢失
     window.addEventListener('beforeunload', () => {
       if (this._timer) { clearInterval(this._timer); this._timer = null; }
+      if (this._boardSaveTimer) {
+        clearTimeout(this._boardSaveTimer);
+        this._flushBoardSave();
+      }
     });
   },
 
@@ -943,15 +947,21 @@ const App = {
     });
   },
 
-  // ===== 配置写入防抖（PRD 4.1：200ms 批量写入，避免频繁 storage IO） =====
+  // ===== 配置写入防抖（PRD 4.1：200ms 批量写入，按分组隔离，避免频繁/跨组 storage IO） =====
   _scheduleBoardSave(groupId, cfg) {
     if (!this._pendingBoardCfg) this._pendingBoardCfg = {};
-    Object.assign(this._pendingBoardCfg, cfg);
+    if (!this._pendingBoardCfg[groupId]) this._pendingBoardCfg[groupId] = {};
+    Object.assign(this._pendingBoardCfg[groupId], cfg);
     clearTimeout(this._boardSaveTimer);
-    this._boardSaveTimer = setTimeout(() => {
-      Storage.saveBoardConfigForGroup(groupId, this._pendingBoardCfg);
-      this._pendingBoardCfg = {};
-    }, 200);
+    this._boardSaveTimer = setTimeout(() => this._flushBoardSave(), 200);
+  },
+
+  _flushBoardSave() {
+    if (!this._pendingBoardCfg) return;
+    for (const [gid, gcfg] of Object.entries(this._pendingBoardCfg)) {
+      Storage.saveBoardConfigForGroup(gid, gcfg);
+    }
+    this._pendingBoardCfg = {};
   },
 
   // ===== 渲染入口 =====
