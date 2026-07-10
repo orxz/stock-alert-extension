@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>股票提醒助手 - 隐私权政策</title>
+<style>
+:root {
+  --primary: #3A6EA5;
+  --primary-dark: #2D5680;
+  --text: #333;
+  --text-light: #666;
+  --bg: #f8f9fa;
+  --border: #e0e0e0;
+  --white: #fff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+}
+.container { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
+.header {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: var(--white);
+  padding: 48px 24px;
+  text-align: center;
+}
+.header h1 { font-size: 28px; margin-bottom: 8px; }
+.header .subtitle { font-size: 15px; opacity: 0.85; }
+.update-date {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+.section {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.section h2 {
+  color: var(--primary);
+  font-size: 20px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--border);
+}
+.section p { margin-bottom: 12px; color: var(--text); }
+.section ul { margin: 12px 0 12px 24px; }
+.section li { margin-bottom: 8px; }
+.permission-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+.permission-table th, .permission-table td {
+  border: 1px solid var(--border);
+  padding: 12px;
+  text-align: left;
+  font-size: 14px;
+}
+.permission-table th {
+  background: var(--primary);
+  color: var(--white);
+}
+.permission-table td:first-child {
+  font-weight: 600;
+  color: var(--primary-dark);
+  white-space: nowrap;
+}
+.callout {
+  background: #e8f0fe;
+  border-left: 4px solid var(--primary);
+  padding: 16px 20px;
+  border-radius: 0 8px 8px 0;
+  margin: 16px 0;
+}
+.callout strong { color: var(--primary-dark); }
+.footer {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+  padding: 24px;
+}
+@media (max-width: 600px) {
+  .container { padding: 20px 12px; }
+  .section { padding: 20px; }
+  .header { padding: 32px 16px; }
+  .header h1 { font-size: 22px; }
+  .permission-table { font-size: 12px; }
+  .permission-table th, .permission-table td { padding: 8px; }
+}
+</style>
+</head>
+<body style="padding-bottom: 50px;">
+<div class="header">
+<h1>股票提醒助手 - 隐私权政策</h1>
+<p class="subtitle">Stock Alert Assistant - Privacy Policy</p>
+</div>
+<div class="container">
+<p class="update-date">最后更新日期：2026年7月10日</p>
+<div class="section">
+<h2>一、概述</h2>
+<p>「股票提醒助手」（以下简称"本插件"）是一款 Chrome 浏览器扩展，提供自选股分组与看板管理功能。本插件尊重并保护用户隐私，<strong>不收集、不存储、不传输任何用户个人数据</strong>。所有用户配置数据仅保存在用户本地浏览器中，不会发送到任何服务器。</p>
+<div class="callout">
+<strong>核心承诺：</strong>本插件不收集任何个人身份信息、浏览记录、位置数据或其他用户隐私数据。插件仅访问公开的股票行情 API 以展示实时行情信息。
+    </div>
+</div>
+<div class="section">
+<h2>二、数据收集说明</h2>
+<p>本插件<strong>不收集</strong>以下任何类型的用户数据：</p>
+<ul>
+<li>个人身份信息（姓名、邮箱、电话等）</li>
+<li>健康信息</li>
+<li>财务和付款信息（不处理任何交易或支付数据）</li>
+<li>身份验证信息（密码、凭证等）</li>
+<li>个人通讯（邮件、短信、聊天记录）</li>
+<li>位置信息（GPS 或 IP 定位）</li>
+<li>网络浏览记录</li>
+<li>用户活动数据（点击、鼠标、键盘行为）</li>
+<li>网站内容（页面文字、图片、视频）</li>
+</ul>
+<p>所有用户配置（自选股列表、分组、排序、列设置等）均通过 <code>chrome.storage.local</code> 存储在用户本地浏览器中，不会同步到云端，也不会发送给开发者或任何第三方。</p>
+</div>
+<div class="section">
+<h2>三、权限说明</h2>
+<p>本插件请求的权限及其用途如下：</p>
+<table class="permission-table">
+<thead><tr><th>权限</th><th>用途说明</th></tr></thead>
+<tbody>
+<tr><td>storage</td><td>用于在本地浏览器中存储用户的自选股列表、分组配置、排序偏好、列设置等数据，确保用户关闭浏览器后配置不丢失。数据仅存储在本地，不会同步到云端。</td></tr>
+<tr><td>alarms</td><td>用于设置定时器，定期刷新股票行情数据（每 30 秒），以实现实时行情展示和涨跌提醒功能。</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section">
+<h2>四、主机权限说明</h2>
+<p>本插件需要访问以下外部 API 以获取公开的股票行情数据：</p>
+<table class="permission-table">
+<thead><tr><th>主机</th><th>用途说明</th></tr></thead>
+<tbody>
+<tr><td>push2.eastmoney.com</td><td>东方财富实时行情 API（主要数据源），获取股票实时价格、涨跌幅等行情数据。</td></tr>
+<tr><td>searchapi.eastmoney.com</td><td>东方财富搜索建议 API，用于添加自选股时的股票代码/名称/拼音搜索补全。</td></tr>
+<tr><td>hq.sinajs.cn</td><td>新浪财经实时行情 API（备用数据源），在主数据源不可用时作为备选。</td></tr>
+</tbody>
+</table>
+<div class="callout">
+<strong>重要说明：</strong>插件仅从上述 API 获取<strong>公开的股票行情数据</strong>（价格、涨跌幅、成交量等），<strong>不会向这些服务发送任何用户数据</strong>。请求中不包含用户身份信息、浏览记录或其他个人数据。
+    </div>
+</div>
+<div class="section">
+<h2>五、数据存储</h2>
+<p>本插件的所有数据存储均在用户本地浏览器中完成：</p>
+<ul>
+<li><strong>存储位置：</strong>Chrome 浏览器本地存储（chrome.storage.local）</li>
+<li><strong>存储内容：</strong>自选股列表、分组配置、排序偏好、列设置等</li>
+<li><strong>存储期限：</strong>数据保存在用户浏览器中，直到用户主动删除或卸载插件</li>
+<li><strong>数据同步：</strong>不会将数据同步到云端或任何远程服务器</li>
+</ul>
+</div>
+<div class="section">
+<h2>六、第三方服务</h2>
+<p>本插件使用以下第三方公开 API 获取股票行情数据：</p>
+<ul>
+<li><strong>东方财富网</strong>（eastmoney.com）— 提供实时股票行情数据和搜索建议服务</li>
+<li><strong>新浪财经</strong>（sina.com.cn）— 提供备用实时股票行情数据</li>
+</ul>
+<p>这些服务仅提供公开的市场数据，本插件不会向其发送任何用户数据。用户使用本插件时，上述服务的使用条款和隐私政策同样适用。</p>
+</div>
+<div class="section">
+<h2>七、数据安全</h2>
+<p>由于本插件不收集、不传输任何用户个人数据，因此不存在数据泄露风险。所有配置数据存储在用户本地浏览器中，受浏览器自身的安全机制保护。插件不使用任何远程代码，所有逻辑均在本地执行（CSP: script-src 'self'）。</p>
+</div>
+<div class="section">
+<h2>八、儿童隐私</h2>
+<p>本插件不面向 13 岁以下儿童，也不会有意收集儿童的个人信息。由于本插件不收集任何用户数据，因此对儿童隐私无任何影响。</p>
+</div>
+<div class="section">
+<h2>九、远程代码声明</h2>
+<p>本插件<strong>不使用任何远程代码</strong>。所有 JavaScript 代码均打包在插件内部，通过 Manifest V3 的内容安全策略（CSP: <code>script-src 'self'; object-src 'self'</code>）确保不会加载或执行任何外部脚本。</p>
+</div>
+<div class="section">
+<h2>十、政策变更</h2>
+<p>如果本隐私权政策发生变更，更新后的政策将发布在此页面上，并更新页面顶部的"最后更新日期"。由于本插件不收集用户数据，用户无需担心政策变更对其隐私的影响。</p>
+</div>
+<div class="section">
+<h2>十一、联系我们</h2>
+<p>如果您对本隐私权政策有任何疑问，请通过以下方式联系开发者：</p>
+<ul>
+<li>邮箱：stockalert.helper@gmail.com</li>
+</ul>
+</div>
+</div>
+<div class="footer">
+<p>© 2026 股票提醒助手. 保留所有权利.</p>
+</div>
+</body>
+</html>

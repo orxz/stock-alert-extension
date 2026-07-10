@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "股票提醒助手 - 自选股分组与看板",
+  "version": "1.0.0",
+  "description": "自选股分组与看板管理：分组、排序、自定义列、实时行情、智能搜索。",
+  "action": {
+    "default_title": "股票提醒助手",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://hq.sinajs.cn/*",
+    "https://push2.eastmoney.com/*",
+    "https://searchapi.eastmoney.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

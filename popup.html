@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>股票提醒助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- 顶部头部 -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-logo">📈</span>
+      <span class="brand-name">股票提醒助手</span>
+      <span class="brand-ver">1.0.0</span>
+    </div>
+    <div class="header-actions">
+      <button id="btn-add-stock" class="header-btn" title="添加自选股">＋</button>
+      <button id="btn-edit" class="header-btn" title="多选编辑">✎</button>
+      <button id="btn-toggle-price" class="header-btn" title="隐藏价格">👁</button>
+    </div>
+  </header>
+
+  <!-- 分组 Tab 栏 -->
+  <nav class="group-tabs" id="group-tabs">
+    <div class="tabs-scroll" id="tabs-scroll"></div>
+    <button id="btn-new-group" class="tab-add" title="新建分组">＋</button>
+  </nav>
+
+  <!-- 工具栏 -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <select id="sort-select" class="sort-select" title="排序方式">
+        <option value="manual">手动排序</option>
+        <option value="changePercent-desc">涨跌幅 ↓</option>
+        <option value="changePercent-asc">涨跌幅 ↑</option>
+        <option value="price-desc">现价 ↓</option>
+        <option value="price-asc">现价 ↑</option>
+        <option value="amount-desc">成交额 ↓</option>
+        <option value="addedAt-asc">自选时间 ↑</option>
+      </select>
+      <input id="search-input" class="search-input" type="text" placeholder="搜索代码/拼音/名称/行业" title="搜索自选股（支持代码前缀、拼音首字母、中文名称、行业标签）">
+    </div>
+    <div class="toolbar-right">
+      <button id="btn-view-grid" class="view-btn active" title="网格视图">▦</button>
+      <button id="btn-view-list" class="view-btn" title="列表视图">☰</button>
+      <button id="btn-col-config" class="view-btn" title="列设置">⚙</button>
+    </div>
+  </div>
+
+  <!-- 看板区域 -->
+  <main class="board" id="board">
+    <div class="empty-state" id="empty-state" style="display:none;">
+      <div class="empty-icon">📋</div>
+      <p>当前分组暂无自选股</p>
+      <button id="btn-empty-add" class="btn-primary">添加自选股</button>
+    </div>
+    <div id="grid-view" class="grid-view"></div>
+    <div id="list-view" class="list-view" style="display:none;">
+      <div class="list-header" id="list-header"></div>
+      <div class="list-body" id="list-body"></div>
+    </div>
+  </main>
+
+  <!-- 多选操作栏 -->
+  <footer class="batch-bar" id="batch-bar" style="display:none;">
+    <span id="batch-count">已选 0 只</span>
+    <button class="batch-btn" id="batch-move">移动到分组</button>
+    <button class="batch-btn batch-danger" id="batch-remove">移出自选</button>
+    <button class="batch-btn batch-cancel" id="batch-cancel">取消</button>
+  </footer>
+
+  <!-- 列配置面板 -->
+  <aside class="col-panel" id="col-panel" style="display:none;">
+    <div class="col-panel-header">
+      <button id="col-panel-back" class="col-panel-back">← 返回</button>
+      <span>列设置</span>
+      <button id="col-panel-close" class="close-btn">✕</button>
+    </div>
+    <div class="col-panel-body" id="col-panel-body"></div>
+    <div class="col-panel-hint">至少保留 1 个字段。拖拽可调整列顺序。</div>
+  </aside>
+
+  <!-- 悬浮行情浮窗 -->
+  <div class="quote-tooltip" id="quote-tooltip" style="display:none;"></div>
+
+  <!-- 添加股票弹层 -->
+  <div class="modal-mask" id="add-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <span>添加自选股</span>
+        <button id="add-close" class="close-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="code-input-wrap">
+          <input id="add-code" class="modal-input" type="text" placeholder="股票代码，如 sz300418 / sh600519" autocomplete="off">
+          <div id="code-suggest" class="code-suggest" style="display:none;"></div>
+        </div>
+        <input id="add-name" class="modal-input" type="text" placeholder="股票名称（可选，自动获取）">
+        <div class="modal-group-select">
+          <label>加入分组：</label>
+          <div id="add-group-list" class="modal-group-list"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="add-cancel" class="btn-secondary">取消</button>
+        <button id="add-confirm" class="btn-primary">确认添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建/重命名分组弹层 -->
+  <div class="modal-mask" id="group-modal" style="display:none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <span id="group-modal-title">新建分组</span>
+        <button id="group-close" class="close-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <input id="group-name-input" class="modal-input" type="text" placeholder="分组名称（1-12 字符）" maxlength="12">
+        <div id="group-modal-err" class="modal-err"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="group-delete" class="btn-danger" style="display:none;margin-right:auto;">删除分组</button>
+        <button id="group-cancel" class="btn-secondary">取消</button>
+        <button id="group-confirm" class="btn-primary">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 移动到分组弹层 -->
+  <div class="modal-mask" id="move-modal" style="display:none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <span>移动到分组</span>
+        <button id="move-close" class="close-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="move-group-list" class="modal-group-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="move-cancel" class="btn-secondary">取消</button>
+        <button id="move-confirm" class="btn-primary">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用确认弹层（替代原生 confirm()） -->
+  <div class="modal-mask" id="confirm-modal" style="display:none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <span id="confirm-title">确认</span>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-msg" class="confirm-msg"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="confirm-cancel" class="btn-secondary">取消</button>
+        <button id="confirm-ok" class="btn-danger">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- 数据来源声明 -->
+  <div class="data-source" id="data-source">行情数据：演示数据（Demo）</div>
+
+  <script src="storage.js"></script>
+  <script src="quotes.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
