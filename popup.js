@@ -657,6 +657,10 @@ const App = {
       row.onmouseleave = () => this.hideQuoteTooltip();
       body.appendChild(row);
     });
+    // 虚拟滚动：超过 50 只时启用 content-visibility（PRD 4.1）
+    if (stocks.length > 50) {
+      body.querySelectorAll('.list-row').forEach(r => r.classList.add('virtual'));
+    }
   },
 
   formatVolume(v) {
@@ -690,7 +694,7 @@ const App = {
       this.state.sortField = field;
       this.state.sortDirection = dir;
     }
-    await Storage.saveBoardConfigForGroup(this.state.currentGroupId, { sortField: this.state.sortField, sortDirection: this.state.sortDirection });
+    this._scheduleBoardSave(this.state.currentGroupId, { sortField: this.state.sortField, sortDirection: this.state.sortDirection });
     this.renderBoard();
   },
 
@@ -702,7 +706,7 @@ const App = {
       this.state.sortDirection = 'desc';
     }
     this.applySortSelect();
-    await Storage.saveBoardConfigForGroup(this.state.currentGroupId, { sortField: this.state.sortField, sortDirection: this.state.sortDirection });
+    this._scheduleBoardSave(this.state.currentGroupId, { sortField: this.state.sortField, sortDirection: this.state.sortDirection });
     this.renderBoard();
   },
 
@@ -714,7 +718,7 @@ const App = {
     await Storage.setManualOrder(this.state.currentGroupId, ids);
     this.state.sortField = 'manual';
     this.applySortSelect();
-    await Storage.saveBoardConfigForGroup(this.state.currentGroupId, { sortField: 'manual' });
+    this._scheduleBoardSave(this.state.currentGroupId, { sortField: 'manual' });
     this.renderBoard();
   },
 
@@ -752,7 +756,7 @@ const App = {
   // ===== 视图切换 =====
   async switchView(mode) {
     this.state.viewMode = mode;
-    await Storage.saveBoardConfigForGroup(this.state.currentGroupId, { viewMode: mode });
+    this._scheduleBoardSave(this.state.currentGroupId, { viewMode: mode });
     document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(mode === 'grid' ? 'btn-view-grid' : 'btn-view-list').classList.add('active');
     this.renderBoard();
@@ -806,7 +810,7 @@ const App = {
       if (this.state.columns.length <= 1) { this.toast('至少保留 1 个字段'); this.renderColPanel(); return; }
       this.state.columns = this.state.columns.filter(c => c !== field);
     }
-    await Storage.saveBoardConfigForGroup(this.state.currentGroupId, { columns: this.state.columns });
+    this._scheduleBoardSave(this.state.currentGroupId, { columns: this.state.columns });
     this.renderBoard();
   },
 
@@ -816,7 +820,7 @@ const App = {
     if (from < 0 || to < 0) return;
     order.splice(to, 0, order.splice(from, 1)[0]);
     this.state.columnOrder = order;
-    await Storage.saveBoardConfigForGroup(this.state.currentGroupId, { columnOrder: order });
+    this._scheduleBoardSave(this.state.currentGroupId, { columnOrder: order });
     this.renderColPanel();
     this.renderBoard();
   },
@@ -937,6 +941,17 @@ const App = {
       okBtn.onclick = () => { cleanup(); resolve(true); };
       cancelBtn.onclick = () => { cleanup(); resolve(false); };
     });
+  },
+
+  // ===== 配置写入防抖（PRD 4.1：200ms 批量写入，避免频繁 storage IO） =====
+  _scheduleBoardSave(groupId, cfg) {
+    if (!this._pendingBoardCfg) this._pendingBoardCfg = {};
+    Object.assign(this._pendingBoardCfg, cfg);
+    clearTimeout(this._boardSaveTimer);
+    this._boardSaveTimer = setTimeout(() => {
+      Storage.saveBoardConfigForGroup(groupId, this._pendingBoardCfg);
+      this._pendingBoardCfg = {};
+    }, 200);
   },
 
   // ===== 渲染入口 =====
