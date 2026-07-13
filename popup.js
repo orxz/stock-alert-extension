@@ -65,7 +65,17 @@ const App = {
     { code: 'sz002594', name: '比亚迪', tag: '汽车', pinyin: 'byd' },
     { code: 'sz300059', name: '东方财富', tag: '证券', pinyin: 'dfcf' },
     { code: 'sz300750', name: '宁德时代', tag: '新能源', pinyin: 'ndsd' },
-    { code: 'sz300760', name: '迈瑞医疗', tag: '医疗', pinyin: 'mrly' }
+    { code: 'sz300760', name: '迈瑞医疗', tag: '医疗', pinyin: 'mrly' },
+    // 科创板（sh688xxx）
+    { code: 'sh688981', name: '中芯国际', tag: '半导体', pinyin: 'zxgj' },
+    { code: 'sh688111', name: '金山办公', tag: '软件', pinyin: 'jsbg' },
+    { code: 'sh688036', name: '传音控股', tag: '手机', pinyin: 'cykg' },
+    { code: 'sh688256', name: '寒武纪', tag: 'AI芯片', pinyin: 'hwj' },
+    { code: 'sh688599', name: '天合光能', tag: '光伏', pinyin: 'thgn' },
+    // 北交所（bj920xxx/bj8xxxxx/bj4xxxxx）
+    { code: 'bj920185', name: '贝特瑞', tag: '新能源', pinyin: 'btr' },
+    { code: 'bj920368', name: '连城数控', tag: '光伏设备', pinyin: 'lcsk' },
+    { code: 'bj920819', name: '颖泰生物', tag: '农药', pinyin: 'ytsw' }
   ],
 
   async init() {
@@ -303,7 +313,7 @@ const App = {
     const lower = kw.toLowerCase();
     const local = [];
     for (const s of this.HOT_STOCKS) {
-      const numCode = s.code.replace(/^(sh|sz)/, '');
+      const numCode = s.code.replace(/^(sh|sz|bj)/, '');
       const pinyin = (s.pinyin || '').toLowerCase();
       let matchType = null, priority = 99;
       if (numCode.startsWith(lower) || s.code.toLowerCase().startsWith(lower)) {
@@ -370,13 +380,15 @@ const App = {
     let code = document.getElementById('add-code').value.trim();
     const name = document.getElementById('add-name').value.trim();
     if (!code) { this.toast('请输入股票代码'); return; }
-    // 自动补全前缀
+    // 自动补全前缀：北交所(4xx/8xx/9xx)→bj，沪市(6xx/5xx等)→sh，深市→sz
     code = code.toLowerCase();
-    if (!/^(sh|sz)/.test(code)) {
-      code = (code.startsWith('6') || code.startsWith('5') || code.startsWith('11') || code.startsWith('12') || code.startsWith('13')) ? 'sh' + code : 'sz' + code;
+    if (!/^(sh|sz|bj)/.test(code)) {
+      if (/^(4|8|9)/.test(code)) code = 'bj' + code;
+      else if (/^(6|5|11|12|13)/.test(code)) code = 'sh' + code;
+      else code = 'sz' + code;
     }
-    // 校验代码格式：sh/sz + 6位数字
-    if (!/^s[hz]\d{6}$/.test(code)) {
+    // 校验代码格式：sh/sz/bj + 6位数字
+    if (!/^(sh|sz|bj)\d{6}$/.test(code)) {
       this.toast('股票代码格式不正确，请输入6位数字代码');
       return;
     }
@@ -435,7 +447,7 @@ const App = {
       const kw = this.state.searchKeyword.toLowerCase();
       stocks = stocks.filter(s => {
         // 1. 代码匹配（前缀/包含）
-        const numCode = s.code.replace(/^(sh|sz)/, '');
+        const numCode = s.code.replace(/^(sh|sz|bj)/, '');
         if (numCode.includes(kw) || s.code.toLowerCase().includes(kw)) return true;
         // 2. 中文名称包含
         if (s.name && s.name.toLowerCase().includes(kw)) return true;

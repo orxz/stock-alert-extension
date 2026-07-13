@@ -13,7 +13,15 @@ const Quotes = {
     'sz300750': { name: '宁德时代', price: 210.50, prevClose: 205.00 },
     'sh600036': { name: '招商银行', price: 35.80, prevClose: 36.10 },
     'sz002475': { name: '立讯精密', price: 38.90, prevClose: 37.50 },
-    'sh601899': { name: '紫金矿业', price: 14.20, prevClose: 13.85 }
+    'sh601899': { name: '紫金矿业', price: 14.20, prevClose: 13.85 },
+    // 科创板（688xxx）演示数据
+    'sh688981': { name: '中芯国际', price: 171.99, prevClose: 163.02 },
+    'sh688111': { name: '金山办公', price: 305.50, prevClose: 298.80 },
+    'sh688256': { name: '寒武纪', price: 1120.00, prevClose: 1095.00 },
+    // 北交所（920xxx）演示数据
+    'bj920185': { name: '贝特瑞', price: 22.05, prevClose: 22.69 },
+    'bj920368': { name: '连城数控', price: 25.77, prevClose: 25.00 },
+    'bj920819': { name: '颖泰生物', price: 2.63, prevClose: 2.70 }
   },
 
   isDemo: false,
@@ -40,14 +48,21 @@ const Quotes = {
       const table = json.QuotationCodeTable || (json._oma_data && json._oma_data.QuotationCodeTable);
       const data = table && table.Data;
       if (!data || !Array.isArray(data)) return [];
-      // 只保留 A 股（Classify === 'AStock'），过滤板块/基金/指数/债券
+      // 筛选 A 股类型：沪A(1)/深A(2)/科创板(25)/京A·北交所(27)
+      // 注：科创板 Classify='23'，北交所 Classify='NEEQ'+SecurityTypeName 含'京'
+      const VALID_SEC_TYPES = ['1', '2', '25', '27'];
       const stocks = [];
       for (const item of data) {
-        if (!item || item.Classify !== 'AStock') continue;
+        if (!item) continue;
+        const secType = String(item.SecurityType || '');
+        if (!VALID_SEC_TYPES.includes(secType)) continue;
         const rawCode = String(item.Code || '');
         if (!/^\d{6}$/.test(rawCode)) continue;
-        // MktNum: "1" = 沪市(sh), "2" = 深市(sz)
-        const prefix = item.MktNum === '1' ? 'sh' : 'sz';
+        // 确定前缀：科创板→sh，京A→bj，沪A→sh，深A→sz
+        let prefix;
+        if (secType === '27') prefix = 'bj';
+        else if (secType === '25' || secType === '1' || item.MktNum === '1') prefix = 'sh';
+        else prefix = 'sz';
         stocks.push({
           code: prefix + rawCode,
           name: item.Name || rawCode,
@@ -92,19 +107,25 @@ const Quotes = {
   },
 
   // ===== 东方财富 push2 API =====
-  // 将代码转为 secids：0=深市(sz/创业板/中小板), 1=沪市(sh)
-  // 沪市代码前缀：600/601/603（A股）、5（基金/ETF）、11/13（转债）
+  // 将代码转为 secids：0=深市(sz)/北交所(bj), 1=沪市(sh)
+  // 沪市代码前缀：600/601/603/688（A股/科创板）、5（基金/ETF）、11/13（转债）
+  // 北交所代码前缀：4xx/8xx/9xx（bj前缀），东方财富 secids 中 market=0
   _toSecids(codes) {
     return codes.map(code => {
       const c = code.toLowerCase();
-      if (c.startsWith('sh') || c.startsWith('6') || c.startsWith('5') || c.startsWith('11') || c.startsWith('12') || c.startsWith('13')) return '1.' + code.replace(/^(sh|sz)/i, '');
-      return '0.' + code.replace(/^(sh|sz)/i, '');
+      const num = code.replace(/^(sh|sz|bj)/i, '');
+      // 北交所：bj 前缀 → market=0
+      if (c.startsWith('bj')) return '0.' + num;
+      // 沪市：sh 前缀或 6xx/5xx/11x/12x/13x 代码段（含科创板 688/689）
+      if (c.startsWith('sh') || /^(6|5|11|12|13)/.test(num)) return '1.' + num;
+      // 深市 sz 及其他（含创业板 300、中小板 002 等）→ market=0
+      return '0.' + num;
     });
   },
 
   async _fetchEastmoney(codes) {
     const secids = this._toSecids(codes);
-    const fields = 'f2,f3,f4,f5,f6,f12,f14,f15,f16,f17,f18';
+    const fields = 'f2,f3,f4,f5,f6,f12,f13,f14,f15,f16,f17,f18';
     const params = new URLSearchParams({
       fltt: '2',
       fields: fields,
@@ -118,12 +139,20 @@ const Quotes = {
     const result = {};
     json.data.diff.forEach(item => {
       if (!item || item.f12 == null) return; // 跳过 null/无效项
-      // item.f12 = code (without prefix), item.f13 = market (0=SZ, 1=SH)
+      // item.f12 = code (without prefix), item.f13 = market (0=SZ/BJ, 1=SH)
       const rawCode = String(item.f12);
-      const prefix = item.f13 === 1 ? 'sh' : 'sz';
+      // f13=1 → 沪市(sh/科创板)；f13=0 → 深市(sz) 或 北交所(bj)
+      // 北交所代码特征：4xx/8xx/9xx 开头的6位数字
+      let prefix;
+      if (item.f13 === 1) prefix = 'sh';
+      else if (/^[489]/.test(rawCode)) prefix = 'bj';
+      else prefix = 'sz';
       const code = prefix + rawCode;
       // 匹配用户原始代码格式（可能用户输入的是 sh600519 或 600519）
-      const matched = codes.find(c => c.toLowerCase().endsWith(rawCode)) || code;
+      // 优先精确匹配（含前缀），避免跨市场同代码号误匹配
+      const matched = codes.find(c => c.toLowerCase() === code.toLowerCase())
+                    || codes.find(c => c.toLowerCase().endsWith(rawCode))
+                    || code;
       result[matched] = {
         name: item.f14 || rawCode,
         price: item.f2,
