@@ -75,7 +75,9 @@ const App = {
     // 北交所（bj920xxx/bj8xxxxx/bj4xxxxx）
     { code: 'bj920185', name: '贝特瑞', tag: '新能源', pinyin: 'btr' },
     { code: 'bj920368', name: '连城数控', tag: '光伏设备', pinyin: 'lcsk' },
-    { code: 'bj920819', name: '颖泰生物', tag: '农药', pinyin: 'ytsw' }
+    { code: 'bj920819', name: '颖泰生物', tag: '农药', pinyin: 'ytsw' },
+    { code: 'bj430047', name: '诺思兰德', tag: '生物医药', pinyin: 'nsld' },
+    { code: 'bj830799', name: '艾融软件', tag: '金融科技', pinyin: 'arrj' }
   ],
 
   async init() {
@@ -380,7 +382,7 @@ const App = {
     let code = document.getElementById('add-code').value.trim();
     const name = document.getElementById('add-name').value.trim();
     if (!code) { this.toast('请输入股票代码'); return; }
-    // 自动补全前缀：北交所(4xx/8xx/9xx)→bj，沪市(6xx/5xx等)→sh，深市→sz
+    // 自动补全前缀：北交所(4xx/8xx/9xx)→bj，沪市(6xx/5xx等，含科创板688/689)→sh，深市→sz
     code = code.toLowerCase();
     if (!/^(sh|sz|bj)/.test(code)) {
       if (/^(4|8|9)/.test(code)) code = 'bj' + code;

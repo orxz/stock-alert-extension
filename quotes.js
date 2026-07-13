@@ -18,10 +18,12 @@ const Quotes = {
     'sh688981': { name: '中芯国际', price: 171.99, prevClose: 163.02 },
     'sh688111': { name: '金山办公', price: 305.50, prevClose: 298.80 },
     'sh688256': { name: '寒武纪', price: 1120.00, prevClose: 1095.00 },
-    // 北交所（920xxx）演示数据
+    // 北交所（920xxx / 8xxxxx / 4xxxxx）演示数据
     'bj920185': { name: '贝特瑞', price: 22.05, prevClose: 22.69 },
     'bj920368': { name: '连城数控', price: 25.77, prevClose: 25.00 },
-    'bj920819': { name: '颖泰生物', price: 2.63, prevClose: 2.70 }
+    'bj920819': { name: '颖泰生物', price: 2.63, prevClose: 2.70 },
+    'bj430047': { name: '诺思兰德', price: 8.50, prevClose: 8.17 },
+    'bj830799': { name: '艾融软件', price: 35.20, prevClose: 34.28 }
   },
 
   isDemo: false,
@@ -50,12 +52,21 @@ const Quotes = {
       if (!data || !Array.isArray(data)) return [];
       // 筛选 A 股类型：沪A(1)/深A(2)/科创板(25)/京A·北交所(27)
       // 注：科创板 Classify='23'，北交所 Classify='NEEQ'+SecurityTypeName 含'京'
+      // SecurityType 白名单覆盖主力市场；缺失时回退 Classify 兜底，避免 API 变动导致漏检
       const VALID_SEC_TYPES = ['1', '2', '25', '27'];
       const stocks = [];
       for (const item of data) {
         if (!item) continue;
         const secType = String(item.SecurityType || '');
-        if (!VALID_SEC_TYPES.includes(secType)) continue;
+        const classify = String(item.Classify || '');
+        if (!VALID_SEC_TYPES.includes(secType)) {
+          // 兜底：SecurityType 缺失/未知时，回退到 Classify='AStock' 检查（兼容旧逻辑）
+          if (!item.SecurityType && classify === 'AStock') {
+            // Classify 确认为 A 股，但 SecurityType 缺失，继续处理
+          } else {
+            continue;
+          }
+        }
         const rawCode = String(item.Code || '');
         if (!/^\d{6}$/.test(rawCode)) continue;
         // 确定前缀：科创板→sh，京A→bj，沪A→sh，深A→sz
@@ -142,10 +153,10 @@ const Quotes = {
       // item.f12 = code (without prefix), item.f13 = market (0=SZ/BJ, 1=SH)
       const rawCode = String(item.f12);
       // f13=1 → 沪市(sh/科创板)；f13=0 → 深市(sz) 或 北交所(bj)
-      // 北交所代码特征：4xx/8xx/9xx 开头的6位数字
+      // 北交所代码特征：4xx/8xx/9xx 开头的6位数字（含新旧段：430/830/920）
       let prefix;
       if (item.f13 === 1) prefix = 'sh';
-      else if (/^[489]/.test(rawCode)) prefix = 'bj';
+      else if (/^[489]\d{5}$/.test(rawCode)) prefix = 'bj';
       else prefix = 'sz';
       const code = prefix + rawCode;
       // 匹配用户原始代码格式（可能用户输入的是 sh600519 或 600519）
@@ -172,6 +183,8 @@ const Quotes = {
   // ===== 新浪财经 API（备用）=====
   // 注意：浏览器扩展中 fetch 无法设置 Referer 头，部分情况新浪会返回空。
   // 响应为 GBK 编码，需用 TextDecoder('gbk') 解码。
+  // 北交所兼容性：新浪对 bj 前缀的支持未正式验证（curl 测试返回 Forbidden），
+  // 代码已按新浪通用格式（list=bj{code}）构造 URL，若不可用则降级到 demo。
   async _fetchSina(codes) {
     const url = 'https://hq.sinajs.cn/list=' + codes.join(',');
     const resp = await fetch(url);
