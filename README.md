@@ -1,6 +1,6 @@
 # 股票提醒助手 — 自选股分组与看板
 
-[![Version](https://img.shields.io/badge/version-v1.1.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.1.0)
+[![Version](https://img.shields.io/badge/version-v1.2.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.2.0)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -16,22 +16,28 @@
 - **多分组看板** — 自定义分组（最多 20 个），拖拽排序，一键切换
 - **实时行情** — 东方财富 push2 API（主源）+ 新浪财经（备源）+ 演示数据（兜底），三级降级
 - **双视图模式** — 网格卡片 / 数据列表，按涨跌幅、价格、成交额、自选时间排序
-- **拖拽排序与置顶** — 股票卡片/行拖拽排序，一键置顶，跨分组拖拽
+- **置顶与手动排序** — 一键置顶/取消置顶，拖拽排序。置顶区与非置顶区独立编号，互不干扰
+- **排序联动 Badge** — 工具栏图标实时显示当前排序第一只股票的涨跌幅，切换排序即时联动
+- **手动刷新 + 更新时间** — 底部状态栏刷新按钮（旋转动画），实时显示“刚刚更新 / N秒前”
 - **自定义列** — 12 字段自由勾选，拖拽调序
 - **智能搜索补全** — 代码前缀 / 拼音首字母 / 中文名称 / 行业标签，实时 API 联想 + 本地降级
 - **价格隐藏** — 一键隐藏/显示价格，适合投屏分享
-- **后台提醒** — 浏览器角标实时显示置顶股票涨跌幅（红涨绿跌），图标悬停查看前 5 只
+- **后台提醒** — 浏览器角标实时显示排序第一股票涨跌幅（红涨绿跌），图标悬停查看前 5 只（按当前排序）
 - **隐私安全** — 所有数据本地存储（chrome.storage.local），不上传任何用户数据
 
 ## 安装
 
 ### Chrome 商店
 
-> 即将上架
+<a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.2.0-blue?logo=google-chrome" alt="Chrome Web Store">
+</a>
+
+点击上方按钮安装，或访问 [Chrome 商店页面](https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh)。
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v1.1.0.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v1.2.0.zip` 并解压
 2. 打开 Chrome，进入 `chrome://extensions`
 3. 启用「开发者模式」
 4. 点击「加载已解压的扩展程序」，选择解压目录
@@ -67,9 +73,11 @@ cd stock-alert-extension
 
 ### 看板操作
 
-- **排序**：工具栏下拉选择排序方式，或列表视图中点击列标题
-- **置顶**：点击卡片/行切换置顶状态，置顶股票始终排最前
-- **拖拽**：在非批量模式下拖拽卡片/行调整手动排序
+- **排序**：工具栏下拉选择排序方式，或列表视图中点击列标题。涨跌幅、现价、成交额、自选时间等多维度
+- **置顶**：点击卡片/行切换置顶状态，新置顶排到置顶区末尾，取消置顶排到非置顶区末尾
+- **拖拽**：在非批量模式下拖拽卡片/行调整手动排序，置顶与非置顶各自独立
+- **手动刷新**：点击底部状态栏 🔄 按钮即时拉取行情，旋转动画 + toast 反馈
+- **更新时间**：状态栏实时显示行情更新时间（刚刚更新 / N秒前 / N分钟前）
 - **列配置**：点击 ⚙ 按钮，勾选/拖拽调整列表字段
 - **价格隐藏**：点击 👁 按钮切换价格显示
 
@@ -99,7 +107,7 @@ cd stock-alert-extension
 - **前端**：原生 HTML/CSS/JavaScript（零框架、零构建工具、零依赖）
 - **存储**：chrome.storage.local
 - **后台**：Service Worker + chrome.alarms（30 秒定时刷新）
-- **性能**：防抖写入（200ms）、虚拟滚动（>50 只）、搜索防抖（300ms）
+- **性能**：防抖写入（200ms）、后台按需拉取行情（manual 排序仅 6 只）、虚拟滚动（>50 只）、搜索防抖（300ms）
 
 ## 文件结构
 
@@ -114,6 +122,7 @@ stock-alert-extension/
 │   ├── 项目架构.md         — 架构概览
 │   ├── module-*.md        — 模块技术笔记
 │   └── design-v1.1.0-*.md — ADR 决策记录
+├── CHANGELOG.md           — 版本更新日志
 ├── icons/                 — 扩展图标
 └── privacy/               — 隐私政策页面
 ```
