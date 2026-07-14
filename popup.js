@@ -19,7 +19,8 @@ const App = {
     searchKeyword: '',
     priceHidden: false,
     dragSrc: null,
-    dragType: null
+    dragType: null,
+    lastUpdateTime: null
   },
 
   FIELD_LABELS: {
@@ -100,9 +101,12 @@ const App = {
     this._timer = setInterval(() => {
       this.refreshQuotes().then(() => this.renderBoard()).catch(() => {});
     }, 10000);
+    // 每秒更新「x秒前」时间显示
+    this._timeTimer = setInterval(() => this.updateTimeLabel(), 1000);
     // popup 关闭时清除定时器 + flush 待保存配置，防止 DOM 访问 + 数据丢失
     window.addEventListener('beforeunload', () => {
       if (this._timer) { clearInterval(this._timer); this._timer = null; }
+      if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
       if (this._boardSaveTimer) {
         clearTimeout(this._boardSaveTimer);
         this._flushBoardSave();
@@ -114,7 +118,41 @@ const App = {
   async refreshQuotes() {
     const codes = this.state.watchlist.map(s => s.code);
     this.state.quotes = await Quotes.fetch(codes);
+    this.state.lastUpdateTime = Date.now();
     this.updateDataSourceLabel();
+    this.updateTimeLabel();
+  },
+
+  updateTimeLabel() {
+    const el = document.getElementById('update-time');
+    if (!el) return;
+    const ts = this.state.lastUpdateTime;
+    if (!ts) { el.textContent = '未更新'; return; }
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 5) el.textContent = '刚刚更新';
+    else if (diff < 60) el.textContent = diff + ' 秒前更新';
+    else if (diff < 3600) el.textContent = Math.floor(diff / 60) + ' 分钟前更新';
+    else {
+      const d = new Date(ts);
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      el.textContent = hh + ':' + mm + ' 更新';
+    }
+  },
+
+  async manualRefresh() {
+    const btn = document.getElementById('btn-refresh');
+    if (btn.classList.contains('spinning')) return; // 防止重复点击
+    btn.classList.add('spinning');
+    try {
+      await this.refreshQuotes();
+      this.renderBoard();
+      this.toast('行情已刷新');
+    } catch (e) {
+      this.toast('刷新失败，请重试');
+    } finally {
+      btn.classList.remove('spinning');
+    }
   },
 
   updateDataSourceLabel() {
@@ -471,7 +509,7 @@ const App = {
       const pa = (a.pinned && a.pinned[gid]) ? 1 : 0, pb = (b.pinned && b.pinned[gid]) ? 1 : 0;
       if (pa !== pb) return pb - pa;
       if (field === 'manual') {
-        const oa = a.manualOrder[gid] ?? 9999, ob = b.manualOrder[gid] ?? 9999;
+        const oa = (a.manualOrder && a.manualOrder[gid]) ?? 9999, ob = (b.manualOrder && b.manualOrder[gid]) ?? 9999;
         return oa - ob;
       }
       if (field === 'addedAt') return ((a.addedAt || 0) - (b.addedAt || 0)) * dir;
@@ -729,22 +767,74 @@ const App = {
   },
 
   async manualReorder(srcCode, dstCode) {
+    const gid = this.state.currentGroupId;
     const stocks = this.getGroupStocks();
     const ids = stocks.map(s => s.code);
     const from = ids.indexOf(srcCode), to = ids.indexOf(dstCode);
     ids.splice(to, 0, ids.splice(from, 1)[0]);
-    await Storage.setManualOrder(this.state.currentGroupId, ids);
+    // 置顶/非置顶分区独立编号，避免跨区拖拽后排序错乱
+    // 排序时先按 pinned 分区，再按 manualOrder 排，因此两个区各自从 0 开始即可
+    const orderMap = {};
+    let pinnedIdx = 0, nonPinnedIdx = 0;
+    ids.forEach(code => {
+      const s = this.state.watchlist.find(x => x.code === code);
+      const isPinned = s && s.pinned && s.pinned[gid];
+      if (isPinned) {
+        orderMap[code] = pinnedIdx++;
+      } else {
+        orderMap[code] = nonPinnedIdx++;
+      }
+    });
+    await Storage.setManualOrder(gid, orderMap);
+    // 刷新 state.watchlist，使 getGroupStocks 读取到最新 manualOrder，避免拖拽视觉不生效
+    const reorderData = await Storage.loadAll();
+    this.state.watchlist = reorderData.watchlist;
     this.state.sortField = 'manual';
     this.applySortSelect();
-    this._scheduleBoardSave(this.state.currentGroupId, { sortField: 'manual' });
+    this._scheduleBoardSave(gid, { sortField: 'manual' });
     this.renderBoard();
   },
 
   async togglePin(code) {
-    await Storage.togglePin(this.state.currentGroupId, code);
+    const gid = this.state.currentGroupId;
+    await Storage.togglePin(gid, code);
     const data = await Storage.loadAll();
     this.state.watchlist = data.watchlist;
+    // 置顶/取消置顶后重算 manualOrder，切换分区的股票排到目标分区末尾
+    await this._rebalanceManualOrder(gid, code);
     this.renderBoard();
+  },
+
+  // 置顶/取消置顶后重算 manualOrder：置顶区和非置顶区各自从 0 连续编号
+  // toggledCode 对应的股票移到目标分区末尾
+  async _rebalanceManualOrder(gid, toggledCode) {
+    const stocks = this.state.watchlist.filter(s => s.groupIds.includes(gid));
+    // 按已有 manualOrder 排序，保持用户已排好的顺序
+    stocks.sort((a, b) => {
+      const oa = (a.manualOrder && a.manualOrder[gid]) ?? 9999;
+      const ob = (b.manualOrder && b.manualOrder[gid]) ?? 9999;
+      return oa - ob;
+    });
+    const pinned = stocks.filter(s => s.pinned && s.pinned[gid]);
+    const nonPinned = stocks.filter(s => !(s.pinned && s.pinned[gid]));
+    // 将刚切换分区的股票移到目标分区末尾
+    if (toggledCode) {
+      const inPinned = pinned.findIndex(s => s.code === toggledCode);
+      const inNonPinned = nonPinned.findIndex(s => s.code === toggledCode);
+      if (inPinned >= 0) {
+        const [item] = pinned.splice(inPinned, 1);
+        pinned.push(item);
+      } else if (inNonPinned >= 0) {
+        const [item] = nonPinned.splice(inNonPinned, 1);
+        nonPinned.push(item);
+      }
+    }
+    const orderMap = {};
+    pinned.forEach((s, i) => { orderMap[s.code] = i; });
+    nonPinned.forEach((s, i) => { orderMap[s.code] = i; });
+    await Storage.setManualOrder(gid, orderMap);
+    const data = await Storage.loadAll();
+    this.state.watchlist = data.watchlist;
   },
 
   async removeStocks(codes) {
@@ -974,10 +1064,15 @@ const App = {
 
   _flushBoardSave() {
     if (!this._pendingBoardCfg) return;
-    for (const [gid, gcfg] of Object.entries(this._pendingBoardCfg)) {
-      Storage.saveBoardConfigForGroup(gid, gcfg);
-    }
-    this._pendingBoardCfg = {};
+    // 一次性读取 boardConfig，合并所有待写入分组后单次写入，避免多分组并发写入的 lost-update 竞态
+    const pending = this._pendingBoardCfg;
+    this._pendingBoardCfg = null;
+    Storage.loadAll().then(data => {
+      for (const [gid, gcfg] of Object.entries(pending)) {
+        data.boardConfig[gid] = { ...(data.boardConfig[gid] || {}), ...gcfg };
+      }
+      Storage.saveBoardConfig(data.boardConfig);
+    });
   },
 
   // ===== 渲染入口 =====
@@ -1003,6 +1098,8 @@ const App = {
     document.getElementById('btn-edit').onclick = () => this.toggleBatchMode();
     document.getElementById('btn-toggle-price').onclick = () => this.togglePriceHidden();
     document.getElementById('btn-new-group').onclick = () => this.openGroupModal('create');
+    // 手动刷新行情
+    document.getElementById('btn-refresh').onclick = () => this.manualRefresh();
     // 视图与列设置
     document.getElementById('btn-view-grid').onclick = () => this.switchView('grid');
     document.getElementById('btn-view-list').onclick = () => this.switchView('list');

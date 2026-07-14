@@ -82,8 +82,8 @@ const Storage = {
         s.groupIds = s.groupIds.filter(id => id !== groupId);
         if (!s.groupIds.includes(DEFAULT_GROUP_ID)) s.groupIds.push(DEFAULT_GROUP_ID);
       }
-      delete s.manualOrder[groupId];
-      delete s.pinned[groupId];
+      if (s.manualOrder) delete s.manualOrder[groupId];
+      if (s.pinned) delete s.pinned[groupId];
     });
     delete boardConfig[groupId];
     // 一次性保存全部变更，避免三次独立写入
@@ -134,8 +134,8 @@ const Storage = {
       // 从指定分组移除（非默认分组）
       stock.groupIds = stock.groupIds.filter(id => id !== groupId);
       if (stock.groupIds.length === 0) stock.groupIds.push(DEFAULT_GROUP_ID);
-      delete stock.manualOrder[groupId];
-      delete stock.pinned[groupId];
+      if (stock.manualOrder) delete stock.manualOrder[groupId];
+      if (stock.pinned) delete stock.pinned[groupId];
     } else {
       // 从"全部"移除 = 彻底删除该自选股
       const i = watchlist.findIndex(s => s.code === code);
@@ -154,8 +154,8 @@ const Storage = {
         if (codeSet.has(s.code)) {
           s.groupIds = s.groupIds.filter(id => id !== groupId);
           if (s.groupIds.length === 0) s.groupIds.push(DEFAULT_GROUP_ID);
-          delete s.manualOrder[groupId];
-          delete s.pinned[groupId];
+          if (s.manualOrder) delete s.manualOrder[groupId];
+          if (s.pinned) delete s.pinned[groupId];
         }
       });
     } else {
@@ -175,8 +175,8 @@ const Storage = {
       // 从源分组移除（非默认分组）
       if (fromGroupId && fromGroupId !== DEFAULT_GROUP_ID) {
         stock.groupIds = stock.groupIds.filter(id => id !== fromGroupId);
-        delete stock.manualOrder[fromGroupId];
-        delete stock.pinned[fromGroupId];
+        if (stock.manualOrder) delete stock.manualOrder[fromGroupId];
+        if (stock.pinned) delete stock.pinned[fromGroupId];
       }
       // 添加到目标分组
       targetGroupIds.forEach(id => { if (!stock.groupIds.includes(id)) stock.groupIds.push(id); });
@@ -186,12 +186,27 @@ const Storage = {
     await this.saveWatchlist(watchlist);
   },
 
-  async setManualOrder(groupId, orderedCodes) {
+  async setManualOrder(groupId, codesOrMap) {
     const { watchlist } = await this.loadAll();
-    orderedCodes.forEach((code, i) => {
-      const stock = watchlist.find(s => s.code === code);
-      if (stock) stock.manualOrder[groupId] = i;
-    });
+    if (Array.isArray(codesOrMap)) {
+      // 数组模式：按顺序分配连续序号
+      codesOrMap.forEach((code, i) => {
+        const stock = watchlist.find(s => s.code === code);
+        if (stock) {
+          if (!stock.manualOrder) stock.manualOrder = {};
+          stock.manualOrder[groupId] = i;
+        }
+      });
+    } else {
+      // Map 模式：{ code: order }，支持置顶/非置顶分区独立编号
+      Object.entries(codesOrMap).forEach(([code, order]) => {
+        const stock = watchlist.find(s => s.code === code);
+        if (stock) {
+          if (!stock.manualOrder) stock.manualOrder = {};
+          stock.manualOrder[groupId] = order;
+        }
+      });
+    }
     await this.saveWatchlist(watchlist);
   },
 
@@ -199,13 +214,14 @@ const Storage = {
     const { watchlist } = await this.loadAll();
     const stock = watchlist.find(s => s.code === code);
     if (!stock) return;
+    // 确保 pinned 对象存在（取消置顶时会被 delete，再次置顶前需重建）
+    if (!stock.pinned) stock.pinned = {};
     // 取消置顶时删除 key 而非置 false，避免数据残留膨胀
     if (stock.pinned[groupId]) {
       delete stock.pinned[groupId];
       // 当 pinned 变为空对象时整体删除
       if (Object.keys(stock.pinned).length === 0) delete stock.pinned;
     } else {
-      if (!stock.pinned) stock.pinned = {};
       stock.pinned[groupId] = true;
     }
     await this.saveWatchlist(watchlist);
