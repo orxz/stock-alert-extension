@@ -3,6 +3,7 @@
 const QuoteService = (() => {
   const DEFAULT_TIMEOUT_MS = 4000;
   const DEFAULT_CHUNK_SIZE = 50;
+  const DEFAULT_FRESHNESS_MS = 30000;
   const CACHE_MAX_AGE_MS = 604800000;
   const OFF_HOURS_INTERVAL_MS = 300000;
   const BACKOFF_MS = [30000, 120000, 300000];
@@ -79,7 +80,7 @@ const QuoteService = (() => {
     let nextAutomaticAttemptAt = 0;
     const inFlight = new Map();
 
-    async function read(codes, { freshnessMs = 30000 } = {}) {
+    async function read(codes, { freshnessMs = DEFAULT_FRESHNESS_MS } = {}) {
       const requested = uniqueCodes(codes);
       const now = clock();
       const cached = await cache.readQuoteCache(requested);
@@ -185,7 +186,7 @@ const QuoteService = (() => {
         if (entry && isUsableQuote(entry.quote) && age <= CACHE_MAX_AGE_MS) {
           results[code] = {
             code,
-            status: 'cached',
+            status: age <= DEFAULT_FRESHNESS_MS ? 'fresh' : 'cached',
             source: 'cache',
             provider: entry.provider || 'unknown',
             fetchedAt: entry.fetchedAt,

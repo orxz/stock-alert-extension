@@ -86,6 +86,21 @@ test('uses a seven-day cache and rejects an older entry', async () => {
   assert.equal(cache.values.sz000001, undefined);
 });
 
+test('failed refresh keeps a recent cache entry fresh', async () => {
+  const now = 10000;
+  const cache = memoryCache({
+    sh600519: { cacheVersion: 1, code: 'sh600519', provider: 'eastmoney', fetchedAt: 9000, quote: quote(10) }
+  });
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney() { throw new Error('offline'); },
+    async fetchSina() { throw new Error('offline'); }
+  };
+  const snapshot = await QuoteService.create({ transport, cache, clock: () => now }).refresh(['sh600519']);
+  assert.equal(snapshot.results.sh600519.status, 'fresh');
+  assert.equal(snapshot.results.sh600519.source, 'cache');
+});
+
 test('reuses an identical in-flight refresh', async () => {
   let resolveRequest;
   const pending = new Promise((resolve) => { resolveRequest = resolve; });
