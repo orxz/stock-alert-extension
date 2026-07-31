@@ -13,3 +13,8 @@ node_modules/
 # Build output
 dist/
 *.zip
+
+# Test output
+coverage/
+playwright-report/
+test-results/
