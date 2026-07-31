@@ -8,6 +8,12 @@ const App = {
     watchlist: [],
     boardConfig: {},
     quotes: {},
+    quoteSnapshot: {
+      results: {},
+      counts: { fresh: 0, cached: 0, missing: 0 },
+      attemptedAt: null,
+      succeededAt: null
+    },
     currentGroupId: 'g_all',
     viewMode: 'grid',
     sortField: 'manual',
@@ -30,6 +36,27 @@ const App = {
   },
 
   ALL_FIELDS: ['name', 'code', 'price', 'change', 'changePercent', 'open', 'prevClose', 'high', 'low', 'volume', 'amount', 'addedAt'],
+
+  _mutations: new Map(),
+
+  withMutationLock(key, action) {
+    if (this._mutations.has(key)) return this._mutations.get(key);
+    const promise = Promise.resolve()
+      .then(action)
+      .finally(() => this._mutations.delete(key));
+    this._mutations.set(key, promise);
+    return promise;
+  },
+
+  withDisabledButton(buttonId, action) {
+    const button = typeof document !== 'undefined' ? document.getElementById(buttonId) : null;
+    if (button) button.disabled = true;
+    return Promise.resolve()
+      .then(action)
+      .finally(() => {
+        if (button) button.disabled = false;
+      });
+  },
 
   // 热门股票库（pinyin = 拼音首字母），覆盖常见代码前缀
   // 6000xx: 浦发/上海机场/民生/中石化/南航/中信证券/招行/联通
@@ -83,6 +110,8 @@ const App = {
 
   async init() {
     try {
+      const versionElement = document.getElementById('brand-version');
+      if (versionElement) versionElement.textContent = chrome.runtime.getManifest().version;
       const data = await Storage.loadAll();
       this.state.groups = data.groups;
       this.state.watchlist = data.watchlist;
@@ -103,14 +132,10 @@ const App = {
     }, 10000);
     // 每秒更新「x秒前」时间显示
     this._timeTimer = setInterval(() => this.updateTimeLabel(), 1000);
-    // popup 关闭时清除定时器 + flush 待保存配置，防止 DOM 访问 + 数据丢失
+    // popup 关闭时清除定时器，防止后续访问已销毁的 DOM
     window.addEventListener('beforeunload', () => {
       if (this._timer) { clearInterval(this._timer); this._timer = null; }
       if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
-      if (this._boardSaveTimer) {
-        clearTimeout(this._boardSaveTimer);
-        this._flushBoardSave();
-      }
     });
   },
 
@@ -175,7 +200,7 @@ const App = {
       tab.className = 'tab' + (g.groupId === this.state.currentGroupId ? ' active' : '');
       tab.draggable = true;
       tab.dataset.groupId = g.groupId;
-      const count = this.state.watchlist.filter(s => s.groupIds.includes(g.groupId)).length;
+      const count = StockUtils.countStocksForGroup(this.state.watchlist, g.groupId);
       tab.innerHTML = `<span>${this.esc(g.name)}</span><span style="font-size:10px;color:#8A93A6;margin-left:2px;">${count}</span>`;
       tab.onclick = () => this.switchGroup(g.groupId);
       tab.oncontextmenu = (e) => { e.preventDefault(); if (!g.isDefault) this.openGroupModal('rename', g); };
@@ -241,7 +266,15 @@ const App = {
     setTimeout(() => input.focus(), 50);
   },
 
-  async submitGroupModal() {
+  submitGroupModal() {
+    const modal = document.getElementById('group-modal');
+    const key = modal.dataset.mode === 'create' ? 'group:create' : `group:${modal.dataset.groupId}`;
+    return this.withMutationLock(key, () =>
+      this.withDisabledButton('group-confirm', () => this._submitGroupModal())
+    );
+  },
+
+  async _submitGroupModal() {
     const modal = document.getElementById('group-modal');
     const name = document.getElementById('group-name-input').value.trim();
     const err = document.getElementById('group-modal-err');
@@ -262,7 +295,13 @@ const App = {
     } catch (e) { err.textContent = e.message; }
   },
 
-  async deleteGroup(groupId) {
+  deleteGroup(groupId) {
+    return this.withMutationLock(`group:${groupId}`, () =>
+      this.withDisabledButton('group-delete', () => this._deleteGroup(groupId))
+    );
+  },
+
+  async _deleteGroup(groupId) {
     const g = this.state.groups.find(x => x.groupId === groupId);
     if (!g) return;
     const ok = await this._confirm(`确认删除分组「${g.name}」？组内股票将移回「全部」。`, { title: '删除分组', okText: '删除' });
@@ -416,7 +455,13 @@ const App = {
     return this.HOT_STOCKS.find(s => s.code === code) || null;
   },
 
-  async submitAddStock() {
+  submitAddStock() {
+    return this.withMutationLock('add-stock', () =>
+      this.withDisabledButton('add-confirm', () => this._submitAddStock())
+    );
+  },
+
+  async _submitAddStock() {
     let code = document.getElementById('add-code').value.trim();
     const name = document.getElementById('add-name').value.trim();
     if (!code) { this.toast('请输入股票代码'); return; }
@@ -435,7 +480,9 @@ const App = {
     const selected = [...document.querySelectorAll('#add-group-list .group-chip.selected')];
     const groupIds = selected.length ? selected.map(c => c.dataset.groupId) : ['g_all'];
     const existed = this.state.watchlist.find(s => s.code === code);
-    const wasInAllGroups = existed && groupIds.every(id => existed.groupIds.includes(id));
+    const wasInAllGroups = existed && groupIds.every((id) =>
+      id === StockUtils.ALL_GROUP_ID || existed.groupIds.includes(id)
+    );
     await Storage.addStock(code, name, groupIds);
     const data = await Storage.loadAll();
     this.state.watchlist = data.watchlist;
@@ -463,7 +510,13 @@ const App = {
     modal.style.display = 'flex';
   },
 
-  async submitMove() {
+  submitMove() {
+    return this.withMutationLock(`move:${this.state.currentGroupId}`, () =>
+      this.withDisabledButton('move-confirm', () => this._submitMove())
+    );
+  },
+
+  async _submitMove() {
     const selected = [...document.querySelectorAll('#move-group-list .group-chip.selected')];
     if (!selected.length) { this.toast('请选择目标分组'); return; }
     // 过滤掉当前分组（移动到当前所在分组是无意义操作，且会导致 manualOrder/pinned 丢失）
@@ -481,8 +534,7 @@ const App = {
 
   // ===== 看板渲染 =====
   getGroupStocks() {
-    const gid = this.state.currentGroupId;
-    let stocks = this.state.watchlist.filter(s => s.groupIds.includes(gid));
+    let stocks = StockUtils.getStocksForGroup(this.state.watchlist, this.state.currentGroupId);
     if (this.state.searchKeyword) {
       const kw = this.state.searchKeyword.toLowerCase();
       stocks = stocks.filter(s => {
@@ -500,25 +552,13 @@ const App = {
         return false;
       });
     }
-    const field = this.state.sortField;
-    const dir = this.state.sortDirection === 'asc' ? 1 : -1;
-    // 预计算 enrich 后的行情数据，避免排序时重复调用 Quotes.enrich
-    const enriched = new Map();
-    stocks.forEach(s => { enriched.set(s.code, Quotes.enrich(this.state.quotes[s.code]) || {}); });
-    stocks.sort((a, b) => {
-      const pa = (a.pinned && a.pinned[gid]) ? 1 : 0, pb = (b.pinned && b.pinned[gid]) ? 1 : 0;
-      if (pa !== pb) return pb - pa;
-      if (field === 'manual') {
-        const oa = (a.manualOrder && a.manualOrder[gid]) ?? 9999, ob = (b.manualOrder && b.manualOrder[gid]) ?? 9999;
-        return oa - ob;
-      }
-      if (field === 'addedAt') return ((a.addedAt || 0) - (b.addedAt || 0)) * dir;
-      if (field === 'name') return (a.name || '').localeCompare(b.name || '') * dir;
-      const qa = enriched.get(a.code), qb = enriched.get(b.code);
-      const va = qa[field] ?? 0, vb = qb[field] ?? 0;
-      return (va - vb) * dir;
-    });
-    return stocks;
+    return StockUtils.sortStocks(
+      stocks,
+      this.state.quoteSnapshot.results,
+      this.state.currentGroupId,
+      this.state.sortField,
+      this.state.sortDirection
+    );
   },
 
   renderBoard() {
@@ -750,7 +790,10 @@ const App = {
       this.state.sortField = field;
       this.state.sortDirection = dir;
     }
-    this._scheduleBoardSave(this.state.currentGroupId, { sortField: this.state.sortField, sortDirection: this.state.sortDirection });
+    await this.persistBoardPatch(this.state.currentGroupId, {
+      sortField: this.state.sortField,
+      sortDirection: this.state.sortDirection
+    });
     this.renderBoard();
   },
 
@@ -762,11 +805,19 @@ const App = {
       this.state.sortDirection = 'desc';
     }
     this.applySortSelect();
-    this._scheduleBoardSave(this.state.currentGroupId, { sortField: this.state.sortField, sortDirection: this.state.sortDirection });
+    await this.persistBoardPatch(this.state.currentGroupId, {
+      sortField: this.state.sortField,
+      sortDirection: this.state.sortDirection
+    });
     this.renderBoard();
   },
 
-  async manualReorder(srcCode, dstCode) {
+  manualReorder(srcCode, dstCode) {
+    const groupId = this.state.currentGroupId;
+    return this.withMutationLock(`reorder:${groupId}`, () => this._manualReorder(srcCode, dstCode));
+  },
+
+  async _manualReorder(srcCode, dstCode) {
     const gid = this.state.currentGroupId;
     const stocks = this.getGroupStocks();
     const ids = stocks.map(s => s.code);
@@ -791,11 +842,16 @@ const App = {
     this.state.watchlist = reorderData.watchlist;
     this.state.sortField = 'manual';
     this.applySortSelect();
-    this._scheduleBoardSave(gid, { sortField: 'manual' });
+    await this.persistBoardPatch(gid, { sortField: 'manual' });
     this.renderBoard();
   },
 
-  async togglePin(code) {
+  togglePin(code) {
+    const groupId = this.state.currentGroupId;
+    return this.withMutationLock(`pin:${groupId}:${code}`, () => this._togglePin(code));
+  },
+
+  async _togglePin(code) {
     const gid = this.state.currentGroupId;
     await Storage.togglePin(gid, code);
     const data = await Storage.loadAll();
@@ -808,7 +864,7 @@ const App = {
   // 置顶/取消置顶后重算 manualOrder：置顶区和非置顶区各自从 0 连续编号
   // toggledCode 对应的股票移到目标分区末尾
   async _rebalanceManualOrder(gid, toggledCode) {
-    const stocks = this.state.watchlist.filter(s => s.groupIds.includes(gid));
+    const stocks = StockUtils.getStocksForGroup(this.state.watchlist, gid);
     // 按已有 manualOrder 排序，保持用户已排好的顺序
     stocks.sort((a, b) => {
       const oa = (a.manualOrder && a.manualOrder[gid]) ?? 9999;
@@ -837,7 +893,14 @@ const App = {
     this.state.watchlist = data.watchlist;
   },
 
-  async removeStocks(codes) {
+  removeStocks(codes) {
+    const groupId = this.state.currentGroupId;
+    return this.withMutationLock(`remove:${groupId}`, () =>
+      this.withDisabledButton('batch-remove', () => this._removeStocks(codes))
+    );
+  },
+
+  async _removeStocks(codes) {
     const gid = this.state.currentGroupId;
     const isAll = gid === 'g_all';
     const msg = isAll
@@ -864,7 +927,7 @@ const App = {
   // ===== 视图切换 =====
   async switchView(mode) {
     this.state.viewMode = mode;
-    this._scheduleBoardSave(this.state.currentGroupId, { viewMode: mode });
+    await this.persistBoardPatch(this.state.currentGroupId, { viewMode: mode });
     document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(mode === 'grid' ? 'btn-view-grid' : 'btn-view-list').classList.add('active');
     this.renderBoard();
@@ -920,7 +983,10 @@ const App = {
       if (this.state.columns.length <= 1) { this.toast('至少保留 1 个字段'); this.renderColPanel(); return; }
       this.state.columns = this.state.columns.filter(c => c !== field);
     }
-    this._scheduleBoardSave(this.state.currentGroupId, { columns: this.state.columns, columnOrder: this.state.columnOrder });
+    await this.persistBoardPatch(this.state.currentGroupId, {
+      columns: this.state.columns,
+      columnOrder: this.state.columnOrder
+    });
     this.renderBoard();
   },
 
@@ -930,7 +996,7 @@ const App = {
     if (from < 0 || to < 0) return;
     order.splice(to, 0, order.splice(from, 1)[0]);
     this.state.columnOrder = order;
-    this._scheduleBoardSave(this.state.currentGroupId, { columnOrder: order });
+    await this.persistBoardPatch(this.state.currentGroupId, { columnOrder: order });
     this.renderColPanel();
     this.renderBoard();
   },
@@ -1053,26 +1119,20 @@ const App = {
     });
   },
 
-  // ===== 配置写入防抖（PRD 4.1：200ms 批量写入，按分组隔离，避免频繁/跨组 storage IO） =====
-  _scheduleBoardSave(groupId, cfg) {
-    if (!this._pendingBoardCfg) this._pendingBoardCfg = {};
-    if (!this._pendingBoardCfg[groupId]) this._pendingBoardCfg[groupId] = {};
-    Object.assign(this._pendingBoardCfg[groupId], cfg);
-    clearTimeout(this._boardSaveTimer);
-    this._boardSaveTimer = setTimeout(() => this._flushBoardSave(), 200);
-  },
-
-  _flushBoardSave() {
-    if (!this._pendingBoardCfg) return;
-    // 一次性读取 boardConfig，合并所有待写入分组后单次写入，避免多分组并发写入的 lost-update 竞态
-    const pending = this._pendingBoardCfg;
-    this._pendingBoardCfg = null;
-    Storage.loadAll().then(data => {
-      for (const [gid, gcfg] of Object.entries(pending)) {
-        data.boardConfig[gid] = { ...(data.boardConfig[gid] || {}), ...gcfg };
-      }
-      Storage.saveBoardConfig(data.boardConfig);
-    });
+  // ===== 看板配置持久化（Storage 内部串行化）=====
+  async persistBoardPatch(groupId, patch) {
+    try {
+      await Storage.saveBoardConfigForGroup(groupId, patch);
+      this.state.boardConfig[groupId] = {
+        ...(this.state.boardConfig[groupId] || {}),
+        ...patch
+      };
+      return true;
+    } catch (error) {
+      console.warn('[popup] board config save failed:', error.message);
+      this.toast('设置保存失败，请重试');
+      return false;
+    }
   },
 
   // ===== 渲染入口 =====
@@ -1165,4 +1225,7 @@ const App = {
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => App.init());
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => App.init());
+}
+if (typeof module !== 'undefined') module.exports = App;
