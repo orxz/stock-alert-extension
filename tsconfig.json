@@ -9,5 +9,5 @@
     "strict": false,
     "skipLibCheck": true
   },
-  "include": ["stock-utils.js", "storage.js", "quotes.js", "scripts/**/*.mjs", "types/**/*.d.ts"]
+  "include": ["stock-utils.js", "storage.js", "quotes.js", "quote-service.js", "scripts/**/*.mjs", "types/**/*.d.ts"]
 }

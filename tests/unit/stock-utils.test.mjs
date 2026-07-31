@@ -41,5 +41,32 @@ test('runtime entry points load StockUtils before storage consumers', async () =
   const popup = await readFile(new URL('popup.html', rootDir), 'utf8');
   const background = await readFile(new URL('background.js', rootDir), 'utf8');
   assert.ok(popup.indexOf('src="stock-utils.js"') < popup.indexOf('src="storage.js"'));
-  assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js'\)/);
+  assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js'(?:, '[^']+')*\)/);
+});
+
+test('normalization rejects malformed, unsupported, and mismatched markets', () => {
+  assert.equal(StockUtils.normalizeStockCode(''), null);
+  assert.equal(StockUtils.normalizeStockCode('123'), null);
+  assert.equal(StockUtils.normalizeStockCode('sh000001'), null);
+  assert.equal(StockUtils.normalizeStockCode('600519x'), null);
+  assert.equal(StockUtils.normalizeStockCode('688001'), 'sh688001');
+  assert.equal(StockUtils.normalizeStockCode('301001'), 'sz301001');
+  assert.equal(StockUtils.normalizeStockCode('830001'), 'bj830001');
+});
+
+test('sorting keeps pinned stocks first and supports every local field', () => {
+  const input = [
+    { code: 'a', name: '乙', addedAt: 2, groupIds: [], pinned: {}, manualOrder: { g_all: 1 } },
+    { code: 'b', name: '甲', addedAt: 1, groupIds: [], pinned: { g_all: true }, manualOrder: { g_all: 2 } },
+    { code: 'c', name: '丙', addedAt: 3, groupIds: [], pinned: {}, manualOrder: {} }
+  ];
+  assert.equal(StockUtils.sortStocks(input, {}, 'g_all', 'manual', 'asc')[0].code, 'b');
+  assert.equal(StockUtils.sortStocks(input, {}, 'g_all', 'addedAt', 'desc')[1].code, 'c');
+  assert.equal(StockUtils.sortStocks(input, {}, 'g_all', 'name', 'asc')[0].code, 'b');
+  assert.deepEqual(input.map((stock) => stock.code), ['a', 'b', 'c']);
+});
+
+test('group helpers tolerate invalid collections', () => {
+  assert.deepEqual(StockUtils.getStocksForGroup(null, 'g_all'), []);
+  assert.equal(StockUtils.countStocksForGroup(null, 'g_all'), 0);
 });

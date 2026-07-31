@@ -6,11 +6,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "check:syntax": "node --check stock-utils.js && node --check storage.js && node --check quotes.js && node --check background.js && node --check popup.js",
+    "check:syntax": "node --check stock-utils.js && node --check storage.js && node --check quotes.js && node --check quote-service.js && node --check background.js && node --check popup.js",
     "check:types": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "validate:manifest": "node scripts/validate-manifest.mjs",
-    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:unit": "c8 --all --include=stock-utils.js --include=storage.js --include=quotes.js --include=quote-service.js --check-coverage --lines 90 --branches 85 --functions 90 --statements 90 node --test tests/unit/*.test.mjs",
     "check": "npm run check:syntax && npm run check:types && npm run lint && npm run validate:manifest",
     "ci": "npm run check && npm run test:unit"
   },

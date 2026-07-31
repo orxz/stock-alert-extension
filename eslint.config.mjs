@@ -48,6 +48,7 @@ export default [
         AbortController: 'readonly',
         Buffer: 'readonly',
         StockUtils: 'readonly',
+        TextEncoder: 'readonly',
         URL: 'readonly',
         console: 'readonly',
         global: 'readonly',
