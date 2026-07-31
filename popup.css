@@ -104,6 +104,15 @@ body {
 .grid-card.down .grid-card-price, .grid-card.down .grid-card-change { color: #27AE60; }
 .grid-card-change { font-size: 11px; }
 .grid-card-pin { position: absolute; top: 2px; left: 3px; font-size: 10px; }
+.quote-cached { position: relative; }
+.quote-cached .grid-card-price,
+.quote-cached .list-cell { color: #6B7280; }
+.quote-missing .grid-card-price,
+.quote-missing .grid-card-change { color: #8A93A6; }
+.quote-stale {
+  display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 4px;
+  background: #F0F2F5; color: #6B7280; font-size: 9px; font-weight: 400;
+}
 /* 批量模式勾选框 — 放大，易点击 */
 .grid-card-check {
   position: absolute; top: 4px; right: 4px;
@@ -274,9 +283,7 @@ body {
 .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 数据来源 */
-.data-source { font-size: 10px; color: #C0C4CC; }
-.data-source.demo { color: #E6A23C; }
+.quote-status-summary { font-size: 10px; color: #6B7280; text-align: right; }
 
 /* 拖拽占位 */
 .drag-over { opacity: .4; }

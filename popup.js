@@ -7,13 +7,13 @@ const App = {
     groups: [],
     watchlist: [],
     boardConfig: {},
-    quotes: {},
     quoteSnapshot: {
       results: {},
       counts: { fresh: 0, cached: 0, missing: 0 },
       attemptedAt: null,
       succeededAt: null
     },
+    quoteGeneration: 0,
     currentGroupId: 'g_all',
     viewMode: 'grid',
     sortField: 'manual',
@@ -25,8 +25,7 @@ const App = {
     searchKeyword: '',
     priceHidden: false,
     dragSrc: null,
-    dragType: null,
-    lastUpdateTime: null
+    dragType: null
   },
 
   FIELD_LABELS: {
@@ -118,40 +117,112 @@ const App = {
       this.state.boardConfig = data.boardConfig;
       const cfg = await Storage.getBoardConfig(this.state.currentGroupId);
       Object.assign(this.state, cfg);
+      this.quoteService = QuoteService.create({
+        transport: Quotes,
+        cache: Storage,
+        clock: () => Date.now(),
+        timeoutMs: 4000,
+        chunkSize: 50
+      });
+      const codes = this.state.watchlist.map((stock) => stock.code);
+      this.state.quoteSnapshot = await this.quoteService.read(codes);
+      this.state.quoteGeneration = this.state.quoteSnapshot.generation || 0;
       this.bindEvents();
       this.applySortSelect();
-      await this.refreshQuotes();
       this.render();
+      this.updateQuoteStatus();
+      this.updateTimeLabel();
+      await this.refreshQuotes();
+      this.renderBoard();
+      this.scheduleNextRefresh();
     } catch (e) {
       console.error('[App.init] failed:', e);
       // 即使初始化失败，也尝试渲染空看板而非白屏
       try { this.render(); } catch (_) {}
     }
-    this._timer = setInterval(() => {
-      this.refreshQuotes().then(() => this.renderBoard()).catch(() => {});
-    }, 10000);
     // 每秒更新「x秒前」时间显示
     this._timeTimer = setInterval(() => this.updateTimeLabel(), 1000);
     // popup 关闭时清除定时器，防止后续访问已销毁的 DOM
     window.addEventListener('beforeunload', () => {
-      if (this._timer) { clearInterval(this._timer); this._timer = null; }
+      if (this._quoteTimer) { clearTimeout(this._quoteTimer); this._quoteTimer = null; }
       if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
     });
   },
 
   // ===== 行情 =====
-  async refreshQuotes() {
-    const codes = this.state.watchlist.map(s => s.code);
-    this.state.quotes = await Quotes.fetch(codes);
-    this.state.lastUpdateTime = Date.now();
-    this.updateDataSourceLabel();
-    this.updateTimeLabel();
+  formatStatusSummary(snapshot) {
+    const { fresh = 0, cached = 0, missing = 0 } = snapshot?.counts || {};
+    if (fresh + cached + missing === 0) return '暂无自选股';
+    if (fresh && cached) return `实时 ${fresh} · 缓存 ${cached}`;
+    if (fresh) return `实时 ${fresh}`;
+    if (cached) return `缓存 ${cached} · 行情服务暂不可用`;
+    return '无行情数据 · 点击刷新重试';
+  },
+
+  getQuoteDisplay(result) {
+    if (!result?.quote || result.status === 'missing') {
+      return { price: '--', change: '--', status: 'missing', staleLabel: '' };
+    }
+    const quote = result.quote;
+    const price = Number.isFinite(quote.price) ? quote.price.toFixed(2) : '--';
+    const change = Number.isFinite(quote.change) && Number.isFinite(quote.changePercent)
+      ? `${quote.change > 0 ? '+' : ''}${quote.change.toFixed(2)} ${quote.changePercent > 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%`
+      : '--';
+    const time = result.fetchedAt
+      ? new Intl.DateTimeFormat('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).format(new Date(result.fetchedAt))
+      : '';
+    return {
+      price,
+      change,
+      status: result.status,
+      staleLabel: result.status === 'cached' ? `旧 ${time}` : ''
+    };
+  },
+
+  applyQuoteSnapshot(snapshot) {
+    if ((snapshot?.generation || 0) < this.state.quoteGeneration) return false;
+    this.state.quoteSnapshot = snapshot;
+    this.state.quoteGeneration = snapshot?.generation || 0;
+    return true;
+  },
+
+  async refreshQuotes({ force = false } = {}) {
+    const codes = this.state.watchlist.map((stock) => stock.code);
+    const snapshot = await this.quoteService.refresh(codes, { force });
+    if (this.applyQuoteSnapshot(snapshot)) {
+      this.updateQuoteStatus();
+      this.updateTimeLabel();
+    }
+    return snapshot;
+  },
+
+  scheduleNextRefresh() {
+    clearTimeout(this._quoteTimer);
+    const delay = QuoteService.getRefreshIntervalMs(new Date(), 'popup');
+    this._quoteTimer = setTimeout(async () => {
+      try {
+        await this.refreshQuotes();
+        this.renderBoard();
+      } finally {
+        this.scheduleNextRefresh();
+      }
+    }, delay);
+  },
+
+  updateQuoteStatus() {
+    const element = document.getElementById('quote-status-summary');
+    if (element) element.textContent = this.formatStatusSummary(this.state.quoteSnapshot);
   },
 
   updateTimeLabel() {
     const el = document.getElementById('update-time');
     if (!el) return;
-    const ts = this.state.lastUpdateTime;
+    const ts = this.state.quoteSnapshot?.succeededAt;
     if (!ts) { el.textContent = '未更新'; return; }
     const diff = Math.floor((Date.now() - ts) / 1000);
     if (diff < 5) el.textContent = '刚刚更新';
@@ -170,24 +241,21 @@ const App = {
     if (btn.classList.contains('spinning')) return; // 防止重复点击
     btn.classList.add('spinning');
     try {
-      await this.refreshQuotes();
+      const snapshot = await this.refreshQuotes({ force: true });
       this.renderBoard();
-      this.toast('行情已刷新');
+      const requested = Object.keys(snapshot.results || {}).length;
+      if (requested > 0 && snapshot.counts.missing === requested) {
+        this.toast('刷新失败，请稍后重试');
+      } else if (snapshot.counts.cached > 0) {
+        this.toast('实时行情不可用，已保留缓存');
+      } else {
+        this.toast('行情已刷新');
+      }
+      this.scheduleNextRefresh();
     } catch (e) {
-      this.toast('刷新失败，请重试');
+      this.toast('刷新失败，请稍后重试');
     } finally {
       btn.classList.remove('spinning');
-    }
-  },
-
-  updateDataSourceLabel() {
-    const el = document.getElementById('data-source');
-    if (Quotes.isDemo) {
-      el.textContent = '行情数据：演示数据（Demo）';
-      el.className = 'data-source demo';
-    } else {
-      el.textContent = '行情数据：实时 · ' + (Quotes._sourceName || '行情接口');
-      el.className = 'data-source';
     }
   },
 
@@ -589,24 +657,30 @@ const App = {
     grid.innerHTML = '';
     const gid = this.state.currentGroupId;
     stocks.forEach(s => {
-      const q = Quotes.enrich(this.state.quotes[s.code]) || { name: s.name, price: 0, change: 0, changePercent: 0 };
-      const up = q.change > 0, down = q.change < 0;
+      const result = this.state.quoteSnapshot.results[s.code]
+        || { status: 'missing', fetchedAt: null, quote: null };
+      const display = this.getQuoteDisplay(result);
+      const q = result.quote || {};
+      const up = typeof q.change === 'number' && q.change > 0;
+      const down = typeof q.change === 'number' && q.change < 0;
       const cls = up ? 'up' : (down ? 'down' : 'flat');
       const card = document.createElement('div');
-      card.className = 'grid-card ' + cls;
+      card.className = `grid-card ${cls} quote-${display.status}`;
       card.draggable = !this.state.batchMode;
       card.dataset.code = s.code;
-      const priceText = this.state.priceHidden ? '****' : (q.price != null ? q.price.toFixed(2) : '--');
-      const changeText = this.state.priceHidden ? '****' :
-        `${up ? '+' : ''}${q.change?.toFixed(2) ?? '--'} ${up ? '+' : ''}${q.changePercent?.toFixed(2) ?? '--'}%`;
+      const priceText = this.state.priceHidden && display.price !== '--' ? '****' : display.price;
+      const changeText = this.state.priceHidden && display.change !== '--' ? '****' : display.change;
       const isPinned = s.pinned && s.pinned[gid];
       const isSelected = this.state.selected.has(s.code);
+      const staleBadge = display.staleLabel
+        ? `<span class="quote-stale" title="缓存行情">${display.staleLabel}</span>`
+        : '';
       card.innerHTML = `
         ${isPinned ? '<span class="grid-card-pin">📌</span>' : ''}
         ${this.state.batchMode
           ? `<span class="grid-card-check${isSelected ? ' checked' : ''}">${isSelected ? '✓' : ''}</span>`
           : '<span class="grid-card-more">⋯</span><div class="card-menu"><div class="card-menu-item" data-action="pin">📌 ' + (isPinned ? '取消置顶' : '置顶') + '</div><div class="card-menu-divider"></div><div class="card-menu-item danger" data-action="delete">🗑 删除</div></div>'}
-        <div class="grid-card-name">${this.esc(q.name || s.name)}</div>
+        <div class="grid-card-name">${this.esc(q.name || s.name)}${staleBadge}</div>
         <div class="grid-card-price">${priceText}</div>
         <div class="grid-card-change">${changeText}</div>`;
       if (this.state.batchMode) {
@@ -698,17 +772,26 @@ const App = {
     body.innerHTML = '';
     const gid = this.state.currentGroupId;
     stocks.forEach(s => {
-      const q = Quotes.enrich(this.state.quotes[s.code]) || { name: s.name, price: 0, change: 0, changePercent: 0 };
-      const up = q.change > 0, down = q.change < 0;
+      const result = this.state.quoteSnapshot.results[s.code]
+        || { status: 'missing', fetchedAt: null, quote: null };
+      const display = this.getQuoteDisplay(result);
+      const q = result.quote || {};
+      const up = typeof q.change === 'number' && q.change > 0;
+      const down = typeof q.change === 'number' && q.change < 0;
       const row = document.createElement('div');
-      row.className = 'list-row';
+      row.className = `list-row quote-${display.status}`;
       row.draggable = !this.state.batchMode;
       row.dataset.code = s.code;
       if (this.state.batchMode && this.state.selected.has(s.code)) row.style.background = '#E8F0FE';
       let html = '<div class="list-cell drag-handle" style="flex:0 0 16px;">⋮⋮</div>';
       cols.forEach(c => {
         let val = '';
-        if (c === 'name') val = this.esc(q.name || s.name);
+        if (c === 'name') {
+          const staleBadge = display.staleLabel
+            ? `<span class="quote-stale" title="缓存行情">${display.staleLabel}</span>`
+            : '';
+          val = this.esc(q.name || s.name) + staleBadge;
+        }
         else if (c === 'code') val = this.esc(s.code);
         else if (c === 'addedAt') val = s.addedAt ? new Date(s.addedAt).toLocaleDateString() : '--';
         else if (typeof q[c] === 'number') {
@@ -1029,7 +1112,8 @@ const App = {
 
   // ===== 悬浮行情浮窗 =====
   showQuoteTooltip(code, evt) {
-    const q = Quotes.enrich(this.state.quotes[code]);
+    const result = this.state.quoteSnapshot.results[code];
+    const q = result?.quote;
     if (!q) return;
     const tip = document.getElementById('quote-tooltip');
     const up = q.change > 0, down = q.change < 0;
@@ -1039,7 +1123,7 @@ const App = {
     const pct = q.changePercent != null ? `${sign}${fmt(q.changePercent)}%` : '--';
     const chg = q.change != null ? `${sign}${fmt(q.change)}` : '--';
     tip.innerHTML = `
-      <div class="tt-name">${this.esc(q.name || code)}<span class="tt-code">${this.esc(code)}</span></div>
+      <div class="tt-name">${this.esc(q.name || code)}<span class="tt-code">${this.esc(code)}</span>${result.status === 'cached' ? `<span class="quote-stale" title="缓存行情">${this.getQuoteDisplay(result).staleLabel}</span>` : ''}</div>
       <div class="tt-row"><span class="tt-label">现价</span><span class="tt-val ${cls}">${fmt(q.price)}</span></div>
       <div class="tt-row"><span class="tt-label">涨跌额</span><span class="tt-val ${cls}">${chg}</span></div>
       <div class="tt-row"><span class="tt-label">涨跌幅</span><span class="tt-val ${cls}">${pct}</span></div>
