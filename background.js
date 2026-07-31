@@ -3,7 +3,7 @@
 // 功能2：鼠标 hover tooltip 显示前 5 只自选股的涨跌幅概览
 // 颜色惯例：红涨绿跌（中国股市）
 
-importScripts('storage.js', 'quotes.js');
+importScripts('stock-utils.js', 'storage.js', 'quotes.js');
 
 const ALARM_NAME = 'quote-refresh';
 const REFRESH_MINUTES = 0.5; // 30秒刷新一次

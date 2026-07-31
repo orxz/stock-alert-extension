@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "check:syntax": "node --check storage.js && node --check quotes.js && node --check background.js && node --check popup.js",
+    "check:syntax": "node --check stock-utils.js && node --check storage.js && node --check quotes.js && node --check background.js && node --check popup.js",
     "check:types": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "validate:manifest": "node scripts/validate-manifest.mjs",
