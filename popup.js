@@ -1109,12 +1109,13 @@ const App = {
   },
 
   // ===== 价格隐藏 =====
-  togglePriceHidden() {
+  async togglePriceHidden() {
     this.state.priceHidden = !this.state.priceHidden;
     const btn = document.getElementById('btn-toggle-price');
     btn.textContent = this.state.priceHidden ? '🚫' : '👁';
     btn.title = this.state.priceHidden ? '显示价格' : '隐藏价格';
     btn.classList.toggle('active', this.state.priceHidden);
+    await this.persistBoardPatch(this.state.currentGroupId, { priceHidden: this.state.priceHidden });
     this.renderBoard();
   },
 

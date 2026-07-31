@@ -37,6 +37,32 @@ test('missing quote values remain last in both directions', () => {
   assert.equal(StockUtils.sortStocks(stocks, results, 'g_all', 'price', 'desc')[1].code, 'sz000001');
 });
 
+test('sorting stocks with both quotes missing preserves relative order', () => {
+  const input = [
+    { code: 'a', name: '甲', groupIds: [], pinned: {}, manualOrder: {} },
+    { code: 'b', name: '乙', groupIds: [], pinned: {}, manualOrder: {} }
+  ];
+  const results = {
+    a: { status: 'missing', quote: null },
+    b: { status: 'missing', quote: null }
+  };
+  const sorted = StockUtils.sortStocks(input, results, 'g_all', 'price', 'desc');
+  assert.deepEqual(sorted.map((stock) => stock.code), ['a', 'b']);
+});
+
+test('sorting by quote value orders stocks in both directions', () => {
+  const input = [
+    { code: 'a', name: '甲', groupIds: [], pinned: {}, manualOrder: {} },
+    { code: 'b', name: '乙', groupIds: [], pinned: {}, manualOrder: {} }
+  ];
+  const results = {
+    a: { status: 'fresh', quote: { price: 20 } },
+    b: { status: 'fresh', quote: { price: 10 } }
+  };
+  assert.equal(StockUtils.sortStocks(input, results, 'g_all', 'price', 'asc')[0].code, 'b');
+  assert.equal(StockUtils.sortStocks(input, results, 'g_all', 'price', 'desc')[0].code, 'a');
+});
+
 test('runtime entry points load StockUtils before storage consumers', async () => {
   const popup = await readFile(new URL('popup.html', rootDir), 'utf8');
   const background = await readFile(new URL('background.js', rootDir), 'utf8');

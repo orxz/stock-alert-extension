@@ -129,7 +129,7 @@ test('ignores non-string codes and duplicate requests', async () => {
   assert.equal(snapshot.results.sh600519.status, 'missing');
 });
 
-test('failed refresh keeps a recent cache entry fresh', async () => {
+test('failed refresh falls back to cache as cached (not fresh)', async () => {
   const now = 10000;
   const cache = memoryCache({
     sh600519: { cacheVersion: 1, code: 'sh600519', provider: 'eastmoney', fetchedAt: 9000, quote: quote(10) }
@@ -140,7 +140,7 @@ test('failed refresh keeps a recent cache entry fresh', async () => {
     async fetchSina() { throw new Error('offline'); }
   };
   const snapshot = await QuoteService.create({ transport, cache, clock: () => now }).refresh(['sh600519']);
-  assert.equal(snapshot.results.sh600519.status, 'fresh');
+  assert.equal(snapshot.results.sh600519.status, 'cached');
   assert.equal(snapshot.results.sh600519.source, 'cache');
 });
 

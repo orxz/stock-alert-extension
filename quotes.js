@@ -19,6 +19,7 @@ const Quotes = {
     const params = new URLSearchParams({
       input,
       type: '14',
+      // 东方财富搜索接口的公共客户端令牌（非密钥），与官网前端一致，可公开使用
       token: 'D43BF722C8E33BDC906FB84D85E326E8',
       count: '15'
     });

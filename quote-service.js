@@ -190,7 +190,7 @@ const QuoteService = (() => {
         if (entry && isUsableQuote(entry.quote) && age <= CACHE_MAX_AGE_MS) {
           results[code] = {
             code,
-            status: age <= DEFAULT_FRESHNESS_MS ? 'fresh' : 'cached',
+            status: 'cached',
             source: 'cache',
             provider: entry.provider || 'unknown',
             fetchedAt: entry.fetchedAt,
@@ -229,16 +229,15 @@ const QuoteService = (() => {
       if (inFlight.has(key)) return inFlight.get(key);
 
       const attemptedAt = clock();
-      const currentGeneration = ++generation;
       if (!force && attemptedAt < nextAutomaticAttemptAt) {
         return read(requested).then((snapshot) => ({
           ...snapshot,
           attemptedAt,
-          generation: currentGeneration,
           deferredUntil: nextAutomaticAttemptAt
         }));
       }
 
+      const currentGeneration = ++generation;
       const promise = executeRefresh(requested, currentGeneration, attemptedAt)
         .finally(() => inFlight.delete(key));
       inFlight.set(key, promise);
