@@ -47,6 +47,8 @@ export default [
       globals: {
         AbortController: 'readonly',
         Buffer: 'readonly',
+        chrome: 'readonly',
+        document: 'readonly',
         StockUtils: 'readonly',
         TextEncoder: 'readonly',
         URL: 'readonly',
