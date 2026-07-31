@@ -86,6 +86,7 @@ const QuoteService = (() => {
 
     async function read(codes, { freshnessMs = DEFAULT_FRESHNESS_MS } = {}) {
       const requested = uniqueCodes(codes);
+      const gen = generation;
       const now = clock();
       const cached = await cache.readQuoteCache(requested);
       const expired = [];
@@ -111,7 +112,7 @@ const QuoteService = (() => {
         }
       }
       if (expired.length) await cache.deleteQuoteCache(expired);
-      return summarize(results, now, null, generation);
+      return summarize(results, now, null, gen);
     }
 
     async function fetchProvider(provider, codes) {
@@ -230,7 +231,8 @@ const QuoteService = (() => {
 
       const attemptedAt = clock();
       if (!force && attemptedAt < nextAutomaticAttemptAt) {
-        return read(requested).then((snapshot) => ({
+        // 退避期内存在失败记录，近期缓存不得再以 fresh 呈现（见设计 §6.1）
+        return read(requested, { freshnessMs: 0 }).then((snapshot) => ({
           ...snapshot,
           attemptedAt,
           deferredUntil: nextAutomaticAttemptAt

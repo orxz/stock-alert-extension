@@ -349,7 +349,7 @@ function createStorage({ area, clock = () => Date.now() }) {
   // ===== 看板配置 =====
   async function getBoardConfig(groupId) {
     const data = await loadAll();
-    return data.boardConfig[groupId] || { viewMode: 'grid', sortField: 'manual', sortDirection: 'desc', columns: ['name', 'price', 'change', 'changePercent'], columnOrder: ['name', 'price', 'change', 'changePercent'] };
+    return data.boardConfig[groupId] || { viewMode: 'grid', sortField: 'manual', sortDirection: 'desc', columns: ['name', 'price', 'change', 'changePercent'], columnOrder: ['name', 'price', 'change', 'changePercent'], priceHidden: false };
   }
 
   async function saveBoardConfigForGroup(groupId, cfg) {

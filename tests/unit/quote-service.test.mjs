@@ -202,13 +202,15 @@ test('automatic failures back off while force allows one retry', async () => {
     async fetchSina() { calls += 1; return {}; }
   };
   const service = QuoteService.create({ transport, cache: memoryCache(), clock: () => now });
-  await service.refresh(['sh600519']);
+  const first = await service.refresh(['sh600519']);
   assert.equal(calls, 2);
   now = 2000;
   const deferred = await service.refresh(['sh600519']);
   assert.equal(calls, 2);
   assert.equal(deferred.deferredUntil, 31000);
-  await service.refresh(['sh600519'], { force: true });
+  assert.equal(deferred.generation, first.generation);
+  const forced = await service.refresh(['sh600519'], { force: true });
+  assert.equal(forced.generation, deferred.generation + 1);
   assert.equal(calls, 4);
 });
 
