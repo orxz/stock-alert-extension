@@ -44,7 +44,11 @@ const QuoteService = (() => {
   }
 
   function isUsableQuote(quote) {
-    return quote && typeof quote === 'object' && typeof quote.price === 'number' && Number.isFinite(quote.price);
+    return quote
+      && typeof quote === 'object'
+      && typeof quote.price === 'number'
+      && Number.isFinite(quote.price)
+      && quote.price > 0;
   }
 
   function uniqueCodes(codes) {

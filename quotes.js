@@ -181,9 +181,11 @@ const Quotes = {
    */
   enrich(rawQuote) {
     if (!rawQuote) return null;
+    const rawPrice = this._num(rawQuote.price);
     const safe = {
       name: String(rawQuote.name || ''),
-      price: this._num(rawQuote.price),
+      // A 股价格不会为 0 或负数：停牌/盘前接口常返回 0.00，必须按缺失处理，否则会渲染成 -100% 的假行情
+      price: rawPrice !== null && rawPrice > 0 ? rawPrice : null,
       prevClose: this._num(rawQuote.prevClose),
       open: this._num(rawQuote.open),
       high: this._num(rawQuote.high),

@@ -86,6 +86,49 @@ test('uses a seven-day cache and rejects an older entry', async () => {
   assert.equal(cache.values.sz000001, undefined);
 });
 
+test('read deletes an expired cache entry and marks the symbol missing', async () => {
+  const cache = memoryCache({
+    sh600519: { cacheVersion: 1, code: 'sh600519', provider: 'eastmoney', fetchedAt: 1000, quote: quote(10) }
+  });
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney() { throw new Error('unexpected network call'); },
+    async fetchSina() { throw new Error('unexpected network call'); }
+  };
+  const service = QuoteService.create({ transport, cache, clock: () => 604800000 + 2000 });
+  const snapshot = await service.read(['sh600519']);
+  assert.equal(snapshot.results.sh600519.status, 'missing');
+  assert.equal(cache.values.sh600519, undefined);
+});
+
+test('treats a cached zero price as unusable and removes it', async () => {
+  const cache = memoryCache({
+    sh600519: { cacheVersion: 1, code: 'sh600519', provider: 'eastmoney', fetchedAt: 1000, quote: quote(0) }
+  });
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney() { throw new Error('offline'); },
+    async fetchSina() { throw new Error('offline'); }
+  };
+  const service = QuoteService.create({ transport, cache, clock: () => 2000 });
+  const snapshot = await service.refresh(['sh600519']);
+  assert.equal(snapshot.results.sh600519.status, 'missing');
+  assert.equal(cache.values.sh600519, undefined);
+});
+
+test('ignores non-string codes and duplicate requests', async () => {
+  const calls = [];
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney(codes) { calls.push(codes); return {}; },
+    async fetchSina(codes) { calls.push(codes); return {}; }
+  };
+  const service = QuoteService.create({ transport, cache: memoryCache(), clock: () => 1000 });
+  const snapshot = await service.refresh(['sh600519', '', 42, null, 'sh600519']);
+  assert.deepEqual(calls[0], ['sh600519']);
+  assert.equal(snapshot.results.sh600519.status, 'missing');
+});
+
 test('failed refresh keeps a recent cache entry fresh', async () => {
   const now = 10000;
   const cache = memoryCache({

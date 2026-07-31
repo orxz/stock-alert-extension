@@ -153,10 +153,13 @@ const App = {
   formatStatusSummary(snapshot) {
     const { fresh = 0, cached = 0, missing = 0 } = snapshot?.counts || {};
     if (fresh + cached + missing === 0) return '暂无自选股';
-    if (fresh && cached) return `实时 ${fresh} · 缓存 ${cached}`;
-    if (fresh) return `实时 ${fresh}`;
-    if (cached) return `缓存 ${cached} · 行情服务暂不可用`;
-    return '无行情数据 · 点击刷新重试';
+    const parts = [];
+    if (fresh) parts.push(`实时 ${fresh}`);
+    if (cached) parts.push(`缓存 ${cached}`);
+    if (missing) parts.push(`缺失 ${missing}`);
+    if (fresh === 0 && cached === 0) return '无行情数据 · 点击刷新重试';
+    if (fresh === 0) return `${parts.join(' · ')} · 行情服务暂不可用`;
+    return parts.join(' · ');
   },
 
   getQuoteDisplay(result) {

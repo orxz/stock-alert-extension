@@ -190,3 +190,31 @@ test('enrich defaults a missing name and derives change fields', () => {
   assert.equal(enriched.change, 1);
   assert.equal(enriched.changePercent, 11.11);
 });
+
+test('Sina parser drops a zero price instead of reporting a suspended quote', () => {
+  const text = 'var hq_str_sh600519="贵州茅台,0.00,1500.00,0.00,0.00,0.00,0,0,0,0";';
+  const result = Quotes.parseSina(text, ['sh600519']);
+  assert.deepEqual(result, {});
+});
+
+test('Eastmoney skips a zero-price row instead of reporting a fake crash', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        data: {
+          diff: [{ f12: '600519', f13: 1, f14: '贵州茅台', f2: 0, f3: 0, f4: 0, f18: 1500 }]
+        }
+      };
+    }
+  });
+  const result = await Quotes.fetchEastmoney(['sh600519'], { fetchImpl });
+  assert.deepEqual(result, {});
+});
+
+test('enrich treats a zero price as missing and never derives a change', () => {
+  const enriched = Quotes.enrich({ name: '停牌', price: 0, prevClose: 10 });
+  assert.equal(enriched.price, null);
+  assert.equal(enriched.change, null);
+  assert.equal(enriched.changePercent, null);
+});

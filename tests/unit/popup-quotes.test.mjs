@@ -14,6 +14,22 @@ test('summarizes mixed live and cached data', () => {
   );
 });
 
+test('summary includes the missing count and keeps actionable hints', () => {
+  assert.equal(
+    App.formatStatusSummary({ counts: { fresh: 8, cached: 2, missing: 1 } }),
+    '实时 8 · 缓存 2 · 缺失 1'
+  );
+  assert.equal(
+    App.formatStatusSummary({ counts: { fresh: 0, cached: 2, missing: 3 } }),
+    '缓存 2 · 缺失 3 · 行情服务暂不可用'
+  );
+  assert.equal(
+    App.formatStatusSummary({ counts: { fresh: 0, cached: 0, missing: 5 } }),
+    '无行情数据 · 点击刷新重试'
+  );
+  assert.equal(App.formatStatusSummary({ counts: {} }), '暂无自选股');
+});
+
 test('cached quote keeps the value and exposes an old marker', () => {
   const display = App.getQuoteDisplay({
     status: 'cached',
