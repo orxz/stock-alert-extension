@@ -30,6 +30,7 @@ test('Sina parser returns only rows with usable names and prices', () => {
 test('transport layer has no demo generator', () => {
   assert.equal(Quotes._demo, undefined);
   assert.equal(Quotes.isDemo, undefined);
+  assert.equal(Quotes.fetch, undefined);
 });
 
 test('search transport forwards the AbortSignal to injected fetch', async () => {
@@ -81,29 +82,6 @@ test('Sina transport decodes and parses the provider response', async () => {
   });
   assert.equal(result.sz000001.price, 10.2);
   assert.equal(result.sz000001.change, 0.7);
-});
-
-test('live compatibility fetch merges providers and never fabricates missing symbols', async () => {
-  const originalEastmoney = Quotes.fetchEastmoney;
-  const originalSina = Quotes.fetchSina;
-  const originalWarn = console.warn;
-  try {
-    console.warn = () => {};
-    Quotes.fetchEastmoney = async () => ({ sh600519: { price: 10 } });
-    Quotes.fetchSina = async (codes) => Object.fromEntries(codes
-      .filter((code) => code === 'sz000001')
-      .map((code) => [code, { price: 20 }]));
-    const result = await Quotes.fetch(['sh600519', 'sz000001', 'bj920185']);
-    assert.deepEqual(Object.keys(result), ['sh600519', 'sz000001']);
-
-    Quotes.fetchEastmoney = async () => { throw new Error('eastmoney HTTP 500'); };
-    Quotes.fetchSina = async () => { throw new Error('sina HTTP 500'); };
-    assert.deepEqual(await Quotes.fetch(['sh600519']), {});
-  } finally {
-    Quotes.fetchEastmoney = originalEastmoney;
-    Quotes.fetchSina = originalSina;
-    console.warn = originalWarn;
-  }
 });
 
 test('transports reject non-success HTTP responses', async () => {

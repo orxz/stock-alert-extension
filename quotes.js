@@ -152,33 +152,6 @@ const Quotes = {
   },
 
   /**
-   * Temporary live-only compatibility entry for Tasks 7–9.
-   * @param {string[]} codes
-   * @param {FetchOptions} options
-   * @returns {Promise<QuoteMap>}
-   */
-  async fetch(codes, options = {}) {
-    if (!codes?.length) return {};
-    /** @type {QuoteMap} */
-    let primary = {};
-    try {
-      primary = await this.fetchEastmoney(codes, options);
-    } catch (error) {
-      console.warn('[quotes] Eastmoney unavailable:', error.message);
-    }
-    const missing = codes.filter((code) => !primary[code]);
-    if (!missing.length) return primary;
-    /** @type {QuoteMap} */
-    let secondary = {};
-    try {
-      secondary = await this.fetchSina(missing, options);
-    } catch (error) {
-      console.warn('[quotes] Sina unavailable:', error.message);
-    }
-    return { ...primary, ...secondary };
-  },
-
-  /**
    * @param {string[]} codes
    * @returns {string[]}
    */
