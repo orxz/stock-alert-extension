@@ -116,3 +116,77 @@ test('enrich converts unusable fields to null without dividing by zero', () => {
   });
   assert.equal(Quotes.enrich(null), null);
 });
+
+test('Eastmoney returns empty when the payload has no row array', async () => {
+  const fetchImpl = async () => ({ ok: true, async json() { return { data: null }; } });
+  const result = await Quotes.fetchEastmoney(['sh600519'], { fetchImpl });
+  assert.deepEqual(result, {});
+});
+
+test('Eastmoney skips unusable rows and normalizes prefixes and fallbacks', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        data: {
+          diff: [
+            null,
+            { f14: '无代码', f2: 1 },
+            { f12: '000001', f13: 0, f2: 10 },
+            { f12: '920185', f13: 0, f14: '贝特瑞', f2: 20 },
+            { f12: '000858', f13: 0, f14: '五粮液', f2: 30 }
+          ]
+        }
+      };
+    }
+  });
+  const result = await Quotes.fetchEastmoney(['sz000858'], { fetchImpl });
+  assert.deepEqual(Object.keys(result).sort(), ['bj920185', 'sz000001', 'sz000858']);
+  assert.equal(result.sz000001.name, '000001');
+  assert.equal(result.bj920185.price, 20);
+  assert.equal(result.sz000858.price, 30);
+});
+
+test('Eastmoney keeps the original code when only the numeric suffix matches', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return { data: { diff: [{ f12: '920185', f13: 0, f14: '贝特瑞', f2: 20 }] } };
+    }
+  });
+  const result = await Quotes.fetchEastmoney(['SH920185'], { fetchImpl });
+  assert.equal(result.SH920185.price, 20);
+});
+
+test('Sina transport short-circuits on an empty code list', async () => {
+  let called = false;
+  const result = await Quotes.fetchSina([], {
+    fetchImpl: async () => { called = true; return { ok: true }; }
+  });
+  assert.deepEqual(result, {});
+  assert.equal(called, false);
+});
+
+test('Sina parser skips non-quote lines and keeps unmatched response codes', () => {
+  const text = [
+    'this line is not a quote',
+    'var hq_str_sz000002="万科A,10.00,9.00,10.50,10.60,9.80,0,0,100,1000";'
+  ].join('\n');
+  const result = Quotes.parseSina(text, ['sh600519']);
+  assert.deepEqual(Object.keys(result), ['sz000002']);
+  assert.equal(result.sz000002.change, 1.5);
+});
+
+test('_toSecids maps market prefixes to eastmoney secids', () => {
+  assert.deepEqual(
+    Quotes._toSecids(['bj920185', 'sh600519', 'sz000001']),
+    ['0.920185', '1.600519', '0.000001']
+  );
+});
+
+test('enrich defaults a missing name and derives change fields', () => {
+  const enriched = Quotes.enrich({ price: 10, prevClose: 9 });
+  assert.equal(enriched.name, '');
+  assert.equal(enriched.change, 1);
+  assert.equal(enriched.changePercent, 11.11);
+});
