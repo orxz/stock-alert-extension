@@ -155,3 +155,22 @@ test('failed manual refresh keeps cached value', async () => {
   await expect(page.locator('#toast')).toContainText('已保留缓存');
   await context.close();
 });
+
+test('failed manual refresh on a recent cache does not claim success', async () => {
+  const code = 'sh600519';
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: {
+      schemaVersion: 2,
+      groups: GROUPS,
+      watchlist: [stock(code)],
+      boardConfig: {},
+      [`quoteCache:${code}`]: cache(code, Date.now() - 1000, 10)
+    }
+  });
+  await expect(page.locator('.grid-card-price')).toHaveText('10.00');
+  await page.click('#btn-refresh');
+  await expect(page.locator('.grid-card-price')).toHaveText('10.00');
+  await expect(page.locator('#toast')).toContainText('已保留缓存');
+  await context.close();
+});

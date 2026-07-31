@@ -246,7 +246,7 @@ const App = {
       const requested = Object.keys(snapshot.results || {}).length;
       if (requested > 0 && snapshot.counts.missing === requested) {
         this.toast('刷新失败，请稍后重试');
-      } else if (snapshot.counts.cached > 0) {
+      } else if (requested > 0 && !snapshot.succeededAt) {
         this.toast('实时行情不可用，已保留缓存');
       } else {
         this.toast('行情已刷新');
