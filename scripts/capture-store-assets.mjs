@@ -1,4 +1,5 @@
 import { copyFile } from 'node:fs/promises';
+import { expect } from '@playwright/test';
 import { launchExtension, seedStorage } from '../tests/e2e/extension-fixture.mjs';
 
 /** @type {Array<[string, string, number, number]>} */
@@ -14,14 +15,15 @@ const STOCKS = [
 ];
 
 function buildSeed() {
-  const now = Date.now();
+  const realNow = Date.now();
+  const BASE = Date.UTC(2026, 6, 31, 6, 32, 0);
   const watchlist = STOCKS.map(([code, name], index) => ({
     code,
     name,
     groupIds: index < 4 ? ['g_tech'] : [],
     manualOrder: { g_all: index },
     pinned: index === 0 ? { g_all: true } : {},
-    addedAt: now - index * 1000
+    addedAt: BASE - index * 1000
   }));
   const cache = Object.fromEntries(STOCKS.map(([code, name, price, changePercent], index) => [
     `quoteCache:${code}`,
@@ -29,7 +31,7 @@ function buildSeed() {
       cacheVersion: 1,
       code,
       provider: 'eastmoney',
-      fetchedAt: now - (index === 7 ? 600000 : 1000),
+      fetchedAt: index === 7 ? BASE : realNow - 1000,
       quote: {
         name,
         price,
@@ -84,6 +86,10 @@ const marketingPage = await context.newPage();
 await seedStorage(worker, buildSeed());
 await page.setViewportSize({ width: 420, height: 640 });
 await page.reload();
+await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓存 1');
+await expect(page.locator('.quote-stale')).toHaveCount(1);
+await expect(page.locator('#update-time')).toHaveText('未更新');
+await page.waitForTimeout(500);
 const version = await page.locator('#brand-version').textContent();
 if (version !== '1.2.1') throw new Error(`expected popup version 1.2.1, got ${version}`);
 const summary = await page.locator('#quote-status-summary').textContent();
@@ -91,6 +97,8 @@ if (summary !== '实时 7 · 缓存 1') throw new Error(`expected mixed summary,
 console.log(`capture verified: v${version}, ${summary}`);
 for (const scenario of scenarios) {
   await scenario.prepare(page);
+  await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓存 1');
+  await page.waitForTimeout(300);
   const popupPng = await page.screenshot({ type: 'png' });
   const storePath = `store-assets/${scenario.file}`;
   await renderMarketingCanvas(marketingPage, { ...scenario, popupPng, output: storePath });
