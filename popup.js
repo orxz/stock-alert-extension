@@ -439,7 +439,12 @@ const App = {
     const seq = ++this._searchSeq; // 防止旧请求覆盖新结果
 
     // 1. 尝试实时 API 查询
-    let results = await Quotes.searchStocks(kw);
+    let results = [];
+    try {
+      results = await Quotes.searchStocks(kw);
+    } catch (error) {
+      console.warn('[popup] 搜索服务不可用，使用本地联想:', error.message);
+    }
 
     // 如果期间用户又输入了新关键词，丢弃本次结果
     if (seq !== this._searchSeq) return;

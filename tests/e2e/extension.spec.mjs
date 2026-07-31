@@ -105,6 +105,21 @@ test('rapid duplicate add creates one stock', async () => {
   await context.close();
 });
 
+test('offline code search falls back to local suggestions without page error', async () => {
+  const errors = [];
+  const { context, page } = await launchExtension({
+    offline: true,
+    onPageError: (error) => errors.push(error.message),
+    seed: { schemaVersion: 2, groups: GROUPS, watchlist: [], boardConfig: {} }
+  });
+  await page.click('#btn-add-stock');
+  await page.fill('#add-code', '600519');
+  await page.waitForTimeout(800);
+  await expect(page.locator('#code-suggest')).toContainText('贵州茅台');
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
 test('rapid view changes persist the final choice', async () => {
   const { context, page } = await launchExtension({
     offline: true,
