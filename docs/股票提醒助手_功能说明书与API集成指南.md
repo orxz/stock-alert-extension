@@ -1,14 +1,14 @@
 # 股票提醒助手 — 功能说明书与 API 集成指南
 
-> 版本：v1.0.0（首个正式版）｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-07-10
+> 版本：v1.2.1 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-07-31
 
 ---
 
 ## 1. 文档概述
 
-本文档为「股票提醒助手」浏览器扩展的功能说明书与 API 集成指南，面向开发者和维护人员。文档涵盖插件的完整功能规格、数据模型、存储结构、三个外部 API 的集成细节（东方财富搜索 API、东方财富行情 API、新浪财经行情 API）、演示数据兜底机制、安全与权限设计，以及文件结构说明。
+本文档为「股票提醒助手」浏览器扩展的功能说明书与 API 集成指南，面向开发者和维护人员。文档涵盖插件的完整功能规格、数据模型、存储结构、三个外部 API 的集成细节（东方财富搜索 API、东方财富行情 API、新浪财经行情 API）、行情缓存与降级机制、安全与权限设计，以及文件结构说明。
 
-本文档内容均基于插件源码（`popup.js`、`quotes.js`、`storage.js`、`background.js`、`manifest.json`、`popup.html`、`popup.css`）编写，所有代码引用均可追溯至对应文件。
+本文档内容均基于插件源码（`popup.js`、`quotes.js`、`quote-service.js`、`stock-utils.js`、`storage.js`、`background.js`、`manifest.json`、`popup.html`、`popup.css`）编写，所有代码引用均可追溯至对应文件。
 
 ---
 
@@ -18,7 +18,7 @@
 
 「股票提醒助手」是一款基于 Chrome Manifest V3 的浏览器扩展，为用户提供自选股分组管理、实时行情看板、智能搜索补全和后台 Badge/Tooltip 提醒功能。插件不使用任何远程代码，所有逻辑均在本地执行。
 
-- **版本**：1.0.0（首个正式版）
+- **版本**：1.2.1
 - **Manifest 版本**：V3
 - **权限**：`storage`、`alarms`
 - **主机权限**：`https://hq.sinajs.cn/*`、`https://push2.eastmoney.com/*`、`https://searchapi.eastmoney.com/*`
@@ -32,11 +32,13 @@
 
 - **UI 层**（`popup.html` / `popup.css`）：弹窗界面结构与样式
 - **逻辑层**（`popup.js`）：主交互逻辑，包含状态管理、看板渲染、事件绑定、搜索补全
-- **数据层**（`storage.js`）：基于 `chrome.storage.local` 的本地存储读写与数据迁移
-- **行情层**（`quotes.js`）：行情数据获取与搜索，含三级降级策略
+- **共享语义层**（`stock-utils.js`）：代码规范化、计算分组视图与确定性排序的纯函数
+- **数据层**（`storage.js`）：基于 `chrome.storage.local` 的本地存储读写、schema v2 迁移、串行写入与行情缓存
+- **行情层**（`quotes.js`）：行情请求与解析的传输层（东方财富/新浪），不含降级决策
+- **编排层**（`quote-service.js`）：超时、分批、双源合并、缓存、退避与状态汇总
 - **后台层**（`background.js`）：Service Worker，负责 Badge 和 Tooltip 的定时更新
 
-数据流向为：用户操作 → `popup.js` 调用 `storage.js` 持久化 → `popup.js` 调用 `quotes.js` 获取行情 → 渲染看板。后台 `background.js` 独立运行，通过 `chrome.alarms` 定时刷新，通过 `chrome.storage.onChanged` 监听数据变化即时更新 Badge。
+数据流向为：用户操作 → `popup.js` 调用 `storage.js` 持久化 → `popup.js` 通过 `quote-service.js` 获取行情 → 渲染看板。后台 `background.js` 独立运行，通过一次性 `chrome.alarms` 定时刷新，通过 `chrome.storage.onChanged` 监听数据变化即时更新 Badge。
 
 ### 2.3 文件结构
 
@@ -46,9 +48,11 @@ stock-alert-extension/
 ├── popup.html          # 弹窗 HTML 结构
 ├── popup.css           # 弹窗样式
 ├── popup.js            # 主逻辑（~990 行）
-├── storage.js          # 本地存储层（216 行）
-├── quotes.js           # 行情数据层（236 行）
-├── background.js       # Service Worker（110 行）
+├── stock-utils.js      # 共享视图/排序纯函数
+├── storage.js          # 本地存储层（schema v2 + 串行写入 + 行情缓存）
+├── quotes.js           # 行情传输层
+├── quote-service.js    # 行情编排层
+├── background.js       # Service Worker
 └── icons/              # 图标资源（16/32/48/128px）
 ```
 
@@ -99,9 +103,15 @@ stock-alert-extension/
 
 **自动刷新：**
 
-- 弹窗打开时立即刷新一次行情
-- 之后每 10 秒自动刷新（`setInterval`）
-- 后台 Service Worker 每 30 秒刷新一次（`chrome.alarms`，`REFRESH_MINUTES = 0.5`）
+- 弹窗打开时先渲染本地缓存，再立即刷新一次行情
+- 之后按自适应间隔递归定时：盘中 10 秒 / 盘外 5 分钟（`QuoteService.getRefreshIntervalMs(now, 'popup')`）
+- 后台 Service Worker 按自适应间隔创建一次性 alarm：盘中 30 秒 / 盘外 5 分钟
+
+**行情状态：**
+
+- 实时（fresh）：本次会话内（30 秒）来自缓存或刚刚刷新成功
+- 缓存（cached）：7 天内旧行情，界面标注「旧 HH:MM」，Badge 灰显
+- 缺失（missing）：无缓存或缓存超过 7 天/损坏，显示灰色 `--`
 
 ### 3.3 搜索与添加股票
 
@@ -201,15 +211,19 @@ stock-alert-extension/
 
 - `chrome.runtime.onInstalled` — 安装时
 - `chrome.runtime.onStartup` — 浏览器启动时
-- `chrome.alarms.onAlarm` — 每 30 秒定时刷新
+- `chrome.alarms.onAlarm` — 盘中 30 秒 / 盘外 5 分钟定时刷新
 - `chrome.storage.onChanged` — 自选股或分组变化时立即更新
 
-### 3.10 数据源标签
+### 3.10 行情状态展示
 
-看板底部显示当前行情数据来源：
+状态栏实时显示行情汇总：
 
-- 实时数据：`行情数据：实时 · 东方财富` 或 `行情数据：实时 · 新浪财经`
-- 演示数据：`行情数据：演示数据（Demo）`（橙色样式 `data-source demo`）
+- 全实时：`实时 N`
+- 实时 + 缓存：`实时 N · 缓存 M`
+- 仅缓存：`缓存 M · 行情服务暂不可用`
+- 全缺失：`无行情数据 · 点击刷新重试`
+
+单只股票卡片/行：实时正常配色；缓存保留数值并显示「旧 HH:MM」；缺失显示灰色 `--`。插件不生成任何模拟价格。
 
 ---
 
@@ -242,7 +256,7 @@ stock-alert-extension/
 {
   "code": "sh600519",
   "name": "贵州茅台",
-  "groupIds": ["g_all", "g_1689000000000"],
+  "groupIds": ["g_1689000000000"],
   "manualOrder": { "g_all": 0, "g_1689000000000": 2 },
   "pinned": { "g_all": true },
   "addedAt": 1689000000000
@@ -250,7 +264,7 @@ stock-alert-extension/
 ```
 
 - `code`：股票代码，格式为 `sh`/`sz` + 6 位数字
-- `groupIds`：所属分组 ID 列表（一只股票可属于多个分组）
+- `groupIds`：所属自定义分组 ID 列表；「全部」（`g_all`）是计算视图，不存储成员关系
 - `manualOrder`：各分组内的手动排序序号
 - `pinned`：各分组内的置顶状态
 - `addedAt`：添加时间戳
@@ -281,16 +295,16 @@ stock-alert-extension/
 
 旧版扁平列表格式，迁移完成后保留作为备份。
 
-### 4.2 数据迁移
+### 4.2 数据迁移（v0/v1 → schema v2）
 
-`Storage._migrate(legacyList)` 将旧版扁平 watchlist 迁移到分组结构：
+`Storage.loadAll()` 在 `schemaVersion !== 2` 时执行 `migrateToV2`：
 
-- 创建默认「全部」分组
-- 每只股票分配到「全部」分组，初始化空的 `manualOrder` 和 `pinned`
-- `addedAt` 按原顺序递减（`now - i * 1000`），保持原有排序
-- 迁移结果一次性写入 `chrome.storage.local`
+- 先写入 `migrationBackup:v1.2.1` 一次性本地备份
+- 旧版扁平 `watchlist_legacy` 还原为 v1 结构，再统一规范化（代码前缀、名称、`manualOrder`/`pinned`/`addedAt`）
+- 移除 `g_all` 成员关系，清理未知分组 ID，按代码合并重复股票
+- 结果一次性写入 `chrome.storage.local`，迁移幂等且不覆盖原备份
 
-迁移触发条件：`loadAll()` 检测到 `groups` 或 `watchlist` 不存在，但 `watchlist_legacy` 存在。
+迁移触发条件：`schemaVersion` 缺失或不是 2。
 
 ### 4.3 常量定义
 
@@ -300,7 +314,8 @@ stock-alert-extension/
 | `DEFAULT_GROUP_NAME` | `全部` | 默认分组名称 |
 | `MAX_GROUPS` | `20` | 最大分组数 |
 | `ALARM_NAME` | `quote-refresh` | 定时器名称 |
-| `REFRESH_MINUTES` | `0.5` | 后台刷新间隔（30 秒） |
+| `CACHE_MAX_AGE_MS` | `604800000` | 行情缓存最长保留时间（7 天） |
+| 自适应间隔 | 盘中/盘外 | 弹窗 10s/5min，后台 30s/5min |
 
 ---
 
@@ -498,46 +513,24 @@ const text = new TextDecoder('gbk').decode(buffer);
 
 **注意：** 新浪 API 不直接返回涨跌额和涨跌幅，`enrich()` 会根据 `price` 和 `prevClose` 自动计算。
 
-### 5.4 演示数据兜底
+### 5.4 行情缓存与降级
 
-当东方财富和新浪均失败时，使用本地演示数据确保功能可用。
+插件**不生成任何模拟行情**。双源均失败时，`QuoteService` 使用本地缓存兜底：
 
-**演示数据基础库（`_demoBase`）：**
-
-包含 8 只股票的基准价格和昨收：
-
-| 代码 | 名称 | 基准价 | 昨收 |
-|---|---|---|---|
-| `sz300418` | 昆仑万维 | 50.65 | 47.96 |
-| `sh600519` | 贵州茅台 | 1689.00 | 1675.50 |
-| `sz000858` | 五粮液 | 156.20 | 158.40 |
-| `sh601318` | 中国平安 | 48.30 | 47.80 |
-| `sz300750` | 宁德时代 | 210.50 | 205.00 |
-| `sh600036` | 招商银行 | 35.80 | 36.10 |
-| `sz002475` | 立讯精密 | 38.90 | 37.50 |
-| `sh601899` | 紫金矿业 | 14.20 | 13.85 |
-
-**数据生成逻辑：**
-
-- 基础库中的股票：在基准价上添加 ±0.5% 随机抖动，计算涨跌额和涨跌幅
-- 基础库外的股票：生成 10-50 之间的随机价格，计算相关字段
-- 所有字段（`open`、`high`、`low`、`volume`、`amount`）均随机生成
-
-**标识：**
-
-- `Quotes.isDemo = true`
-- `Quotes._sourceName = '演示数据'`
-- 看板底部显示橙色标签：`行情数据：演示数据（Demo）`
+- 缓存键：`quoteCache:{code}`，按代码隔离存储
+- 有效期：`fetchedAt` 起 7 天内可用；30 秒内视为实时（fresh）
+- 缓存状态：30 秒 ~ 7 天为 `cached`，界面显示「旧 HH:MM」、Badge 灰显
+- 缺失状态：无缓存、缓存损坏或超过 7 天 → `missing`，显示灰色 `--` 并清理损坏条目
 
 ### 5.5 数据流转与降级策略
 
-`Quotes.fetch(codes)` 是行情数据的主入口，按以下顺序依次尝试：
+`QuoteService.read(codes)` 只读缓存（不发起网络请求），`QuoteService.refresh(codes, { force })` 按以下顺序执行：
 
-1. **东方财富（主源）**：调用 `_fetchEastmoney(codes)`，成功且返回非空 → 设置 `isDemo=false`、`_sourceName='东方财富'`，返回结果
-2. **新浪财经（备源）**：东方财富失败或返回空 → 调用 `_fetchSina(codes)`，成功且返回非空 → 设置 `isDemo=false`、`_sourceName='新浪财经'`，返回结果
-3. **演示数据（兜底）**：两者均失败 → 设置 `isDemo=true`、`_sourceName='演示数据'`，返回 `_demo(codes)`
+1. **东方财富（主源）**：每批最多 50 只，4 秒超时；成功部分直接采用并写缓存
+2. **新浪财经（备源）**：仅对东财缺失的股票补查，同样分批、超时
+3. **缓存兜底**：双源均未返回的股票使用 7 天内的本地缓存；失败计数按 `[30s, 2m, 5m]` 退避
 
-每一级失败均通过 `try/catch` 捕获并 `console.warn` 记录，不会中断流程。
+失败分类：超时（`timeout`）、非 2xx（`http`）、解析失败（`parse`）、其他（`unavailable`），分别保留在结果中供界面展示。
 
 ### 5.6 enrich() 数据加工
 
@@ -547,7 +540,7 @@ const text = new TextDecoder('gbk').decode(buffer);
 - **涨跌额计算**：若 `change` 为 `null` 且 `price` 和 `prevClose` 均有效，则 `change = price - prevClose`
 - **涨跌幅计算**：若 `changePercent` 为 `null` 且 `change` 和 `prevClose` 均有效，则 `changePercent = (change / prevClose) * 100`
 
-东方财富 API 直接返回 `change` 和 `changePercent`，新浪和演示数据需要 `enrich()` 计算。
+东方财富 API 直接返回 `change` 和 `changePercent`，新浪数据需要 `enrich()` 计算。
 
 ---
 

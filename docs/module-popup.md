@@ -12,10 +12,13 @@
 App
 ├── state                — 全局状态（groups/watchlist/quotes/viewMode...）
 ├── HOT_STOCKS           — 预设热门股票库（含拼音/行业标签）
-├── init()               — 初始化 + 启动 10 秒定时刷新
+├── init()               — 初始化：读缓存 → 渲染 → 刷新 → 自适应调度
 ├── 行情
-│   ├── refreshQuotes()  — 调用 Quotes.fetch()
-│   └── updateDataSourceLabel()
+│   ├── quoteService     — QuoteService.create({ transport: Quotes, cache: Storage })
+│   ├── refreshQuotes()  — 读缓存 + 网络刷新（force 手动重试）
+│   ├── formatStatusSummary() — 实时/缓存/缺失汇总
+│   ├── getQuoteDisplay()     — 单只行情展示（-- / 旧 HH:MM）
+│   └── scheduleNextRefresh() — 盘中 10 秒 / 盘外 5 分钟
 ├── 分组管理
 │   ├── renderGroupTabs()
 │   ├── openGroupModal / submitGroupModal / deleteGroup
@@ -39,14 +42,15 @@ App
 └── 工具方法
     ├── esc() — HTML 转义防 XSS
     ├── toast() — 消息提示
-    └── _confirm() — 自定义确认弹层
+    ├── _confirm() — 自定义确认弹层
+    └── withMutationLock() — 用户操作去重锁
 ```
 
 ## tech_stack
 
 - 原生 DOM 操作（无虚拟 DOM、无框架）
 - HTML5 Drag and Drop API（卡片/行/列/分组拖拽排序）
-- setInterval 10 秒定时刷新行情
+- QuoteService 缓存优先渲染 + 自适应定时刷新（盘中 10 秒 / 盘外 5 分钟）
 - 自定义防抖（配置保存 200ms、搜索 300ms）
 
 ## coding_conventions
@@ -71,18 +75,17 @@ _searchSeq: 0  // 全局递增序号
 // 异步结果返回后检查 seq !== this._searchSeq 则丢弃（旧请求）
 ```
 
-### 配置写入防抖
+### 配置持久化
 
-```javascript
-_scheduleBoardSave(groupId, cfg)  // 200ms 内多次调用合并为一次写入
-_flushBoardSave()                  // 按分组隔离写入，避免跨组 IO
-```
+视图、排序、列配置变更通过 `Storage.saveBoardConfigForGroup(groupId, patch)` 直接串行持久化；失败时保留本地状态并提示「设置保存失败，请重试」。
+
+添加、分组增删、移动、批量删除、手动排序、置顶等操作使用 `App.withMutationLock(key, action)` 去重，重复点击同一操作不会产生并发写入。
 
 ### 安全设计
 
 - `esc()` 方法对所有用户可见文本做 HTML 转义（`& < > " '`）
 - `_confirm()` 自定义弹层替代 `confirm()`，避免 popup 失焦导致关闭
-- popup 关闭时 `beforeunload` 清除定时器 + flush 待保存配置
+- popup 关闭时 `beforeunload` 清除定时器
 
 ## gotchas_and_constraints
 

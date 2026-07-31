@@ -37,6 +37,10 @@ async function seedStable(worker, values) {
   throw new Error('seed storage did not stabilize before popup load');
 }
 
+export async function seedStorage(worker, values) {
+  await seedStable(worker, values);
+}
+
 export async function launchExtension({ seed = null, offline = false, onPageError = null } = {}) {
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
@@ -55,7 +59,7 @@ export async function launchExtension({ seed = null, offline = false, onPageErro
   let [worker] = context.serviceWorkers();
   if (!worker) worker = await context.waitForEvent('serviceworker');
   const extensionId = new URL(worker.url()).host;
-  if (seed) await seedStable(worker, seed);
+  if (seed) await seedStorage(worker, seed);
   const page = await context.newPage();
   if (onPageError) page.on('pageerror', onPageError);
   await page.goto(`chrome-extension://${extensionId}/popup.html`);

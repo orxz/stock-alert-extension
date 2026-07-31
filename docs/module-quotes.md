@@ -2,7 +2,7 @@
 
 ## overview
 
-行情数据获取与解析模块，提供股票搜索和实时行情查询能力。采用三级降级策略：东方财富（主源）→ 新浪财经（备源）→ demo 演示数据（兜底）。支持沪深主板、科创板、创业板、北交所全市场股票。
+行情传输与解析模块，仅负责股票搜索和行情请求/解析，不做数据生成。提供东方财富（主源）与新浪财经（备源）两个可注入 `fetchImpl` 的传输方法；降级、超时、分批、缓存与状态编排统一由 `quote-service.js` 的 `QuoteService` 负责。支持沪深主板、科创板、创业板、北交所全市场股票。
 
 ## architecture_design
 
@@ -11,13 +11,11 @@
 ```
 Quotes
 ├── searchStocks(keyword)    — 股票搜索（东财搜索 API）
-├── fetch(codes)              — 行情获取主入口（三级降级）
-│   ├── _fetchEastmoney(codes) — 东方财富 push2 API
-│   │   ├── _toSecids(codes)   — 代码→secids 映射
-│   │   └── 响应解析（f12/f13/f14...）
-│   ├── _fetchSina(codes)    — 新浪财经 API（GBK 编码）
-│   │   └── _parseSina(text)
-│   └── _demo(codes)         — 演示数据兜底
+├── fetchEastmoney(codes, { fetchImpl, signal }) — 东方财富 push2 API
+│   ├── _toSecids(codes)      — 代码→secids 映射
+│   └── 响应解析（f12/f13/f14...）
+├── fetchSina(codes, { fetchImpl, signal }) — 新浪财经 API（GBK 编码）
+│   └── parseSina(text, codes)
 ├── enrich(q)                — 数值安全处理 + 涨跌额/幅计算
 └── _num(v)                  — 停牌股票 "-" → null 转换
 ```
@@ -95,6 +93,6 @@ f13=0 时，深市和北交所都返回 market=0，需通过代码首位数字�
 ## coding_conventions
 
 - 代码前缀统一小写：`sh`/`sz`/`bj`
-- `_demoBase` key 全小写，查询时 `code.toLowerCase()`
-- 所有异步方法返回 Promise，异常不抛出而是 console.warn + 返回空对象/数组
+- 传输方法不捕获异常，失败决策由 `QuoteService` 统一处理（超时/HTTP/解析分类）
+- 只返回真实行情数据，任何情况下不生成模拟价格
 - `enrich()` 是纯函数，不修改原始数据，返回新对象

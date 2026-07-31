@@ -1,6 +1,6 @@
 # 股票提醒助手 — 自选股分组与看板
 
-[![Version](https://img.shields.io/badge/version-v1.2.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.2.0)
+[![Version](https://img.shields.io/badge/version-v1.2.1-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.2.1)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -14,7 +14,7 @@
 
 - **全市场覆盖** — 沪深主板 / 科创板（688/689）/ 创业板（300/301）/ 北交所（920/8xx/4xx）
 - **多分组看板** — 自定义分组（最多 20 个），拖拽排序，一键切换
-- **实时行情** — 东方财富 push2 API（主源）+ 新浪财经（备源）+ 演示数据（兜底），三级降级
+- **可信行情** — 东方财富 push2 API（主源）+ 新浪财经（备源），失败时保留 7 天本地缓存，实时/缓存/缺失三种状态明确标注，绝不生成模拟价格
 - **双视图模式** — 网格卡片 / 数据列表，按涨跌幅、价格、成交额、自选时间排序
 - **置顶与手动排序** — 一键置顶/取消置顶，拖拽排序。置顶区与非置顶区独立编号，互不干扰
 - **排序联动 Badge** — 工具栏图标实时显示当前排序第一只股票的涨跌幅，切换排序即时联动
@@ -22,22 +22,22 @@
 - **自定义列** — 12 字段自由勾选，拖拽调序
 - **智能搜索补全** — 代码前缀 / 拼音首字母 / 中文名称 / 行业标签，实时 API 联想 + 本地降级
 - **价格隐藏** — 一键隐藏/显示价格，适合投屏分享
-- **后台提醒** — 浏览器角标实时显示排序第一股票涨跌幅（红涨绿跌），图标悬停查看前 5 只（按当前排序）
-- **隐私安全** — 所有数据本地存储（chrome.storage.local），不上传任何用户数据
+- **后台提醒** — 浏览器角标实时显示排序第一股票涨跌幅（实时红涨绿跌，缓存灰显），图标悬停查看前 5 只（按当前排序）
+- **隐私安全** — 自选股、分组与看板配置仅保存在本地；查询行情时仅把股票代码发送给行情服务商
 
 ## 安装
 
 ### Chrome 商店
 
 <a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
-  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.2.0-blue?logo=google-chrome" alt="Chrome Web Store">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.2.1-blue?logo=google-chrome" alt="Chrome Web Store">
 </a>
 
 点击上方按钮安装，或访问 [Chrome 商店页面](https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh)。
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v1.2.0.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v1.2.1.zip` 并解压
 2. 打开 Chrome，进入 `chrome://extensions`
 3. 启用「开发者模式」
 4. 点击「加载已解压的扩展程序」，选择解压目录
@@ -87,9 +87,9 @@ cd stock-alert-extension
 |:--:|------|------|------|
 | 1 | 东方财富 | `push2.eastmoney.com` | 主源，JSON/UTF-8，实时行情 |
 | 2 | 新浪财经 | `hq.sinajs.cn` | 备源，GBK 编码，扩展中可能受限 |
-| 3 | 演示数据 | — | 兜底，本地模拟，标记「演示数据」 |
+| 3 | 本地缓存 | `quoteCache:*` | 双源均失败时保留 7 天内缓存，标注「缓存 · 已过期 HH:MM」；超过 7 天或损坏显示 `--` |
 
-> 当行情数据来自演示数据时，界面底部会明确标注。
+> 弹窗状态栏始终如实显示「实时 N · 缓存 M」或「缓存 M · 行情服务暂不可用」，缺失股票显示灰色 `--`。
 
 ## 市场覆盖
 
@@ -106,8 +106,8 @@ cd stock-alert-extension
 - **平台**：Chrome Extension Manifest V3
 - **前端**：原生 HTML/CSS/JavaScript（零框架、零构建工具、零依赖）
 - **存储**：chrome.storage.local
-- **后台**：Service Worker + chrome.alarms（30 秒定时刷新）
-- **性能**：防抖写入（200ms）、后台按需拉取行情（manual 排序仅 6 只）、虚拟滚动（>50 只）、搜索防抖（300ms）
+- **后台**：Service Worker + 一次性 chrome.alarms（盘中 30 秒 / 盘外 5 分钟自适应）
+- **性能**：串行写入防并发覆盖、后台按需拉取行情（manual/name/addedAt 排序仅前 5 只）、虚拟滚动（>50 只）、搜索防抖（300ms）
 
 ## 文件结构
 
@@ -116,8 +116,10 @@ stock-alert-extension/
 ├── manifest.json          — 扩展清单
 ├── background.js          — Service Worker（角标/工具提示）
 ├── popup.html/css/js      — 弹窗 UI
-├── quotes.js              — 行情数据层（API + 演示）
-├── storage.js             — 本地存储层
+├── stock-utils.js         — 共享视图/排序纯函数
+├── quotes.js              — 行情传输层（东方财富/新浪）
+├── quote-service.js       — 行情编排（超时/分批/缓存/退避）
+├── storage.js             — 本地存储层（schema v2 + 串行写入）
 ├── docs/                  — 文档与截图
 │   ├── 项目架构.md         — 架构概览
 │   ├── module-*.md        — 模块技术笔记
@@ -129,7 +131,7 @@ stock-alert-extension/
 
 ## 隐私
 
-本扩展**不上传任何用户数据**。所有自选股列表、分组配置、看板偏好均存储在本地 Chrome 存储中。详情见 [隐私政策](privacy/index.html)。
+自选股列表、分组配置、看板偏好均存储在本地 Chrome 存储中，开发者不会收集或上传这些配置。为了查询公开行情，扩展会把用户请求查询的股票代码发送给东方财富或新浪财经；请求不包含姓名、邮箱、浏览记录或分组名称。详情见 [隐私政策](privacy/index.html)。
 
 ## 许可证
 

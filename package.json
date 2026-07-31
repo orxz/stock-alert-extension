@@ -10,6 +10,9 @@
     "check:types": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "validate:manifest": "node scripts/validate-manifest.mjs",
+    "capture:store": "node scripts/capture-store-assets.mjs",
+    "package:extension": "node scripts/package-extension.mjs",
+    "release:verify": "npm run ci && npm run capture:store && npm run package:extension",
     "test:unit": "c8 --all --include=stock-utils.js --include=storage.js --include=quotes.js --include=quote-service.js --check-coverage --lines 90 --branches 85 --functions 90 --statements 90 node --test tests/unit/*.test.mjs",
     "test:e2e": "playwright test",
     "check": "npm run check:syntax && npm run check:types && npm run lint && npm run validate:manifest",
@@ -21,6 +24,7 @@
     "@types/node": "^26.1.2",
     "c8": "^12.0.0",
     "eslint": "^10.8.0",
+    "fflate": "^0.8.3",
     "typescript": "^7.0.2"
   }
 }
