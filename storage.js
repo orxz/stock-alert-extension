@@ -240,12 +240,17 @@ function createStorage({ area, clock = () => Date.now() }) {
   // ===== 自选股操作（v2：不存储 g_all 成员标记）=====
   async function addStock(code, name, groupIds) {
     return mutateUserData(async (data) => {
-      const targetIds = [...new Set((groupIds || []).filter((id) => id !== DEFAULT_GROUP_ID))];
-      let stock = data.watchlist.find((s) => s.code === code);
+      const normalizedCode = StockUtils.normalizeStockCode(code);
+      if (!normalizedCode) throw new Error('股票代码格式不正确');
+      const validCustomIds = new Set(data.groups
+        .filter((group) => group.groupId !== DEFAULT_GROUP_ID)
+        .map((group) => group.groupId));
+      const targetIds = [...new Set((groupIds || []).filter((id) => validCustomIds.has(id)))];
+      let stock = data.watchlist.find((s) => s.code === normalizedCode);
       if (stock) {
         targetIds.forEach((id) => { if (!stock.groupIds.includes(id)) stock.groupIds.push(id); });
       } else {
-        stock = { code, name: name || code, groupIds: targetIds, manualOrder: {}, pinned: {}, addedAt: clock() };
+        stock = { code: normalizedCode, name: name || normalizedCode, groupIds: targetIds, manualOrder: {}, pinned: {}, addedAt: clock() };
         data.watchlist.push(stock);
       }
       return stock;
@@ -350,6 +355,7 @@ function createStorage({ area, clock = () => Date.now() }) {
   async function saveBoardConfigForGroup(groupId, cfg) {
     return mutateUserData(async (data) => {
       data.boardConfig[groupId] = { ...(data.boardConfig[groupId] || {}), ...cfg };
+      return data.boardConfig[groupId];
     });
   }
 
