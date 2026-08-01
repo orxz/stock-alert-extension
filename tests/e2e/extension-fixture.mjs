@@ -50,16 +50,15 @@ export async function launchExtension({ seed = null, offline = false, holdQuotes
       `--load-extension=${extensionPath}`
     ]
   });
+  let releaseHold = null;
   if (offline) await context.setOffline(true);
   if (offline) {
     // 挂起行情请求可让初始缓存渲染保持稳定可断言；调用方通过 releaseHold 放行
-    let releaseHold = null;
     const holdGate = holdQuotes ? new Promise((resolve) => { releaseHold = resolve; }) : null;
     const routeOrHold = (route) => (holdGate ? holdGate.then(() => route.abort()) : route.abort());
     await context.route('https://push2.eastmoney.com/**', routeOrHold);
     await context.route('https://hq.sinajs.cn/**', routeOrHold);
     await context.route('https://searchapi.eastmoney.com/**', routeOrHold);
-    context.holdQuotes = { releaseHold };
   }
   let [worker] = context.serviceWorkers();
   if (!worker) worker = await context.waitForEvent('serviceworker');
@@ -68,7 +67,7 @@ export async function launchExtension({ seed = null, offline = false, holdQuotes
   const page = await context.newPage();
   if (onPageError) page.on('pageerror', onPageError);
   await page.goto(`chrome-extension://${extensionId}/popup.html`);
-  return { context, page, worker, extensionId };
+  return { context, page, worker, extensionId, releaseHold };
 }
 
 export async function replaceStorage(page, values) {

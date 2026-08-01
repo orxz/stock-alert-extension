@@ -52,7 +52,7 @@ test('mixed cache state is explicit per summary and stock', async () => {
     `quoteCache:${code}`,
     cache(code, now - (index < 8 ? 1000 : 600000))
   ]));
-  const { context, page } = await launchExtension({
+  const { context, page, releaseHold } = await launchExtension({
     offline: true,
     holdQuotes: true,
     seed: {
@@ -68,7 +68,7 @@ test('mixed cache state is explicit per summary and stock', async () => {
     await expect(page.locator('#quote-status-summary')).toHaveText('实时 8 · 缓存 2');
     await expect(page.locator('.quote-stale')).toHaveCount(2);
   } finally {
-    context.holdQuotes.releaseHold?.();
+    releaseHold?.();
     await context.close();
   }
 });
