@@ -1,47 +1,22 @@
 // background.js — 缓存感知的 Badge / Tooltip 与自适应后台调度
 
 if (typeof importScripts === 'function') {
-  importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-service.js');
+  importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-service.js', 'quote-format.js');
 }
 
 const ALARM_NAME = 'quote-refresh';
 const TOOLTIP_MAX = 5;
 
 function formatBadge(percent) {
-  if (!Number.isFinite(percent)) return '--';
-  const absolute = Math.abs(percent);
-  if (absolute >= 1000) return '999';
-  if (absolute >= 100) return Math.round(absolute).toString();
-  if (absolute >= 10) return absolute.toFixed(0);
-  return absolute.toFixed(1);
+  return QuoteFormat.formatBadge(percent);
 }
 
 function formatBadgeState(_stock, result) {
-  const percent = result?.quote?.changePercent;
-  if (!Number.isFinite(percent)) return { text: '--', color: '#95A5A6' };
-  if (result.status === 'cached') return { text: formatBadge(percent), color: '#95A5A6' };
-  const color = percent > 0 ? '#E74C3C' : percent < 0 ? '#27AE60' : '#95A5A6';
-  return { text: formatBadge(percent), color };
+  return QuoteFormat.formatBadgeState(result);
 }
 
 function formatTooltipLine(stock, result) {
-  const quote = result?.quote;
-  if (!quote || !Number.isFinite(quote.price)) {
-    return `${(stock.name || stock.code).slice(0, 6)}  暂无行情`;
-  }
-  const name = (quote.name || stock.name || stock.code).slice(0, 6);
-  const percent = Number.isFinite(quote.changePercent) ? `${quote.changePercent.toFixed(1)}%` : '--';
-  const arrow = quote.change > 0 ? '▲' : quote.change < 0 ? '▼' : '—';
-  if (result.status !== 'cached') return `${name} ${arrow} ${percent}`;
-  const time = Number.isFinite(result.fetchedAt)
-    ? new Intl.DateTimeFormat('zh-CN', {
-        timeZone: 'Asia/Shanghai',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).format(new Date(result.fetchedAt))
-    : '--:--';
-  return `${name} ${arrow} ${percent} · 已过期 ${time}`;
+  return QuoteFormat.formatTooltipLine(stock, result);
 }
 
 // 非行情排序只网络刷新 Tooltip 窗口，但缓存读取覆盖全部，避免误报「暂无可用行情」

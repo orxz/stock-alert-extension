@@ -151,48 +151,15 @@ const App = {
 
   // ===== 行情 =====
   formatStatusSummary(snapshot) {
-    const { fresh = 0, cached = 0, missing = 0 } = snapshot?.counts || {};
-    if (fresh + cached + missing === 0) return '暂无自选股';
-    const parts = [];
-    if (fresh) parts.push(`实时 ${fresh}`);
-    if (cached) parts.push(`缓存 ${cached}`);
-    if (missing) parts.push(`缺失 ${missing}`);
-    if (fresh === 0 && cached === 0) return '无行情数据 · 点击刷新重试';
-    if (fresh === 0) return `${parts.join(' · ')} · 行情服务暂不可用`;
-    return parts.join(' · ');
+    return QuoteFormat.formatStatusSummary(snapshot);
   },
 
   getRefreshToastMessage(snapshot) {
-    const requested = Object.keys(snapshot.results || {}).length;
-    if (requested === 0) return '暂无自选股';
-    if (snapshot.counts.missing === requested) return '刷新失败，请稍后重试';
-    if (!snapshot.succeededAt) return '实时行情不可用，已保留缓存';
-    return '行情已刷新';
+    return QuoteFormat.getRefreshToastMessage(snapshot);
   },
 
   getQuoteDisplay(result) {
-    if (!result?.quote || result.status === 'missing') {
-      return { price: '--', change: '--', status: 'missing', staleLabel: '' };
-    }
-    const quote = result.quote;
-    const price = Number.isFinite(quote.price) ? quote.price.toFixed(2) : '--';
-    const change = Number.isFinite(quote.change) && Number.isFinite(quote.changePercent)
-      ? `${quote.change > 0 ? '+' : ''}${quote.change.toFixed(2)} ${quote.changePercent > 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%`
-      : '--';
-    const time = result.fetchedAt
-      ? new Intl.DateTimeFormat('zh-CN', {
-          timeZone: 'Asia/Shanghai',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }).format(new Date(result.fetchedAt))
-      : '';
-    return {
-      price,
-      change,
-      status: result.status,
-      staleLabel: result.status === 'cached' ? `旧 ${time}` : ''
-    };
+    return QuoteFormat.getQuoteDisplay(result);
   },
 
   applyQuoteSnapshot(snapshot) {
@@ -231,12 +198,7 @@ const App = {
   },
 
   formatUpdateTime(ts) {
-    return new Intl.DateTimeFormat('zh-CN', {
-      timeZone: 'Asia/Shanghai',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(new Date(ts)) + ' 更新';
+    return QuoteFormat.formatUpdateTime(ts);
   },
 
   updateTimeLabel() {
@@ -856,17 +818,11 @@ const App = {
   },
 
   formatVolume(v) {
-    if (!v) return '0';
-    if (v >= 100000000) return (v / 100000000).toFixed(2) + '亿';
-    if (v >= 10000) return (v / 10000).toFixed(1) + '万';
-    return String(v);
+    return QuoteFormat.formatVolume(v);
   },
 
   formatAmount(v) {
-    if (!v) return '0';
-    if (v >= 100000000) return (v / 100000000).toFixed(2) + '亿';
-    if (v >= 10000) return (v / 10000).toFixed(1) + '万';
-    return v.toFixed(0);
+    return QuoteFormat.formatAmount(v);
   },
 
   // ===== 排序 =====

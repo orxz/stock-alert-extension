@@ -19,6 +19,7 @@ const browserGlobals = {
   App: 'readonly',
   Quotes: 'readonly',
   QuoteService: 'readonly',
+  QuoteFormat: 'readonly',
   Storage: 'readonly',
   StockUtils: 'readonly',
   DEFAULT_GROUP_ID: 'readonly'
