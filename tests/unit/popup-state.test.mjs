@@ -35,16 +35,17 @@ test('board patches persist per group and report failures', async () => {
   const notices = [];
   App.toast = (message) => notices.push(message);
   App.state.boardConfig = { g_all: { viewMode: 'grid' } };
-  global.Storage = {
-    async saveBoardConfigForGroup(groupId, patch) {
-      assert.equal(groupId, 'g_all');
-      return { ...App.state.boardConfig[groupId], ...patch };
+  global.Bridge = {
+    async send(action, payload) {
+      assert.equal(action, 'storage:saveBoardConfig');
+      assert.equal(payload.groupId, 'g_all');
+      return {};
     }
   };
   assert.equal(await App.persistBoardPatch('g_all', { sortField: 'price' }), true);
   assert.deepEqual(App.state.boardConfig.g_all, { viewMode: 'grid', sortField: 'price' });
 
-  global.Storage.saveBoardConfigForGroup = async () => { throw new Error('disk full'); };
+  global.Bridge.send = async () => { throw new Error('disk full'); };
   const originalWarn = console.warn;
   console.warn = () => {};
   try {

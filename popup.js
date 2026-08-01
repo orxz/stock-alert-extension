@@ -111,21 +111,14 @@ const App = {
     try {
       const versionElement = document.getElementById('brand-version');
       if (versionElement) versionElement.textContent = chrome.runtime.getManifest().version;
-      const data = await Storage.loadAll();
+      const data = await Bridge.send('storage:read', {});
       this.state.groups = data.groups;
       this.state.watchlist = data.watchlist;
       this.state.boardConfig = data.boardConfig;
-      const cfg = await Storage.getBoardConfig(this.state.currentGroupId);
+      const cfg = await Bridge.send('storage:boardConfig', { groupId: this.state.currentGroupId });
       Object.assign(this.state, cfg);
-      this.quoteService = QuoteService.create({
-        transport: Quotes,
-        cache: Storage,
-        clock: () => Date.now(),
-        timeoutMs: 4000,
-        chunkSize: 50
-      });
       const codes = this.state.watchlist.map((stock) => stock.code);
-      this.state.quoteSnapshot = await this.quoteService.read(codes);
+      this.state.quoteSnapshot = await Bridge.send('quote:read', { codes });
       this.state.quoteGeneration = this.state.quoteSnapshot.generation || 0;
       this.bindEvents();
       this.applySortSelect();
@@ -171,7 +164,7 @@ const App = {
 
   async refreshQuotes({ force = false } = {}) {
     const codes = this.state.watchlist.map((stock) => stock.code);
-    const snapshot = await this.quoteService.refresh(codes, { force });
+    const snapshot = await Bridge.send('quote:refresh', { codes, force });
     if (this.applyQuoteSnapshot(snapshot)) {
       this.updateQuoteStatus();
       this.updateTimeLabel();
@@ -256,9 +249,8 @@ const App = {
     const ids = this.state.groups.map(g => g.groupId);
     const from = ids.indexOf(srcId), to = ids.indexOf(dstId);
     ids.splice(to, 0, ids.splice(from, 1)[0]);
-    await Storage.reorderGroups(ids);
-    const data = await Storage.loadAll();
-    this.state.groups = data.groups;
+    const result = await Bridge.send('storage:reorderGroups', { ids });
+    this.state.groups = result.groups;
     this.renderGroupTabs();
     this.toast('分组顺序已调整');
   },
@@ -268,7 +260,7 @@ const App = {
     this.state.selected.clear();
     // 切换分组时退出批量模式，避免"批量栏显示但未选中"的困惑状态
     if (this.state.batchMode) this.toggleBatchMode();
-    const cfg = await Storage.getBoardConfig(groupId);
+    const cfg = await Bridge.send('storage:boardConfig', { groupId });
     Object.assign(this.state, cfg);
     this.applySortSelect();
     this.render();
@@ -315,15 +307,15 @@ const App = {
     if (!name) { err.textContent = '请输入分组名称'; return; }
     if (name.length > 12) { err.textContent = '分组名称不超过 12 字符'; return; }
     try {
+      let result;
       if (modal.dataset.mode === 'create') {
-        await Storage.createGroup(name);
+        result = await Bridge.send('storage:createGroup', { name });
         this.toast('分组已创建');
       } else {
-        await Storage.renameGroup(modal.dataset.groupId, name);
+        result = await Bridge.send('storage:renameGroup', { groupId: modal.dataset.groupId, name });
         this.toast('已重命名');
       }
-      const data = await Storage.loadAll();
-      this.state.groups = data.groups;
+      this.state.groups = result.groups;
       modal.style.display = 'none';
       this.renderGroupTabs();
     } catch (e) { err.textContent = e.message; }
@@ -341,11 +333,10 @@ const App = {
     const ok = await this._confirm(`确认删除分组「${g.name}」？组内股票将移回「全部」。`, { title: '删除分组', okText: '删除' });
     if (!ok) return;
     try {
-      await Storage.deleteGroup(groupId);
+      const result = await Bridge.send('storage:deleteGroup', { groupId });
       if (this.state.currentGroupId === groupId) this.state.currentGroupId = 'g_all';
-      const data = await Storage.loadAll();
-      this.state.groups = data.groups;
-      this.state.watchlist = data.watchlist;
+      this.state.groups = result.groups;
+      this.state.watchlist = result.watchlist;
       this.render();
       this.toast('分组已删除');
     } catch (e) { this.toast(e.message); }
@@ -522,9 +513,8 @@ const App = {
     const wasInAllGroups = existed && groupIds.every((id) =>
       id === StockUtils.ALL_GROUP_ID || existed.groupIds.includes(id)
     );
-    await Storage.addStock(code, name, groupIds);
-    const data = await Storage.loadAll();
-    this.state.watchlist = data.watchlist;
+    const result = await Bridge.send('storage:addStock', { code, name, groupIds });
+    this.state.watchlist = result.watchlist;
     document.getElementById('add-modal').style.display = 'none';
     await this.refreshQuotes();
     this.render();
@@ -561,9 +551,12 @@ const App = {
     // 过滤掉当前分组（移动到当前所在分组是无意义操作，且会导致 manualOrder/pinned 丢失）
     const target = selected.map(c => c.dataset.groupId).filter(id => id !== this.state.currentGroupId);
     if (!target.length) { this.toast('请选择其他分组（非当前分组）'); return; }
-    await Storage.moveStocksToGroups([...this.state.selected], this.state.currentGroupId, target);
-    const data = await Storage.loadAll();
-    this.state.watchlist = data.watchlist;
+    const result = await Bridge.send('storage:moveStocks', {
+      codes: [...this.state.selected],
+      fromGroup: this.state.currentGroupId,
+      toGroups: target
+    });
+    this.state.watchlist = result.watchlist;
     document.getElementById('move-modal').style.display = 'none';
     this.state.selected.clear();
     this.state.batchMode = false;
@@ -884,10 +877,9 @@ const App = {
         orderMap[code] = nonPinnedIdx++;
       }
     });
-    await Storage.setManualOrder(gid, orderMap);
+    const reorderResult = await Bridge.send('storage:setManualOrder', { groupId: gid, orderMap });
     // 刷新 state.watchlist，使 getGroupStocks 读取到最新 manualOrder，避免拖拽视觉不生效
-    const reorderData = await Storage.loadAll();
-    this.state.watchlist = reorderData.watchlist;
+    this.state.watchlist = reorderResult.watchlist;
     this.state.sortField = 'manual';
     this.applySortSelect();
     await this.persistBoardPatch(gid, { sortField: 'manual' });
@@ -901,9 +893,8 @@ const App = {
 
   async _togglePin(code) {
     const gid = this.state.currentGroupId;
-    await Storage.togglePin(gid, code);
-    const data = await Storage.loadAll();
-    this.state.watchlist = data.watchlist;
+    const result = await Bridge.send('storage:togglePin', { groupId: gid, code });
+    this.state.watchlist = result.watchlist;
     // 置顶/取消置顶后重算 manualOrder，切换分区的股票排到目标分区末尾
     await this._rebalanceManualOrder(gid, code);
     this.renderBoard();
@@ -936,9 +927,8 @@ const App = {
     const orderMap = {};
     pinned.forEach((s, i) => { orderMap[s.code] = i; });
     nonPinned.forEach((s, i) => { orderMap[s.code] = i; });
-    await Storage.setManualOrder(gid, orderMap);
-    const data = await Storage.loadAll();
-    this.state.watchlist = data.watchlist;
+    const result = await Bridge.send('storage:setManualOrder', { groupId: gid, orderMap });
+    this.state.watchlist = result.watchlist;
   },
 
   removeStocks(codes) {
@@ -956,9 +946,8 @@ const App = {
       : `确认将 ${codes.length} 只股票移出当前分组？（仍保留在「全部」中）`;
     const ok = await this._confirm(msg, { title: '移除确认', okText: '移除' });
     if (!ok) return;
-    await Storage.removeStocksBatch(codes, gid);
-    const data = await Storage.loadAll();
-    this.state.watchlist = data.watchlist;
+    const result = await Bridge.send('storage:removeStocks', { codes, groupId: gid });
+    this.state.watchlist = result.watchlist;
     this.state.selected.clear();
     this.state.batchMode = false;
     this.render();
@@ -1172,7 +1161,7 @@ const App = {
   // ===== 看板配置持久化（Storage 内部串行化）=====
   async persistBoardPatch(groupId, patch) {
     try {
-      await Storage.saveBoardConfigForGroup(groupId, patch);
+      await Bridge.send('storage:saveBoardConfig', { groupId, patch });
       this.state.boardConfig[groupId] = {
         ...(this.state.boardConfig[groupId] || {}),
         ...patch

@@ -17,6 +17,7 @@ const browserGlobals = {
   chrome: 'readonly',
   importScripts: 'readonly',
   App: 'readonly',
+  Bridge: 'readonly',
   Quotes: 'readonly',
   QuoteService: 'readonly',
   QuoteFormat: 'readonly',
