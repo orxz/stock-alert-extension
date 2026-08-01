@@ -90,6 +90,8 @@ await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓�
 await expect(page.locator('.quote-stale')).toHaveCount(1);
 await expect(page.locator('#update-time')).toHaveText('未更新');
 await page.waitForTimeout(500);
+// 禁用过渡/动画，避免截图捕获弹窗淡入等动画的中间帧导致像素不确定
+await page.addStyleTag({ content: '* { transition: none !important; animation: none !important; }' });
 const version = await page.locator('#brand-version').textContent();
 if (version !== '1.2.1') throw new Error(`expected popup version 1.2.1, got ${version}`);
 const summary = await page.locator('#quote-status-summary').textContent();
