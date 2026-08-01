@@ -220,7 +220,7 @@ const Render = {
         <div class="grid-card-price">${priceText}</div>
         <div class="grid-card-change">${changeText}</div>`;
       if (state.batchMode) {
-        if (isSelected) card.style.outline = '2px solid #3A6EA5';
+        if (isSelected) card.style.outline = '2px solid var(--color-accent)';
         card.onclick = () => Actions.toggleSelect(s.code);
       } else {
         card.onclick = () => Actions.togglePin(s.code);
