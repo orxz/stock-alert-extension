@@ -1,6 +1,28 @@
 # 更新日志
 
-## v1.2.1 (当前版本)
+## v1.3.0 — 架构与体验
+
+### 架构升级
+- Service Worker 成为行情数据唯一所有者，Popup 通过 RPC 消息总线请求
+- 新增 `router.js` RPC 路由器（14 个 action）
+- 新增 `popup-bridge.js` RPC 客户端（含超时保护）
+- popup.js 拆分为 5 个模块：bridge / state / render / actions / entry
+
+### 代码质量
+- 提取 `quote-format.js` 共享格式化模块，消除 Popup/Background 重复
+- CSS 设计令牌系统（CSS Custom Properties）
+- 协议契约测试：Bridge ↔ Router 一致性验证
+
+### 无障碍 (WCAG 2.1 AA)
+- ARIA 标记：tablist、region、dialog、alert、status
+- 键盘导航：分组 Tab 箭头键、卡片 Enter 置顶
+- 颜色对比度修复：次要文本、涨跌色加深至 4.5:1
+- 触控目标扩展至 44px
+- `prefers-reduced-motion` 支持
+
+---
+
+## v1.2.1
 
 ### 新增功能
 - **全局分组语义**：「全部」改为计算视图，股票加入任意自定义分组后始终出现在「全部」，`groupIds` 只保存自定义分组

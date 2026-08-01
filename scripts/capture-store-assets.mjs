@@ -1,6 +1,6 @@
-import { copyFile } from 'node:fs/promises';
+import { copyFile, readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
-import { launchExtension, seedStorage } from '../tests/e2e/extension-fixture.mjs';
+import { launchExtension } from '../tests/e2e/extension-fixture.mjs';
 
 /** @type {Array<[string, string, number, number]>} */
 const STOCKS = [
@@ -81,11 +81,12 @@ const scenarios = [
   { file: 'screenshot3-add.png', title: '添加自选股', subtitle: '加入任意分组，始终出现在全部视图', prepare: (page) => page.click('#btn-add-stock') }
 ];
 
-const { context, page, worker, releaseHold } = await launchExtension({ offline: true, holdQuotes: true });
+// v1.3.0 起 QuoteService 常驻 Service Worker，其退避状态会跨 Popup 重载存活。
+// 因此必须先播种再首屏加载（单次加载），避免「空自选股首屏 → refresh → 进入退避」
+// 使重载后的刷新走退避分支、把全部缓存判为过期。与 e2e mixed-cache 用例一致。
+const { context, page, worker, releaseHold } = await launchExtension({ offline: true, holdQuotes: true, seed: buildSeed() });
 const marketingPage = await context.newPage();
-await seedStorage(worker, buildSeed());
 await page.setViewportSize({ width: 420, height: 640 });
-await page.reload();
 await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓存 1');
 await expect(page.locator('.quote-stale')).toHaveCount(1);
 await expect(page.locator('#update-time')).toHaveText('未更新');
@@ -93,7 +94,8 @@ await page.waitForTimeout(500);
 // 禁用过渡/动画，避免截图捕获弹窗淡入等动画的中间帧导致像素不确定
 await page.addStyleTag({ content: '* { transition: none !important; animation: none !important; }' });
 const version = await page.locator('#brand-version').textContent();
-if (version !== '1.2.1') throw new Error(`expected popup version 1.2.1, got ${version}`);
+const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
+if (version !== manifest.version) throw new Error(`expected popup version ${manifest.version}, got ${version}`);
 const summary = await page.locator('#quote-status-summary').textContent();
 if (summary !== '实时 7 · 缓存 1') throw new Error(`expected mixed summary, got ${summary}`);
 console.log(`capture verified: v${version}, ${summary}`);
