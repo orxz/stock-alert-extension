@@ -1,12 +1,16 @@
 // quote-format.js — 共享行情格式化（Popup / Background 共用）
 
 const QuoteFormat = (() => {
+  /** @type {Intl.DateTimeFormatOptions} */
   const TZ_OPTIONS = {
     timeZone: 'Asia/Shanghai',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false
   };
+
+  // 非交易时段 popup 的最低刷新间隔（5 分钟），避免后台空跑
+  const OFF_HOURS_INTERVAL_MS = 300000;
 
   function formatTime(ts) {
     return new Intl.DateTimeFormat('zh-CN', TZ_OPTIONS).format(new Date(ts));
@@ -107,6 +111,32 @@ const QuoteFormat = (() => {
     return v.toFixed(0);
   }
 
+  // 以中国时区解析当前时间，用于判断 A 股交易时段
+  function chinaTimeParts(now) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Shanghai',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(now);
+    return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  }
+
+  // A 股交易时段：9:15-11:35 与 12:55-15:05（含集合竞价与收盘前缓冲）
+  function isChinaMarketActive(now) {
+    const parts = chinaTimeParts(now);
+    if (parts.weekday === 'Sat' || parts.weekday === 'Sun') return false;
+    const minutes = Number(parts.hour) * 60 + Number(parts.minute);
+    return (minutes >= 555 && minutes <= 695) || (minutes >= 775 && minutes <= 905);
+  }
+
+  // 根据当前是否处于交易时段，决定 popup / background 的刷新间隔
+  function getRefreshIntervalMs(now, target) {
+    if (!isChinaMarketActive(now)) return OFF_HOURS_INTERVAL_MS;
+    return target === 'background' ? 30000 : 10000;
+  }
+
   return {
     formatTime,
     formatUpdateTime,
@@ -118,7 +148,10 @@ const QuoteFormat = (() => {
     formatBadgeState,
     formatTooltipLine,
     formatVolume,
-    formatAmount
+    formatAmount,
+    chinaTimeParts,
+    isChinaMarketActive,
+    getRefreshIntervalMs
   };
 })();
 

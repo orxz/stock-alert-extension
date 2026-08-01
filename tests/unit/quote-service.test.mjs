@@ -189,7 +189,8 @@ test('uses China market intervals', () => {
 test('runtime entry points load QuoteService after its dependencies', async () => {
   const popup = await readFile(new URL('popup.html', rootDir), 'utf8');
   const background = await readFile(new URL('background.js', rootDir), 'utf8');
-  assert.ok(popup.indexOf('src="quotes.js"') < popup.indexOf('src="quote-service.js"'));
+  // popup 不再直接加载 quote-service.js（行情通过 Bridge RPC 由 background 提供）
+  assert.ok(!popup.includes('src="quote-service.js"'));
   assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js', 'quote-service\.js', 'quote-format\.js', 'router\.js'\)/);
 });
 

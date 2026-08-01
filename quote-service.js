@@ -1,11 +1,16 @@
 // quote-service.js — 行情编排：超时、分批、双源合并、缓存、退避与刷新策略
 
+// 中国市场时段判断与刷新间隔计算已迁移至 quote-format.js 作为共享工具。
+// 此处在 Node 测试环境中按需加载 QuoteFormat，浏览器/SW 由 importScripts 已加载。
+if (typeof globalThis !== 'undefined' && !globalThis.QuoteFormat && typeof require === 'function') {
+  require('./quote-format.js');
+}
+
 const QuoteService = (() => {
   const DEFAULT_TIMEOUT_MS = 4000;
   const DEFAULT_CHUNK_SIZE = 50;
   const DEFAULT_FRESHNESS_MS = 30000;
   const CACHE_MAX_AGE_MS = 604800000;
-  const OFF_HOURS_INTERVAL_MS = 300000;
   const BACKOFF_MS = [30000, 120000, 300000];
 
   function chunk(values, size) {
@@ -250,26 +255,15 @@ const QuoteService = (() => {
   }
 
   function chinaTimeParts(now) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Shanghai',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23'
-    }).formatToParts(now);
-    return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return globalThis.QuoteFormat.chinaTimeParts(now);
   }
 
   function isChinaMarketActive(now) {
-    const parts = chinaTimeParts(now);
-    if (parts.weekday === 'Sat' || parts.weekday === 'Sun') return false;
-    const minutes = Number(parts.hour) * 60 + Number(parts.minute);
-    return (minutes >= 555 && minutes <= 695) || (minutes >= 775 && minutes <= 905);
+    return globalThis.QuoteFormat.isChinaMarketActive(now);
   }
 
   function getRefreshIntervalMs(now, target) {
-    if (!isChinaMarketActive(now)) return OFF_HOURS_INTERVAL_MS;
-    return target === 'background' ? 30000 : 10000;
+    return globalThis.QuoteFormat.getRefreshIntervalMs(now, target);
   }
 
   return { create, getRefreshIntervalMs, isChinaMarketActive };
