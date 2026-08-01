@@ -176,12 +176,24 @@ function createStorage({ area, clock = () => Date.now() }) {
     for (const [code, entry] of Object.entries(entries)) {
       patch[quoteCacheKey(code)] = { ...entry, cacheVersion: 1, code };
     }
-    if (Object.keys(patch).length) await area.set(patch);
+    if (!Object.keys(patch).length) return;
+    await enqueueWrite(async () => {
+      const data = await loadAll();
+      const memberCodes = new Set(data.watchlist.map((stock) => stock.code));
+      const filtered = {};
+      for (const code of Object.keys(entries)) {
+        if (memberCodes.has(code)) filtered[quoteCacheKey(code)] = patch[quoteCacheKey(code)];
+      }
+      if (Object.keys(filtered).length) await area.set(filtered);
+    });
   }
 
   async function deleteQuoteCache(codes) {
     const keys = codes.map(StockUtils.normalizeStockCode).filter(Boolean).map(quoteCacheKey);
-    if (keys.length) await area.remove(keys);
+    if (!keys.length) return;
+    await enqueueWrite(async () => {
+      await area.remove(keys);
+    });
   }
 
   // ===== 分组操作 =====

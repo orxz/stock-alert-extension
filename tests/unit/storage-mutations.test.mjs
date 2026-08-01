@@ -220,7 +220,15 @@ test('batch removal handles custom and global deletion with cache cleanup', asyn
 });
 
 test('quote cache writes and deletes normalized independent entries', async () => {
-  const area = createStorageArea();
+  const area = createStorageArea({
+    schemaVersion: 2,
+    groups: [{ groupId: 'g_all', name: '全部', order: 0, isDefault: true }],
+    watchlist: [
+      { code: 'sh600519', name: '贵州茅台', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 1 },
+      { code: 'sz000001', name: '平安银行', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 2 }
+    ],
+    boardConfig: {}
+  });
   const storage = createStorage({ area, clock: () => 100 });
   await storage.writeQuoteCache({
     sh600519: { provider: 'eastmoney', fetchedAt: 10, quote: { price: 1 } },
@@ -231,6 +239,38 @@ test('quote cache writes and deletes normalized independent entries', async () =
   await storage.deleteQuoteCache(['600519']);
   assert.equal(area.data['quoteCache:sh600519'], undefined);
   assert.ok(area.data['quoteCache:sz000001']);
+});
+
+test('writeQuoteCache never persists symbols outside the watchlist', async () => {
+  const area = createStorageArea({
+    schemaVersion: 2,
+    groups: [{ groupId: 'g_all', name: '全部', order: 0, isDefault: true }],
+    watchlist: [{ code: 'sh600519', name: '贵州茅台', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 1 }],
+    boardConfig: {}
+  });
+  const storage = createStorage({ area, clock: () => 100 });
+  await storage.writeQuoteCache({
+    sh600519: { provider: 'eastmoney', fetchedAt: 10, quote: { price: 1 } },
+    sz000001: { provider: 'sina', fetchedAt: 11, quote: { price: 2 } }
+  });
+  assert.ok(area.data['quoteCache:sh600519']);
+  assert.equal(area.data['quoteCache:sz000001'], undefined);
+});
+
+test('removal and a late refresh write never leave an orphan cache key', async () => {
+  const area = createStorageArea({
+    schemaVersion: 2,
+    groups: [{ groupId: 'g_all', name: '全部', order: 0, isDefault: true }],
+    watchlist: [{ code: 'sh600519', name: '贵州茅台', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 1 }],
+    boardConfig: {},
+    'quoteCache:sh600519': { cacheVersion: 1, code: 'sh600519', provider: 'eastmoney', fetchedAt: 10, quote: { price: 1 } }
+  });
+  const storage = createStorage({ area, clock: () => 100 });
+  await storage.removeStock('sh600519', 'g_all');
+  // 模拟删除时仍在途的刷新：请求完成晚于删除，写入不得复活孤儿缓存键
+  await storage.writeQuoteCache({ sh600519: { provider: 'eastmoney', fetchedAt: 99, quote: { price: 9 } } });
+  assert.equal(area.data.watchlist.length, 0);
+  assert.equal(area.data['quoteCache:sh600519'], undefined);
 });
 
 test('atomic save methods and board reads preserve unrelated fields', async () => {
