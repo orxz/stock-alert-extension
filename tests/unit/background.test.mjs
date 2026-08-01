@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const require = createRequire(import.meta.url);
 global.StockUtils = require('../../stock-utils.js');
-const { formatBadgeState, formatTooltipLine } = require('../../background.js');
+const { formatBadgeState, formatTooltipLine, planQuoteRequests } = require('../../background.js');
 
 const stock = { code: 'sh600519', name: '贵州茅台' };
 
@@ -32,4 +32,15 @@ test('missing quote uses a gray double dash', () => {
     formatBadgeState(stock, { status: 'missing', fetchedAt: null, quote: null }),
     { text: '--', color: '#95A5A6' }
   );
+});
+
+test('non-quote sorts read all caches but refresh only the tooltip window', () => {
+  const stocks = Array.from({ length: 8 }, (_, index) => ({ code: `sh60000${index}` }));
+  const manual = planQuoteRequests(stocks, 'manual');
+  assert.deepEqual(manual.readCodes, stocks.map((item) => item.code));
+  assert.deepEqual(manual.refreshCodes, stocks.slice(0, 5).map((item) => item.code));
+  const price = planQuoteRequests(stocks, 'price');
+  assert.deepEqual(price.readCodes, stocks.map((item) => item.code));
+  assert.deepEqual(price.refreshCodes, stocks.map((item) => item.code));
+  assert.deepEqual(planQuoteRequests([], 'manual').readCodes, []);
 });

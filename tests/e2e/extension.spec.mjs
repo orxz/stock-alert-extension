@@ -195,3 +195,29 @@ test('failed manual refresh on a recent cache does not claim success', async () 
   await expect(page.locator('#toast')).toContainText('已保留缓存');
   await context.close();
 });
+
+test('tooltip does not claim no data when a later sorted stock has cache', async () => {
+  const first = 'sh600519';
+  const later = 'sz000001';
+  const { context, worker } = await launchExtension({
+    offline: true,
+    seed: {
+      schemaVersion: 2,
+      groups: GROUPS,
+      watchlist: [
+        { ...stock(first), manualOrder: { g_all: 0 } },
+        { ...stock(later, 1), manualOrder: { g_all: 1 } }
+      ],
+      boardConfig: { g_all: { sortField: 'manual', sortDirection: 'asc' } },
+      [`quoteCache:${later}`]: cache(later, Date.now() - 600000)
+    }
+  });
+  try {
+    // 前 5 只缺失、第 6 只有缓存时，标题必须展示逐股状态而不是谎报「暂无可用行情」
+    await expect.poll(async () => worker.evaluate(async () => chrome.action.getTitle({}))).toContain('暂无行情');
+    const title = await worker.evaluate(async () => chrome.action.getTitle({}));
+    expect(title).not.toContain('暂无可用行情');
+  } finally {
+    await context.close();
+  }
+});

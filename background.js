@@ -44,6 +44,17 @@ function formatTooltipLine(stock, result) {
   return `${name} ${arrow} ${percent} · 已过期 ${time}`;
 }
 
+// 非行情排序只网络刷新 Tooltip 窗口，但缓存读取覆盖全部，避免误报「暂无可用行情」
+function planQuoteRequests(stocks, field) {
+  const codes = stocks.map((stock) => stock.code);
+  const needsFullQuotes = !['manual', 'addedAt', 'name'].includes(field);
+  return {
+    needsFullQuotes,
+    readCodes: codes,
+    refreshCodes: needsFullQuotes ? codes : codes.slice(0, TOOLTIP_MAX)
+  };
+}
+
 let backgroundQuoteService = null;
 let updating = false;
 let pending = false;
@@ -112,25 +123,23 @@ async function updateBadgeAndTitle() {
     const config = data.boardConfig?.[groupId] || {};
     const field = config.sortField || 'manual';
     const direction = config.sortDirection || 'desc';
-    const needsFullQuotes = !['manual', 'addedAt', 'name'].includes(field);
     const service = getBackgroundQuoteService();
     let groupStocks = StockUtils.getStocksForGroup(watchlist, groupId);
+    const plan = planQuoteRequests(groupStocks, field);
 
-    if (needsFullQuotes) {
-      const codes = groupStocks.map((stock) => stock.code);
-      const cached = await service.read(codes);
+    if (plan.needsFullQuotes) {
+      const cached = await service.read(plan.readCodes);
       groupStocks = StockUtils.sortStocks(groupStocks, cached.results, groupId, field, direction);
       await renderChrome(groupStocks, cached);
-      const refreshed = await service.refresh(codes);
+      const refreshed = await service.refresh(plan.refreshCodes);
       groupStocks = StockUtils.sortStocks(groupStocks, refreshed.results, groupId, field, direction);
       await renderChrome(groupStocks, refreshed);
     } else {
       groupStocks = StockUtils.sortStocks(groupStocks, {}, groupId, field, direction);
-      const codes = groupStocks.slice(0, TOOLTIP_MAX).map((stock) => stock.code);
-      const cached = await service.read(codes);
+      const cached = await service.read(plan.readCodes);
       await renderChrome(groupStocks, cached);
-      const refreshed = await service.refresh(codes);
-      await renderChrome(groupStocks, refreshed);
+      const refreshed = await service.refresh(plan.refreshCodes);
+      await renderChrome(groupStocks, { ...cached, results: { ...cached.results, ...refreshed.results } });
     }
   } catch (error) {
     console.warn('[bg] update failed:', error.message);
@@ -171,5 +180,5 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { formatBadge, formatBadgeState, formatTooltipLine };
+  module.exports = { formatBadge, formatBadgeState, formatTooltipLine, planQuoteRequests };
 }
