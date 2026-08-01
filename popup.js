@@ -162,6 +162,14 @@ const App = {
     return parts.join(' · ');
   },
 
+  getRefreshToastMessage(snapshot) {
+    const requested = Object.keys(snapshot.results || {}).length;
+    if (requested === 0) return '暂无自选股';
+    if (snapshot.counts.missing === requested) return '刷新失败，请稍后重试';
+    if (!snapshot.succeededAt) return '实时行情不可用，已保留缓存';
+    return '行情已刷新';
+  },
+
   getQuoteDisplay(result) {
     if (!result?.quote || result.status === 'missing') {
       return { price: '--', change: '--', status: 'missing', staleLabel: '' };
@@ -250,14 +258,7 @@ const App = {
     try {
       const snapshot = await this.refreshQuotes({ force: true });
       this.renderBoard();
-      const requested = Object.keys(snapshot.results || {}).length;
-      if (requested > 0 && snapshot.counts.missing === requested) {
-        this.toast('刷新失败，请稍后重试');
-      } else if (requested > 0 && !snapshot.succeededAt) {
-        this.toast('实时行情不可用，已保留缓存');
-      } else {
-        this.toast('行情已刷新');
-      }
+      this.toast(this.getRefreshToastMessage(snapshot));
       this.scheduleNextRefresh();
     } catch (e) {
       this.toast('刷新失败，请稍后重试');

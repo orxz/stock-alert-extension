@@ -63,3 +63,23 @@ test('older quote generations cannot overwrite newer state', () => {
 test('update time formats in Asia/Shanghai like the stale label', () => {
   assert.equal(App.formatUpdateTime(Date.UTC(2026, 6, 31, 6, 32)), '14:32 更新');
 });
+
+test('refresh toast distinguishes empty, failed, cached, and success outcomes', () => {
+  const snapshot = (results, counts, succeededAt) => ({ results, counts, attemptedAt: 1, succeededAt });
+  assert.equal(
+    App.getRefreshToastMessage(snapshot({}, { fresh: 0, cached: 0, missing: 0 }, null)),
+    '暂无自选股'
+  );
+  assert.equal(
+    App.getRefreshToastMessage(snapshot({ sh600519: {} }, { fresh: 0, cached: 0, missing: 1 }, null)),
+    '刷新失败，请稍后重试'
+  );
+  assert.equal(
+    App.getRefreshToastMessage(snapshot({ sh600519: {} }, { fresh: 0, cached: 1, missing: 0 }, null)),
+    '实时行情不可用，已保留缓存'
+  );
+  assert.equal(
+    App.getRefreshToastMessage(snapshot({ sh600519: {} }, { fresh: 1, cached: 0, missing: 0 }, 2)),
+    '行情已刷新'
+  );
+});
