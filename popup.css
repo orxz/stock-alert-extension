@@ -6,6 +6,8 @@
   --text-primary: #1A1D26;
   --text-secondary: #6B7280;
   --text-inverse: #FFFFFF;
+  /* 深色背景（如头部）上的弱化文本 —— --text-secondary 仅用于浅色背景，在深色上对比度不足 */
+  --text-on-dark: rgba(255,255,255,.7);
   --color-up: #D9332C;
   --color-down: #1E8E4C;
   --color-flat: #6B7280;
@@ -44,7 +46,7 @@ body {
 .brand { display: flex; align-items: center; gap: 6px; }
 .brand-logo { font-size: 18px; }
 .brand-name { font-size: 15px; font-weight: 600; }
-.brand-ver { font-size: 10px; color: var(--text-secondary); background: rgba(255,255,255,.1); padding: 1px 5px; border-radius: 8px; }
+.brand-ver { font-size: 10px; color: var(--text-on-dark); background: rgba(255,255,255,.1); padding: 1px 5px; border-radius: 8px; }
 .header-actions { display: flex; gap: 6px; }
 .header-btn {
   background: rgba(255,255,255,.12); border: none; color: var(--text-inverse);
