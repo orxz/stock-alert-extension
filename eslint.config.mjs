@@ -20,6 +20,7 @@ const browserGlobals = {
   Quotes: 'readonly',
   QuoteService: 'readonly',
   QuoteFormat: 'readonly',
+  Router: 'readonly',
   Storage: 'readonly',
   StockUtils: 'readonly',
   DEFAULT_GROUP_ID: 'readonly'

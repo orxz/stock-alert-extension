@@ -1,7 +1,7 @@
 // background.js — 缓存感知的 Badge / Tooltip 与自适应后台调度
 
 if (typeof importScripts === 'function') {
-  importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-service.js', 'quote-format.js');
+  importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-service.js', 'quote-format.js', 'router.js');
 }
 
 const ALARM_NAME = 'quote-refresh';
@@ -45,6 +45,11 @@ function getBackgroundQuoteService() {
     });
   }
   return backgroundQuoteService;
+}
+
+// RPC 消息总线初始化（仅浏览器环境）：注入已配置的 QuoteService 与 Storage。
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+  Router.init(getBackgroundQuoteService(), Storage);
 }
 
 async function scheduleNextAlarm() {

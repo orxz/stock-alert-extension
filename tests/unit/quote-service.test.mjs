@@ -190,7 +190,7 @@ test('runtime entry points load QuoteService after its dependencies', async () =
   const popup = await readFile(new URL('popup.html', rootDir), 'utf8');
   const background = await readFile(new URL('background.js', rootDir), 'utf8');
   assert.ok(popup.indexOf('src="quotes.js"') < popup.indexOf('src="quote-service.js"'));
-  assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js', 'quote-service\.js', 'quote-format\.js'\)/);
+  assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js', 'quote-service\.js', 'quote-format\.js', 'router\.js'\)/);
 });
 
 test('automatic failures back off while force allows one retry', async () => {
