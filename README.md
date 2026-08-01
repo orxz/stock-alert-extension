@@ -96,17 +96,24 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 npm install          # 安装开发依赖
 npm run check        # 语法 + 类型 + lint + manifest 校验
 npm run test:unit    # 单元测试（覆盖率门禁 90/85/90/90）
-npm run test:e2e     # Playwright 真实扩展 E2E（9 场景）
+npm run test:e2e     # Playwright 真实扩展 E2E（13 场景）
 npm run ci           # 完整本地门禁
 npm run package:extension  # 确定性打包（固定 mtime + SHA-256）
 ```
 
 | 文件 | 职责 |
 |------|------|
-| `background.js` | Service Worker：角标 / 工具提示 / 自适应调度 |
-| `popup.html/css/js` | 弹窗 UI |
-| `stock-utils.js` | 共享视图 / 排序纯函数 |
-| `quotes.js` | 行情传输层（东方财富 / 新浪） |
+| `background.js` | Service Worker：行情数据唯一所有者、角标 / 工具提示 / RPC 路由 / 自适应调度 |
+| `router.js` | RPC 路由器（14 个 action，Popup ↔ Service Worker 消息总线） |
+| `popup-bridge.js` | RPC 客户端（`Bridge.send` 封装 + 超时保护） |
+| `popup-state.js` | 弹窗视图状态管理（subscribe / notify / patch） |
+| `popup-render.js` | 弹窗 DOM 渲染（分组 / 看板 / 模态框 / 键盘导航） |
+| `popup-actions.js` | 弹窗用户操作（CRUD / 排序 / 拖拽 / 批量） |
+| `popup.js` | 弹窗入口（38 行：init 序列 + DOMContentLoaded） |
+| `popup.html/css` | 弹窗 UI 结构 / 样式（CSS 设计令牌系统） |
+| `stock-utils.js` | 共享纯函数（代码规范化 / 分组视图 / 排序） |
+| `quote-format.js` | 共享格式化（Badge / Tooltip / 时间 / 状态汇总） |
+| `quotes.js` | 行情传输层（东方财富 / 新浪，搜索 API） |
 | `quote-service.js` | 行情编排（超时 / 分批 / 缓存 / 退避） |
 | `storage.js` | 本地存储（schema v2 + 串行写入队列） |
 

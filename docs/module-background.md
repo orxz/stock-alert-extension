@@ -8,15 +8,16 @@ Manifest V3 Service Worker，负责在后台更新扩展图标的 badge 和 tool
 
 ```
 background.js
-├── importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-service.js')  — 导入依赖
-├── formatBadge(percent)        — 格式化 badge 文字
-├── formatBadgeState(stock, result) — badge 状态（实时红绿 / 缓存灰色 / 缺失 --）
-├── formatTooltipLine(stock, result) — 格式化 tooltip 单行（缓存附「已过期 HH:MM」）
+├── importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-format.js', 'quote-service.js', 'router.js')
+├── Router.init(QuoteService, Storage)  — 初始化 RPC 路由器（v1.3.0）
 ├── updateBadgeAndTitle()       — 核心更新逻辑
 ├── scheduleNextAlarm()         — 一次性 alarm（盘中 30 秒 / 盘外 5 分钟）
 ├── chrome.runtime.onInstalled  — 安装时初始化
 ├── chrome.runtime.onStartup    — 浏览器启动时初始化
 └── chrome.storage.onChanged    — 数据变更即时更新
+
+formatBadge / formatBadgeState / formatTooltipLine
+  → 从 quote-format.js 导入（v1.3.0 提取为共享模块）
 ```
 
 ## data_flow
@@ -82,5 +83,5 @@ Manifest V3 中 `chrome.alarms` 是后台定时器的唯一可靠方式（`setIn
 ## coding_conventions
 
 - 颜色惯例：红涨绿跌（中国股市标准），与欧美市场相反
-- Service Worker 中通过 `importScripts()` 导入 stock-utils.js / storage.js / quotes.js / quote-service.js
+- Service Worker 中通过 `importScripts()` 导入 stock-utils.js / storage.js / quotes.js / quote-format.js / quote-service.js / router.js
 - 所有 chrome API 调用不检查错误（fire-and-forget），异常由 try-catch 捕获后 console.warn

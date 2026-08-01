@@ -1,64 +1,106 @@
-# popup.js — 主交互逻辑
+# popup 模块群 — 弹窗 UI
 
 ## overview
 
-弹窗 UI 的核心控制器，负责分组管理、看板渲染、排序拖拽、列配置、模态框等全部前端交互逻辑。约 1070 行代码，是项目最大的模块。
+v1.3.0 将原 popup.js（~1070 行）拆分为 5 个职责清晰的模块，Popup 不再直接访问 Storage / QuoteService，所有数据和存储操作走 RPC 消息总线（`Bridge.send` → `Router`）。
+
+## 模块结构
+
+```
+popup.js            — 入口（38 行）：DOMContentLoaded → State.init → Actions.bind → Render.subscribe
+popup-bridge.js     — RPC 客户端：Bridge.send(action, payload) → Promise（10s 超时保护）
+popup-state.js      — 视图状态管理：subscribe / notify / patch，init 通过 Bridge 加载初始数据
+popup-render.js     — DOM 渲染（~748 行）：分组 Tab / 看板 / 网格 / 列表 / Tooltip / Toast / 模态框 / 键盘导航
+popup-actions.js    — 用户操作（~579 行）：CRUD / 排序 / 拖拽 / 搜索 / 批量 / 刷新
+```
+
+## init 序列
+
+```
+DOMContentLoaded
+  → State.init()              — Bridge.send('storage:read') + Bridge.send('quote:read') 加载初始数据
+  → Actions.bind(State, Render)  — 注入状态和渲染依赖
+  → Render.subscribe(State)     — 订阅状态变更
+  → Render.renderAll(State.current)
+  → Actions.refreshQuotes()     — 首次行情刷新
+  → scheduleNextRefresh()       — 自适应定时刷新
+```
 
 ## architecture_design
 
-核心对象 `App`，单例模式，`DOMContentLoaded` 时调用 `App.init()` 启动。
+### popup-state.js
 
 ```
-App
-├── state                — 全局状态（groups/watchlist/quotes/viewMode...）
-├── HOT_STOCKS           — 预设热门股票库（含拼音/行业标签）
-├── init()               — 初始化：读缓存 → 渲染 → 刷新 → 自适应调度
+State
+├── current            — 全局视图状态对象（groups/watchlist/quotes/viewMode/sortField...）
+├── subscribers[]      — 订阅者列表（Render）
+├── subscribe(fn)      — 注册订阅
+├── notify()           — 通知所有订阅者重新渲染
+├── patch(partial)     — 合并更新 current + notify
+└── init()             — 通过 Bridge 加载初始数据
+```
+
+### popup-render.js
+
+```
+Render
+├── renderAll(state)              — 全量渲染
+├── renderGroupTabs(state)        — 分组栏（role="tablist"，箭头键导航，roving tabindex）
+├── renderBoard(state)            — 看板容器
+├── renderGrid(state)             — 网格视图（role="button"，Enter/Space 置顶）
+├── renderList(state)             — 列表视图（虚拟滚动 >50 只）
+├── showQuoteTooltip / hideQuoteTooltip  — 行情悬浮卡
+├── toast(msg)                    — 消息提示（role="alert"）
+├── _confirm(msg)                 — 自定义确认弹层（role="dialog"）
+├── renderColPanel(state)         — 列配置面板
+├── esc(str)                      — HTML 转义防 XSS
+└── subscribe(state)              — 注册为 State 订阅者
+```
+
+### popup-actions.js
+
+```
+Actions
+├── bind(state, render)           — 注入依赖（typeof document guard 兼容 Node 测试）
 ├── 行情
-│   ├── quoteService     — QuoteService.create({ transport: Quotes, cache: Storage })
-│   ├── refreshQuotes()  — 读缓存 + 网络刷新（force 手动重试）
-│   ├── formatStatusSummary() — 实时/缓存/缺失汇总
-│   ├── getQuoteDisplay()     — 单只行情展示（-- / 旧 HH:MM）
-│   └── scheduleNextRefresh() — 盘中 10 秒 / 盘外 5 分钟
+│   ├── refreshQuotes()           — Bridge.send('quote:refresh')
+│   └── scheduleNextRefresh()     — 盘中 10 秒 / 盘外 5 分钟
 ├── 分组管理
-│   ├── renderGroupTabs()
-│   ├── openGroupModal / submitGroupModal / deleteGroup
-│   └── reorderGroups / switchGroup
+│   ├── switchGroup / reorderGroups / createGroup / renameGroup / deleteGroup
 ├── 添加股票
-│   ├── openAddModal()
+│   ├── openAddModal() / _submitAddStock()
 │   ├── renderCodeSuggest / _asyncSearch / _renderSuggestItems
-│   └── submitAddStock() — 前缀自动补全 + 校验
-├── 看板渲染
-│   ├── getGroupStocks() — 过滤 + 搜索 + 排序
-│   ├── renderBoard() / renderGrid() / renderList()
-│   └── showQuoteTooltip / hideQuoteTooltip
+│   └── 搜索防抖 300ms + 序号防竞态
 ├── 排序与拖拽
-│   ├── onSortSelectChange / sortByField / manualReorder
-│   └── togglePin
+│   ├── onSortSelectChange / sortByField / _manualReorder / _rebalanceManualOrder
+│   ├── togglePin / _togglePin
+│   └── _removeStocks / _submitMove
 ├── 列配置
-│   ├── toggleColPanel / renderColPanel
-│   └── toggleColumn / reorderColumns
+│   ├── toggleColumn / reorderColumns / toggleColPanel
+│   └── persistBoardPatch (内含 try/catch + toast)
 ├── 批量模式
-│   └── toggleBatchMode / toggleSelect / openMoveModal / submitMove
-└── 工具方法
-    ├── esc() — HTML 转义防 XSS
-    ├── toast() — 消息提示
-    ├── _confirm() — 自定义确认弹层
-    └── withMutationLock() — 用户操作去重锁
+│   ├── toggleBatchMode / toggleSelect / openMoveModal
+└── 视图
+    ├── switchView / togglePriceHidden
 ```
 
 ## tech_stack
 
 - 原生 DOM 操作（无虚拟 DOM、无框架）
-- HTML5 Drag and Drop API（卡片/行/列/分组拖拽排序）
-- QuoteService 缓存优先渲染 + 自适应定时刷新（盘中 10 秒 / 盘外 5 分钟）
-- 搜索防抖 300ms；看板配置经串行存储队列即时持久化（无防抖）
+- HTML5 Drag and Drop API（卡片 / 行 / 列 / 分组拖拽排序）
+- RPC 消息总线：所有数据和存储操作经 `Bridge.send` → `Router` → Service Worker
+- QuoteFormat 共享格式化（从 quote-format.js 导入）
+- Quotes.searchStocks（仍直接加载 quotes.js 用于搜索联想）
+- CSS 设计令牌系统（CSS Custom Properties，WCAG 2.1 AA）
+- ARIA 无障碍：tablist / region / dialog / alert / status
+- 键盘导航：分组 Tab 箭头键 + 卡片 Enter/Space + `.finally()` 焦点恢复
 
 ## coding_conventions
 
 ### 代码前缀自动补全规则
 
 ```javascript
-// submitAddStock() 中的前缀补全逻辑
+// _submitAddStock() 中的前缀补全逻辑
 if (/^(4|8|9)/.test(code)) code = 'bj' + code;      // 北交所
 else if (/^(6|5|11|12|13)/.test(code)) code = 'sh' + code; // 沪市
 else code = 'sz' + code;                              // 深市
@@ -75,11 +117,9 @@ _searchSeq: 0  // 全局递增序号
 // 异步结果返回后检查 seq !== this._searchSeq 则丢弃（旧请求）
 ```
 
-### 配置持久化
+### RPC 错误处理
 
-视图、排序、列配置变更通过 `Storage.saveBoardConfigForGroup(groupId, patch)` 直接串行持久化；失败时保留本地状态并提示「设置保存失败，请重试」。
-
-添加、分组增删、移动、批量删除、手动排序、置顶等操作使用 `App.withMutationLock(key, action)` 去重，重复点击同一操作不会产生并发写入。
+所有 Bridge.send 调用包裹在 try/catch 中，失败时 `this.render.toast(e.message || '操作失败，请重试')`。`persistBoardPatch` 有独立的 try/catch（高频操作，避免嵌套）。
 
 ### 安全设计
 
@@ -101,9 +141,9 @@ s.code.replace(/^(sh|sz)/, '')     // 错误：会遗漏 bj 前缀
 
 列表超过 50 只股票时，为每个 `.list-row` 添加 `.virtual` 类（`content-visibility: auto`），优化长列表渲染性能。
 
-### HOT_STOCKS 预设库
+### WCAG 2.1 AA 合规
 
-包含 40 只热门股票（沪市 19 + 深市 12 + 科创板 5 + 北交所 3 + 创业板 1），每只含 code/name/tag/pinyin 四个字段，用于：
-1. 添加弹窗空输入时展示热门
-2. API 搜索失败时的本地降级匹配
-3. 看板搜索的拼音/行业标签元数据查找
+- 颜色对比度：所有文本 ≥ 4.5:1，通过 CSS 设计令牌（`--text-primary`、`--text-secondary`、`--color-up`、`--color-down` 等）
+- 触控目标：`.header-btn`、`.view-btn`、`.tab-add` ≥ 44px
+- `prefers-reduced-motion`：动画降级为即时切换
+- 焦点恢复：异步重渲染后通过 `.finally()` 恢复 DOM 元素焦点
