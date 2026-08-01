@@ -10,21 +10,21 @@
   <!-- 顶部头部 -->
   <header class="app-header">
     <div class="brand">
-      <span class="brand-logo">📈</span>
+      <span class="brand-logo" aria-hidden="true">📈</span>
       <span class="brand-name">股票提醒助手</span>
       <span class="brand-ver" id="brand-version"></span>
     </div>
     <div class="header-actions">
-      <button id="btn-add-stock" class="header-btn" title="添加自选股">＋</button>
-      <button id="btn-edit" class="header-btn" title="多选编辑">✎</button>
-      <button id="btn-toggle-price" class="header-btn" title="隐藏价格">👁</button>
+      <button id="btn-add-stock" class="header-btn" title="添加自选股" aria-label="添加自选股">＋</button>
+      <button id="btn-edit" class="header-btn" title="多选编辑" aria-label="多选编辑">✎</button>
+      <button id="btn-toggle-price" class="header-btn" title="隐藏价格" aria-label="隐藏价格">👁</button>
     </div>
   </header>
 
   <!-- 分组 Tab 栏 -->
-  <nav class="group-tabs" id="group-tabs">
+  <nav class="group-tabs" id="group-tabs" role="tablist" aria-label="股票分组">
     <div class="tabs-scroll" id="tabs-scroll"></div>
-    <button id="btn-new-group" class="tab-add" title="新建分组">＋</button>
+    <button id="btn-new-group" class="tab-add" title="新建分组" aria-label="新建分组">＋</button>
   </nav>
 
   <!-- 工具栏 -->
@@ -49,7 +49,7 @@
   </div>
 
   <!-- 看板区域 -->
-  <main class="board" id="board">
+  <main class="board" id="board" role="region" aria-label="股票看板" aria-live="polite">
     <div class="empty-state" id="empty-state" style="display:none;">
       <div class="empty-icon">📋</div>
       <p>当前分组暂无自选股</p>
@@ -85,10 +85,10 @@
   <div class="quote-tooltip" id="quote-tooltip" style="display:none;"></div>
 
   <!-- 添加股票弹层 -->
-  <div class="modal-mask" id="add-modal" style="display:none;">
+  <div class="modal-mask" id="add-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
     <div class="modal">
       <div class="modal-header">
-        <span>添加自选股</span>
+        <span id="add-modal-title">添加自选股</span>
         <button id="add-close" class="close-btn">✕</button>
       </div>
       <div class="modal-body">
@@ -162,13 +162,13 @@
   </div>
 
   <!-- Toast -->
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
 
   <!-- 底部状态栏：最近成功时间 + 手动刷新 + 行情状态 -->
   <div class="status-bar">
     <div class="status-left">
       <span class="update-time" id="update-time">未更新</span>
-      <button class="refresh-btn" id="btn-refresh" title="手动刷新行情" aria-label="手动刷新行情">
+      <button class="refresh-btn" id="btn-refresh" title="手动刷新行情" aria-label="手动刷新行情" aria-busy="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="23 4 23 10 17 10"></polyline>
           <polyline points="1 20 1 14 7 14"></polyline>
@@ -176,7 +176,7 @@
         </svg>
       </button>
     </div>
-    <div class="quote-status-summary" id="quote-status-summary">暂无自选股</div>
+    <div class="quote-status-summary" id="quote-status-summary" role="status" aria-live="polite">暂无自选股</div>
   </div>
 
   <script src="stock-utils.js"></script>

@@ -90,11 +90,15 @@ const Render = {
     scroll.innerHTML = '';
     state.groups.forEach(g => {
       const tab = document.createElement('div');
-      tab.className = 'tab' + (g.groupId === state.currentGroupId ? ' active' : '');
+      const isActive = g.groupId === state.currentGroupId;
+      tab.className = 'tab' + (isActive ? ' active' : '');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      tab.tabIndex = isActive ? 0 : -1;
       tab.draggable = true;
       tab.dataset.groupId = g.groupId;
       const count = StockUtils.countStocksForGroup(state.watchlist, g.groupId);
-      tab.innerHTML = `<span>${this.esc(g.name)}</span><span style="font-size:10px;color:#8A93A6;margin-left:2px;">${count}</span>`;
+      tab.innerHTML = `<span>${this.esc(g.name)}</span><span style="font-size:10px;color:var(--text-secondary);margin-left:2px;">${count}</span>`;
       tab.onclick = () => Actions.switchGroup(g.groupId);
       tab.oncontextmenu = (e) => { e.preventDefault(); if (!g.isDefault) Actions.openGroupModal('rename', g); };
       tab.ondragstart = (e) => { state.dragSrc = g.groupId; state.dragType = 'group'; e.dataTransfer.effectAllowed = 'move'; };
@@ -107,6 +111,23 @@ const Render = {
           Actions.reorderGroups(state.dragSrc, g.groupId);
         }
       };
+      tab.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          const tabs = [...scroll.querySelectorAll('[role="tab"]')];
+          const currentIdx = tabs.indexOf(tab);
+          if (currentIdx === -1 || tabs.length < 2) return;
+          const nextIdx = e.key === 'ArrowRight'
+            ? (currentIdx + 1) % tabs.length
+            : (currentIdx - 1 + tabs.length) % tabs.length;
+          const nextGroupId = tabs[nextIdx].dataset.groupId;
+          Actions.switchGroup(nextGroupId).finally(() => {
+            // 重渲染会销毁旧 DOM，需在新 tab 上恢复焦点（roving tabindex）
+            const newActive = scroll.querySelector(`[role="tab"][data-group-id="${nextGroupId}"]`);
+            if (newActive) newActive.focus();
+          });
+        }
+      });
       scroll.appendChild(tab);
     });
   },
@@ -183,6 +204,10 @@ const Render = {
       const changeText = state.priceHidden && display.change !== '--' ? '****' : display.change;
       const isPinned = s.pinned && s.pinned[gid];
       const isSelected = state.selected.has(s.code);
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', `${q.name || s.name} ${priceText} ${changeText}`);
+      card.setAttribute('aria-pressed', isPinned ? 'true' : 'false');
       const staleBadge = display.staleLabel
         ? `<span class="quote-stale" title="缓存行情">${display.staleLabel}</span>`
         : '';
@@ -235,6 +260,22 @@ const Render = {
           if (delItem) delItem.onclick = (e) => { e.stopPropagation(); menu.classList.remove('show'); Actions.removeStocks([s.code]); };
         }
       }
+      // 键盘支持：Enter / Space 触发与点击一致的操作
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const action = state.batchMode ? 'select' : 'pin';
+          if (action === 'select') {
+            Actions.toggleSelect(s.code);
+          } else {
+            Actions.togglePin(s.code).finally(() => {
+              // 重渲染会销毁旧 DOM，需在同 code 的新卡片上恢复焦点
+              const newCard = grid.querySelector(`.grid-card[data-code="${s.code}"]`);
+              if (newCard) newCard.focus();
+            });
+          }
+        }
+      });
       card.ondragstart = (e) => { state.dragSrc = s.code; state.dragType = 'stock'; e.dataTransfer.effectAllowed = 'move'; };
       card.ondragover = (e) => { e.preventDefault(); card.classList.add('drag-over'); };
       card.ondragleave = () => card.classList.remove('drag-over');
