@@ -89,25 +89,37 @@ const Actions = {
 
   // ===== 分组切换 / 排序 =====
   async switchGroup(groupId) {
+    const prevGroupId = this.state.current.currentGroupId;
     this.state.current.currentGroupId = groupId;
     this.state.current.selected.clear();
     // 切换分组时退出批量模式，避免"批量栏显示但未选中"的困惑状态
     if (this.state.current.batchMode) this.toggleBatchMode();
-    const cfg = await Bridge.send('storage:boardConfig', { groupId });
-    Object.assign(this.state.current, cfg);
-    this.render.applySortSelect(this.state.current);
-    this.render.render(this.state.current);
-    document.getElementById('batch-count').textContent = `已选 0 只`;
+    try {
+      const cfg = await Bridge.send('storage:boardConfig', { groupId });
+      Object.assign(this.state.current, cfg);
+      this.render.applySortSelect(this.state.current);
+      this.render.render(this.state.current);
+      document.getElementById('batch-count').textContent = `已选 0 只`;
+    } catch (e) {
+      // 回滚到原分组，避免 UI 停留在未加载配置的新分组
+      this.state.current.currentGroupId = prevGroupId;
+      this.render.render(this.state.current);
+      this.render.toast(e.message || '切换分组失败，请重试');
+    }
   },
 
   async reorderGroups(srcId, dstId) {
     const ids = this.state.current.groups.map(g => g.groupId);
     const from = ids.indexOf(srcId), to = ids.indexOf(dstId);
     ids.splice(to, 0, ids.splice(from, 1)[0]);
-    const result = await Bridge.send('storage:reorderGroups', { ids });
-    this.state.current.groups = result.groups;
-    this.render.renderGroupTabs(this.state.current);
-    this.render.toast('分组顺序已调整');
+    try {
+      const result = await Bridge.send('storage:reorderGroups', { ids });
+      this.state.current.groups = result.groups;
+      this.render.renderGroupTabs(this.state.current);
+      this.render.toast('分组顺序已调整');
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   // ===== 分组 CRUD =====
@@ -198,12 +210,16 @@ const Actions = {
     const wasInAllGroups = existed && groupIds.every((id) =>
       id === StockUtils.ALL_GROUP_ID || existed.groupIds.includes(id)
     );
-    const result = await Bridge.send('storage:addStock', { code, name, groupIds });
-    this.state.current.watchlist = result.watchlist;
-    document.getElementById('add-modal').style.display = 'none';
-    await this.refreshQuotes();
-    this.render.render(this.state.current);
-    this.render.toast(wasInAllGroups ? '该股票已在所选分组中' : (existed ? '已加入新分组' : '已添加 ' + code));
+    try {
+      const result = await Bridge.send('storage:addStock', { code, name, groupIds });
+      this.state.current.watchlist = result.watchlist;
+      document.getElementById('add-modal').style.display = 'none';
+      await this.refreshQuotes();
+      this.render.render(this.state.current);
+      this.render.toast(wasInAllGroups ? '该股票已在所选分组中' : (existed ? '已加入新分组' : '已添加 ' + code));
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   // ===== 移动到分组 =====
@@ -223,17 +239,21 @@ const Actions = {
     // 过滤掉当前分组（移动到当前所在分组是无意义操作，且会导致 manualOrder/pinned 丢失）
     const target = selected.map(c => c.dataset.groupId).filter(id => id !== this.state.current.currentGroupId);
     if (!target.length) { this.render.toast('请选择其他分组（非当前分组）'); return; }
-    const result = await Bridge.send('storage:moveStocks', {
-      codes: [...this.state.current.selected],
-      fromGroup: this.state.current.currentGroupId,
-      toGroups: target
-    });
-    this.state.current.watchlist = result.watchlist;
-    document.getElementById('move-modal').style.display = 'none';
-    this.state.current.selected.clear();
-    this.state.current.batchMode = false;
-    this.render.render(this.state.current);
-    this.render.toast('已移动');
+    try {
+      const result = await Bridge.send('storage:moveStocks', {
+        codes: [...this.state.current.selected],
+        fromGroup: this.state.current.currentGroupId,
+        toGroups: target
+      });
+      this.state.current.watchlist = result.watchlist;
+      document.getElementById('move-modal').style.display = 'none';
+      this.state.current.selected.clear();
+      this.state.current.batchMode = false;
+      this.render.render(this.state.current);
+      this.render.toast('已移动');
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   // ===== 删除 / 选择 / 置顶 =====
@@ -252,12 +272,16 @@ const Actions = {
       : `确认将 ${codes.length} 只股票移出当前分组？（仍保留在「全部」中）`;
     const ok = await this.render._confirm(msg, { title: '移除确认', okText: '移除' });
     if (!ok) return;
-    const result = await Bridge.send('storage:removeStocks', { codes, groupId: gid });
-    this.state.current.watchlist = result.watchlist;
-    this.state.current.selected.clear();
-    this.state.current.batchMode = false;
-    this.render.render(this.state.current);
-    this.render.toast(isAll ? '已移除' : '已移出分组');
+    try {
+      const result = await Bridge.send('storage:removeStocks', { codes, groupId: gid });
+      this.state.current.watchlist = result.watchlist;
+      this.state.current.selected.clear();
+      this.state.current.batchMode = false;
+      this.render.render(this.state.current);
+      this.render.toast(isAll ? '已移除' : '已移出分组');
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   toggleSelect(code) {
@@ -274,11 +298,15 @@ const Actions = {
 
   async _togglePin(code) {
     const gid = this.state.current.currentGroupId;
-    const result = await Bridge.send('storage:togglePin', { groupId: gid, code });
-    this.state.current.watchlist = result.watchlist;
-    // 置顶/取消置顶后重算 manualOrder，切换分区的股票排到目标分区末尾
-    await this._rebalanceManualOrder(gid, code);
-    this.render.renderBoard(this.state.current);
+    try {
+      const result = await Bridge.send('storage:togglePin', { groupId: gid, code });
+      this.state.current.watchlist = result.watchlist;
+      // 置顶/取消置顶后重算 manualOrder，切换分区的股票排到目标分区末尾
+      await this._rebalanceManualOrder(gid, code);
+      this.render.renderBoard(this.state.current);
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   // 置顶/取消置顶后重算 manualOrder：置顶区和非置顶区各自从 0 连续编号
@@ -308,8 +336,12 @@ const Actions = {
     const orderMap = {};
     pinned.forEach((s, i) => { orderMap[s.code] = i; });
     nonPinned.forEach((s, i) => { orderMap[s.code] = i; });
-    const result = await Bridge.send('storage:setManualOrder', { groupId: gid, orderMap });
-    this.state.current.watchlist = result.watchlist;
+    try {
+      const result = await Bridge.send('storage:setManualOrder', { groupId: gid, orderMap });
+      this.state.current.watchlist = result.watchlist;
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   manualReorder(srcCode, dstCode) {
@@ -336,13 +368,17 @@ const Actions = {
         orderMap[code] = nonPinnedIdx++;
       }
     });
-    const reorderResult = await Bridge.send('storage:setManualOrder', { groupId: gid, orderMap });
-    // 刷新 state.watchlist，使 getGroupStocks 读取到最新 manualOrder，避免拖拽视觉不生效
-    this.state.current.watchlist = reorderResult.watchlist;
-    this.state.current.sortField = 'manual';
-    this.render.applySortSelect(this.state.current);
-    await this.persistBoardPatch(gid, { sortField: 'manual' });
-    this.render.renderBoard(this.state.current);
+    try {
+      const reorderResult = await Bridge.send('storage:setManualOrder', { groupId: gid, orderMap });
+      // 刷新 state.watchlist，使 getGroupStocks 读取到最新 manualOrder，避免拖拽视觉不生效
+      this.state.current.watchlist = reorderResult.watchlist;
+      this.state.current.sortField = 'manual';
+      this.render.applySortSelect(this.state.current);
+      await this.persistBoardPatch(gid, { sortField: 'manual' });
+      this.render.renderBoard(this.state.current);
+    } catch (e) {
+      this.render.toast(e.message || '操作失败，请重试');
+    }
   },
 
   // ===== 视图切换 =====
