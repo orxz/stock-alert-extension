@@ -189,8 +189,9 @@ test('uses China market intervals', () => {
 test('runtime entry points load QuoteService after its dependencies', async () => {
   const popup = await readFile(new URL('popup.html', rootDir), 'utf8');
   const background = await readFile(new URL('background.js', rootDir), 'utf8');
-  assert.ok(popup.indexOf('src="quotes.js"') < popup.indexOf('src="quote-service.js"'));
-  assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js', 'quote-service\.js'\)/);
+  // popup 不再直接加载 quote-service.js（行情通过 Bridge RPC 由 background 提供）
+  assert.ok(!popup.includes('src="quote-service.js"'));
+  assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js', 'quote-service\.js', 'quote-format\.js', 'router\.js'\)/);
 });
 
 test('automatic failures back off while force allows one retry', async () => {
@@ -212,6 +213,31 @@ test('automatic failures back off while force allows one retry', async () => {
   const forced = await service.refresh(['sh600519'], { force: true });
   assert.equal(forced.generation, deferred.generation + 1);
   assert.equal(calls, 4);
+});
+
+test('empty refresh does not prime backoff state', async () => {
+  let now = 1000;
+  let calls = 0;
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney(codes) { calls.push(['eastmoney', codes]); return {}; },
+    async fetchSina(codes) { calls.push(['sina', codes]); return {}; }
+  };
+  const cache = memoryCache();
+  const service = QuoteService.create({ transport, cache, clock: () => now });
+  calls = [];
+  // 空自选股刷新：不得触碰 failureCount / nextAutomaticAttemptAt
+  const empty = await service.refresh([]);
+  assert.deepEqual(empty.counts, { fresh: 0, cached: 0, missing: 0 });
+  assert.deepEqual(empty.results, {});
+  assert.equal(empty.succeededAt, null);
+  assert.deepEqual(calls, []);
+  // 下一次非空刷新必须立即执行（未被退避推迟）
+  now = 2000;
+  const next = await service.refresh(['sh600519']);
+  assert.equal(next.deferredUntil, undefined);
+  assert.ok(next.attemptedAt === 2000);
+  assert.deepEqual(calls, [['eastmoney', ['sh600519']], ['sina', ['sh600519']]]);
 });
 
 test('successful refresh resets failure backoff', async () => {

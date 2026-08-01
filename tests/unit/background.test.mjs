@@ -3,13 +3,13 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-global.StockUtils = require('../../stock-utils.js');
-const { formatBadgeState, formatTooltipLine, planQuoteRequests } = require('../../background.js');
+const QuoteFormat = require('../../quote-format.js');
+const { planQuoteRequests } = require('../../background.js');
 
 const stock = { code: 'sh600519', name: '贵州茅台' };
 
 test('cached quote keeps its number but uses gray', () => {
-  const state = formatBadgeState(stock, {
+  const state = QuoteFormat.formatBadgeState({
     status: 'cached',
     fetchedAt: Date.UTC(2026, 6, 31, 6, 32),
     quote: { changePercent: -2.5, price: 10 }
@@ -18,7 +18,7 @@ test('cached quote keeps its number but uses gray', () => {
 });
 
 test('cached Tooltip explicitly includes age', () => {
-  const line = formatTooltipLine(stock, {
+  const line = QuoteFormat.formatTooltipLine(stock, {
     status: 'cached',
     fetchedAt: Date.UTC(2026, 6, 31, 6, 32),
     quote: { name: '贵州茅台', changePercent: -2.5, change: -1, price: 10 }
@@ -29,7 +29,7 @@ test('cached Tooltip explicitly includes age', () => {
 
 test('missing quote uses a gray double dash', () => {
   assert.deepEqual(
-    formatBadgeState(stock, { status: 'missing', fetchedAt: null, quote: null }),
+    QuoteFormat.formatBadgeState({ status: 'missing', fetchedAt: null, quote: null }),
     { text: '--', color: '#95A5A6' }
   );
 });

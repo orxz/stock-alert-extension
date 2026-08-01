@@ -7,6 +7,7 @@ const browserGlobals = {
   fetch: 'readonly',
   module: 'readonly',
   process: 'readonly',
+  require: 'readonly',
   setInterval: 'readonly',
   setTimeout: 'readonly',
   structuredClone: 'readonly',
@@ -16,11 +17,16 @@ const browserGlobals = {
   window: 'readonly',
   chrome: 'readonly',
   importScripts: 'readonly',
-  App: 'readonly',
+  Bridge: 'readonly',
   Quotes: 'readonly',
   QuoteService: 'readonly',
+  QuoteFormat: 'readonly',
+  Router: 'readonly',
   Storage: 'readonly',
   StockUtils: 'readonly',
+  State: 'readonly',
+  Render: 'readonly',
+  Actions: 'readonly',
   DEFAULT_GROUP_ID: 'readonly'
 };
 
@@ -56,6 +62,8 @@ export default [
         global: 'readonly',
         process: 'readonly',
         setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
         structuredClone: 'readonly'
       }
     },

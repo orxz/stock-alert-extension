@@ -66,7 +66,9 @@ test('sorting by quote value orders stocks in both directions', () => {
 test('runtime entry points load StockUtils before storage consumers', async () => {
   const popup = await readFile(new URL('popup.html', rootDir), 'utf8');
   const background = await readFile(new URL('background.js', rootDir), 'utf8');
-  assert.ok(popup.indexOf('src="stock-utils.js"') < popup.indexOf('src="storage.js"'));
+  // popup 不再直接加载 storage.js（数据通过 Bridge RPC），StockUtils 的消费者改为 popup-render.js
+  assert.ok(!popup.includes('src="storage.js"'));
+  assert.ok(popup.indexOf('src="stock-utils.js"') < popup.indexOf('src="popup-render.js"'));
   assert.match(background, /importScripts\('stock-utils\.js', 'storage\.js', 'quotes\.js'(?:, '[^']+')*\)/);
 });
 

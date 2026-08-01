@@ -5,51 +5,15 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 global.StockUtils = require('../../stock-utils.js');
 global.document = undefined;
-const App = require('../../popup.js');
-
-test('summarizes mixed live and cached data', () => {
-  assert.equal(
-    App.formatStatusSummary({ counts: { fresh: 8, cached: 2, missing: 0 } }),
-    '实时 8 · 缓存 2'
-  );
-});
-
-test('summary includes the missing count and keeps actionable hints', () => {
-  assert.equal(
-    App.formatStatusSummary({ counts: { fresh: 8, cached: 2, missing: 1 } }),
-    '实时 8 · 缓存 2 · 缺失 1'
-  );
-  assert.equal(
-    App.formatStatusSummary({ counts: { fresh: 0, cached: 2, missing: 3 } }),
-    '缓存 2 · 缺失 3 · 行情服务暂不可用'
-  );
-  assert.equal(
-    App.formatStatusSummary({ counts: { fresh: 0, cached: 0, missing: 5 } }),
-    '无行情数据 · 点击刷新重试'
-  );
-  assert.equal(App.formatStatusSummary({ counts: {} }), '暂无自选股');
-});
-
-test('cached quote keeps the value and exposes an old marker', () => {
-  const display = App.getQuoteDisplay({
-    status: 'cached',
-    fetchedAt: Date.UTC(2026, 6, 31, 6, 32),
-    quote: { price: 10, change: 1, changePercent: 11.11 }
-  });
-  assert.equal(display.price, '10.00');
-  assert.equal(display.status, 'cached');
-  assert.match(display.staleLabel, /^旧 /);
-});
-
-test('missing quote never displays zero', () => {
-  const display = App.getQuoteDisplay({ status: 'missing', fetchedAt: null, quote: null });
-  assert.equal(display.price, '--');
-  assert.equal(display.change, '--');
-});
+const State = require('../../popup-state.js');
+const Render = require('../../popup-render.js');
+const Actions = require('../../popup-actions.js');
+global.Bridge = { async send() { return {}; } };
+Actions.bind(State, Render);
 
 test('older quote generations cannot overwrite newer state', () => {
-  App.state.quoteGeneration = 2;
-  const applied = App.applyQuoteSnapshot({
+  State.current.quoteGeneration = 2;
+  const applied = Actions.applyQuoteSnapshot({
     generation: 1,
     results: {},
     counts: { fresh: 0, cached: 0, missing: 0 },
@@ -57,29 +21,109 @@ test('older quote generations cannot overwrite newer state', () => {
     succeededAt: null
   });
   assert.equal(applied, false);
-  assert.equal(App.state.quoteGeneration, 2);
+  assert.equal(State.current.quoteGeneration, 2);
 });
 
-test('update time formats in Asia/Shanghai like the stale label', () => {
-  assert.equal(App.formatUpdateTime(Date.UTC(2026, 6, 31, 6, 32)), '14:32 更新');
+test('newer quote generation overwrites state and bumps the counter', () => {
+  State.current.quoteGeneration = 2;
+  State.current.quoteSnapshot = { results: {}, counts: { fresh: 0, cached: 0, missing: 0 }, attemptedAt: 1, succeededAt: null };
+  const applied = Actions.applyQuoteSnapshot({
+    generation: 5,
+    results: { sh600519: { status: 'fresh', quote: { price: 1680 } } },
+    counts: { fresh: 1, cached: 0, missing: 0 },
+    attemptedAt: 10,
+    succeededAt: 11
+  });
+  assert.equal(applied, true);
+  assert.equal(State.current.quoteGeneration, 5);
+  assert.equal(State.current.quoteSnapshot.results.sh600519.status, 'fresh');
 });
 
-test('refresh toast distinguishes empty, failed, cached, and success outcomes', () => {
-  const snapshot = (results, counts, succeededAt) => ({ results, counts, attemptedAt: 1, succeededAt });
-  assert.equal(
-    App.getRefreshToastMessage(snapshot({}, { fresh: 0, cached: 0, missing: 0 }, null)),
-    '暂无自选股'
-  );
-  assert.equal(
-    App.getRefreshToastMessage(snapshot({ sh600519: {} }, { fresh: 0, cached: 0, missing: 1 }, null)),
-    '刷新失败，请稍后重试'
-  );
-  assert.equal(
-    App.getRefreshToastMessage(snapshot({ sh600519: {} }, { fresh: 0, cached: 1, missing: 0 }, null)),
-    '实时行情不可用，已保留缓存'
-  );
-  assert.equal(
-    App.getRefreshToastMessage(snapshot({ sh600519: {} }, { fresh: 1, cached: 0, missing: 0 }, 2)),
-    '行情已刷新'
-  );
+test('snapshot without generation field is accepted and resets counter to 0', () => {
+  State.current.quoteGeneration = 0;
+  const applied = Actions.applyQuoteSnapshot({
+    results: {},
+    counts: { fresh: 0, cached: 0, missing: 0 },
+    attemptedAt: 1,
+    succeededAt: null
+  });
+  assert.equal(applied, true);
+  assert.equal(State.current.quoteGeneration, 0);
+});
+
+test('refreshQuotes applies fresh snapshot and triggers status/time update', async () => {
+  State.current.watchlist = [{ code: 'sh600519', name: '贵州茅台', groupIds: [] }];
+  State.current.quoteGeneration = 0;
+  let statusCalls = 0;
+  let timeCalls = 0;
+  Render.updateQuoteStatus = () => { statusCalls += 1; };
+  Render.updateTimeLabel = () => { timeCalls += 1; };
+  global.Bridge = {
+    async send(action, payload) {
+      assert.equal(action, 'quote:refresh');
+      assert.deepEqual(payload, { codes: ['sh600519'], force: false });
+      return { generation: 3, results: { sh600519: { status: 'fresh', quote: { price: 1680 } } }, counts: { fresh: 1, cached: 0, missing: 0 }, attemptedAt: 1, succeededAt: 2 };
+    }
+  };
+  const snapshot = await Actions.refreshQuotes();
+  assert.equal(snapshot.generation, 3);
+  assert.equal(State.current.quoteGeneration, 3);
+  assert.equal(statusCalls, 1);
+  assert.equal(timeCalls, 1);
+});
+
+test('cleanup clears scheduled timers without throwing', () => {
+  Actions._quoteTimer = setTimeout(() => {}, 1000);
+  Actions._timeTimer = setInterval(() => {}, 1000);
+  Actions.cleanup();
+  assert.equal(Actions._quoteTimer, null);
+  assert.equal(Actions._timeTimer, null);
+});
+
+test('Render.esc escapes HTML-special characters and tolerates null', () => {
+  assert.equal(Render.esc('<script>alert("x")</script>'), '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+  assert.equal(Render.esc("a'b&c"), 'a&#39;b&amp;c');
+  assert.equal(Render.esc(null), '');
+  assert.equal(Render.esc(undefined), '');
+});
+
+test('Render.getStockMeta resolves known hot stocks and returns null for unknown', () => {
+  assert.equal(Render.getStockMeta('sh600519').name, '贵州茅台');
+  assert.equal(Render.getStockMeta('sh600519').pinyin, 'gzmt');
+  assert.equal(Render.getStockMeta('sh000999'), null);
+});
+
+test('Render.getGroupStocks filters by keyword across code/pinyin/name/tag', () => {
+  State.current.currentGroupId = 'g_all';
+  State.current.searchKeyword = '';
+  State.current.sortField = 'manual';
+  State.current.sortDirection = 'desc';
+  State.current.quoteSnapshot = { results: {} };
+  State.current.watchlist = [
+    { code: 'sh600519', name: '贵州茅台', groupIds: [], manualOrder: {}, pinned: {} },
+    { code: 'sz000001', name: '平安银行', groupIds: [], manualOrder: {}, pinned: {} }
+  ];
+  assert.equal(Render.getGroupStocks(State.current).length, 2);
+
+  State.current.searchKeyword = 'gzmt'; // 拼音命中茅台
+  assert.deepEqual(Render.getGroupStocks(State.current).map((s) => s.code), ['sh600519']);
+
+  State.current.searchKeyword = '600'; // 代码前缀命中
+  assert.deepEqual(Render.getGroupStocks(State.current).map((s) => s.code), ['sh600519']);
+
+  State.current.searchKeyword = '银行'; // 行业/名称命中平安银行
+  assert.deepEqual(Render.getGroupStocks(State.current).map((s) => s.code), ['sz000001']);
+
+  State.current.searchKeyword = '';
+});
+
+test('Render.getGroupStocks respects custom group membership', () => {
+  State.current.currentGroupId = 'g_tech';
+  State.current.searchKeyword = '';
+  State.current.watchlist = [
+    { code: 'sh600519', name: '贵州茅台', groupIds: ['g_tech'], manualOrder: { g_tech: 0 }, pinned: {} },
+    { code: 'sz000001', name: '平安银行', groupIds: [], manualOrder: {}, pinned: {} }
+  ];
+  assert.deepEqual(Render.getGroupStocks(State.current).map((s) => s.code), ['sh600519']);
+  State.current.currentGroupId = 'g_all';
 });

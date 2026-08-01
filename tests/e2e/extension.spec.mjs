@@ -221,3 +221,76 @@ test('tooltip does not claim no data when a later sorted stock has cache', async
     await context.close();
   }
 });
+
+test('keyboard ArrowRight moves focus between group tabs and switches group', async () => {
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: {
+      schemaVersion: 2,
+      groups: GROUPS,
+      watchlist: [stock('sh600519')],
+      boardConfig: {}
+    }
+  });
+  try {
+    // 起始活动分组为 g_all（roving tabindex：仅它 tabindex=0）
+    const activeTab = page.locator('#tabs-scroll .tab[tabindex="0"]');
+    await expect(activeTab).toHaveAttribute('role', 'tab');
+    await expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    await activeTab.focus();
+    // ArrowRight 切到下一个分组
+    await page.keyboard.press('ArrowRight');
+    // 重渲染后，g_tech 成为活动分组并恢复焦点
+    await expect(page.locator('#tabs-scroll .tab.active')).toHaveAttribute('data-group-id', 'g_tech');
+    await expect(page.locator('#tabs-scroll .tab.active')).toHaveAttribute('aria-selected', 'true');
+    const focusedRole = await page.evaluate(() => document.activeElement?.getAttribute('role'));
+    expect(focusedRole).toBe('tab');
+    const focusedGroupId = await page.evaluate(() => document.activeElement?.dataset.groupId);
+    expect(focusedGroupId).toBe('g_tech');
+  } finally {
+    await context.close();
+  }
+});
+
+test('keyboard Enter toggles pin on the focused stock card', async () => {
+  const code = 'sh600519';
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: {
+      schemaVersion: 2,
+      groups: GROUPS,
+      watchlist: [stock(code)],
+      boardConfig: {}
+    }
+  });
+  try {
+    const card = page.locator(`.grid-card[data-code="${code}"]`);
+    await expect(card).toHaveAttribute('role', 'button');
+    await expect(card).toHaveAttribute('tabindex', '0');
+    await expect(card).toHaveAttribute('aria-pressed', 'false');
+    await card.focus();
+    await page.keyboard.press('Enter');
+    // 置顶后 aria-pressed 翻转为 true，卡片经重渲染后仍可被同一选择器命中
+    await expect(page.locator(`.grid-card[data-code="${code}"]`)).toHaveAttribute('aria-pressed', 'true');
+  } finally {
+    await context.close();
+  }
+});
+
+test('ARIA landmark roles are present on key elements', async () => {
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: { schemaVersion: 2, groups: GROUPS, watchlist: [], boardConfig: {} }
+  });
+  try {
+    await expect(page.locator('#group-tabs[role="tablist"]')).toHaveCount(1);
+    await expect(page.locator('#board[role="region"]')).toHaveCount(1);
+    await expect(page.locator('#quote-status-summary[role="status"]')).toHaveCount(1);
+    await expect(page.locator('#toast[role="alert"]')).toHaveCount(1);
+    await expect(page.locator('#add-modal[role="dialog"][aria-modal="true"]')).toHaveCount(1);
+    // 装饰图标对辅助技术隐藏
+    await expect(page.locator('.brand-logo[aria-hidden="true"]')).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});

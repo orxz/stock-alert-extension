@@ -14,6 +14,12 @@ export const RUNTIME_FILES = [
   'storage.js',
   'quotes.js',
   'quote-service.js',
+  'quote-format.js',
+  'router.js',
+  'popup-bridge.js',
+  'popup-state.js',
+  'popup-render.js',
+  'popup-actions.js',
   'icons/icon16.png',
   'icons/icon48.png',
   'icons/icon128.png',
@@ -26,7 +32,6 @@ export async function buildRelease(rootDir = new URL('../', import.meta.url)) {
   const manifest = JSON.parse(await readFile(new URL('manifest.json', rootDir), 'utf8'));
   const errors = await validateManifest(manifest, rootDir);
   if (errors.length) throw new Error(errors.join('\n'));
-  if (manifest.version !== '1.2.1') throw new Error(`expected manifest 1.2.1, got ${manifest.version}`);
 
   const entries = {};
   for (const file of RUNTIME_FILES) {
@@ -36,7 +41,7 @@ export async function buildRelease(rootDir = new URL('../', import.meta.url)) {
 
   const archive = zipSync(entries, { level: 9 });
   const outputDir = new URL('dist/', rootDir);
-  const outputFile = new URL('stock-alert-extension-v1.2.1.zip', outputDir);
+  const outputFile = new URL(`stock-alert-extension-v${manifest.version}.zip`, outputDir);
   await mkdir(outputDir, { recursive: true });
   await writeFile(outputFile, archive);
   const hash = createHash('sha256').update(archive).digest('hex');

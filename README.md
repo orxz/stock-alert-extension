@@ -1,6 +1,6 @@
 # 股票提醒助手 — 自选股分组与看板
 
-[![Version](https://img.shields.io/badge/version-v1.2.1-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.2.1)
+[![Version](https://img.shields.io/badge/version-v1.3.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.3.0)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,12 +24,12 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 ### Chrome 商店（推荐）
 
 <a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
-  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.2.1-blue?logo=google-chrome" alt="Chrome Web Store">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.3.0-blue?logo=google-chrome" alt="Chrome Web Store">
 </a>
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v1.2.1.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v1.3.0.zip` 并解压
 2. 打开 `chrome://extensions`，启用「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压目录
 
@@ -67,6 +67,7 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 | 版本 | 要点 |
 |------|------|
+| **v1.3.0** | Service Worker 成为行情数据唯一所有者（Popup 走 RPC 消息总线）；popup.js 拆分为 bridge/state/render/actions 模块；提取 quote-format 共享模块；WCAG 2.1 AA 无障碍（ARIA、键盘导航、对比度、触控目标） |
 | **v1.2.1** | 「全部」改计算视图；schema v2 自动迁移（含备份）；行情三态如实标注；缓存灰显角标；串行写入防数据丢失；E2E + CI 质量门禁；移除 Demo 模拟价格 |
 | v1.2.0 | 底部状态栏（更新时间 + 手动刷新）；角标按排序联动；tooltip 显示排序后前 5 只 |
 | v1.1.0 | 科创板 / 北交所支持；搜索 API 联想补全；搜索防抖防竞态 |
@@ -95,17 +96,24 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 npm install          # 安装开发依赖
 npm run check        # 语法 + 类型 + lint + manifest 校验
 npm run test:unit    # 单元测试（覆盖率门禁 90/85/90/90）
-npm run test:e2e     # Playwright 真实扩展 E2E（9 场景）
+npm run test:e2e     # Playwright 真实扩展 E2E（13 场景）
 npm run ci           # 完整本地门禁
 npm run package:extension  # 确定性打包（固定 mtime + SHA-256）
 ```
 
 | 文件 | 职责 |
 |------|------|
-| `background.js` | Service Worker：角标 / 工具提示 / 自适应调度 |
-| `popup.html/css/js` | 弹窗 UI |
-| `stock-utils.js` | 共享视图 / 排序纯函数 |
-| `quotes.js` | 行情传输层（东方财富 / 新浪） |
+| `background.js` | Service Worker：行情数据唯一所有者、角标 / 工具提示 / RPC 路由 / 自适应调度 |
+| `router.js` | RPC 路由器（14 个 action，Popup ↔ Service Worker 消息总线） |
+| `popup-bridge.js` | RPC 客户端（`Bridge.send` 封装 + 超时保护） |
+| `popup-state.js` | 弹窗视图状态管理（subscribe / notify / patch） |
+| `popup-render.js` | 弹窗 DOM 渲染（分组 / 看板 / 模态框 / 键盘导航） |
+| `popup-actions.js` | 弹窗用户操作（CRUD / 排序 / 拖拽 / 批量） |
+| `popup.js` | 弹窗入口（38 行：init 序列 + DOMContentLoaded） |
+| `popup.html/css` | 弹窗 UI 结构 / 样式（CSS 设计令牌系统） |
+| `stock-utils.js` | 共享纯函数（代码规范化 / 分组视图 / 排序） |
+| `quote-format.js` | 共享格式化（Badge / Tooltip / 时间 / 状态汇总） |
+| `quotes.js` | 行情传输层（东方财富 / 新浪，搜索 API） |
 | `quote-service.js` | 行情编排（超时 / 分批 / 缓存 / 退避） |
 | `storage.js` | 本地存储（schema v2 + 串行写入队列） |
 

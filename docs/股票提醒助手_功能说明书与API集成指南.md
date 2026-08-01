@@ -1,6 +1,6 @@
 # 股票提醒助手 — 功能说明书与 API 集成指南
 
-> 版本：v1.2.1 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-07-31
+> 版本：v1.3.0 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-08-01
 
 ---
 
@@ -8,7 +8,7 @@
 
 本文档为「股票提醒助手」浏览器扩展的功能说明书与 API 集成指南，面向开发者和维护人员。文档涵盖插件的完整功能规格、数据模型、存储结构、三个外部 API 的集成细节（东方财富搜索 API、东方财富行情 API、新浪财经行情 API）、行情缓存与降级机制、安全与权限设计，以及文件结构说明。
 
-本文档内容均基于插件源码（`popup.js`、`quotes.js`、`quote-service.js`、`stock-utils.js`、`storage.js`、`background.js`、`manifest.json`、`popup.html`、`popup.css`）编写，所有代码引用均可追溯至对应文件。
+本文档内容均基于插件源码（`popup.js`、`popup-bridge.js`、`popup-state.js`、`popup-render.js`、`popup-actions.js`、`router.js`、`quote-format.js`、`quotes.js`、`quote-service.js`、`stock-utils.js`、`storage.js`、`background.js`、`manifest.json`、`popup.html`、`popup.css`）编写，所有代码引用均可追溯至对应文件。
 
 ---
 
@@ -18,7 +18,7 @@
 
 「股票提醒助手」是一款基于 Chrome Manifest V3 的浏览器扩展，为用户提供自选股分组管理、实时行情看板、智能搜索补全和后台 Badge/Tooltip 提醒功能。插件不使用任何远程代码，所有逻辑均在本地执行。
 
-- **版本**：1.2.1
+- **版本**：1.3.0
 - **Manifest 版本**：V3
 - **权限**：`storage`、`alarms`
 - **主机权限**：`https://hq.sinajs.cn/*`、`https://push2.eastmoney.com/*`、`https://searchapi.eastmoney.com/*`
@@ -30,30 +30,43 @@
 
 插件采用分层架构，各职责清晰分离：
 
-- **UI 层**（`popup.html` / `popup.css`）：弹窗界面结构与样式
-- **逻辑层**（`popup.js`）：主交互逻辑，包含状态管理、看板渲染、事件绑定、搜索补全
+- **UI 层**（`popup.html` / `popup.css`）：弹窗界面结构与样式（CSS 设计令牌系统）
+- **弹窗入口**（`popup.js`，38 行）：init 序列 + DOMContentLoaded
+- **弹窗状态**（`popup-state.js`）：视图状态管理（subscribe / notify / patch）
+- **弹窗渲染**（`popup-render.js`）：DOM 渲染（分组 / 看板 / 模态框 / 键盘导航）
+- **弹窗操作**（`popup-actions.js`）：用户操作（CRUD / 排序 / 拖拽 / 批量）
+- **RPC 客户端**（`popup-bridge.js`）：消息总线客户端（Bridge.send + 超时保护）
+- **RPC 路由**（`router.js`）：Service Worker 端路由器（14 个 action）
+- **共享格式化**（`quote-format.js`）：Badge / Tooltip / 时间 / 状态汇总（Popup 与 Background 共享）
 - **共享语义层**（`stock-utils.js`）：代码规范化、计算分组视图与确定性排序的纯函数
 - **数据层**（`storage.js`）：基于 `chrome.storage.local` 的本地存储读写、schema v2 迁移、串行写入与行情缓存
-- **行情层**（`quotes.js`）：行情请求与解析的传输层（东方财富/新浪），不含降级决策
+- **行情层**（`quotes.js`）：行情请求与解析的传输层（东方财富/新浪），搜索 API
 - **编排层**（`quote-service.js`）：超时、分批、双源合并、缓存、退避与状态汇总
-- **后台层**（`background.js`）：Service Worker，负责 Badge 和 Tooltip 的定时更新
+- **后台层**（`background.js`）：Service Worker，行情数据唯一所有者，负责 RPC 路由 + Badge / Tooltip 定时更新
 
-数据流向为：用户操作 → `popup.js` 调用 `storage.js` 持久化 → `popup.js` 通过 `quote-service.js` 获取行情 → 渲染看板。后台 `background.js` 独立运行，通过一次性 `chrome.alarms` 定时刷新，通过 `chrome.storage.onChanged` 监听数据变化即时更新 Badge。
+数据流向为：用户操作 → `popup-actions.js` → `Bridge.send` → RPC 消息 → `router.js` → `storage.js` 持久化 / `quote-service.js` 获取行情 → 返回数据 → `popup-render.js` 渲染看板。后台 `background.js` 独立运行，通过一次性 `chrome.alarms` 定时刷新，通过 `chrome.storage.onChanged` 监听数据变化即时更新 Badge。
 
 ### 2.3 文件结构
 
 ```text
 stock-alert-extension/
-├── manifest.json       # 扩展清单（Manifest V3）
-├── popup.html          # 弹窗 HTML 结构
-├── popup.css           # 弹窗样式
-├── popup.js            # 主逻辑（~990 行）
-├── stock-utils.js      # 共享视图/排序纯函数
-├── storage.js          # 本地存储层（schema v2 + 串行写入 + 行情缓存）
-├── quotes.js           # 行情传输层
-├── quote-service.js    # 行情编排层
-├── background.js       # Service Worker
-└── icons/              # 图标资源（16/32/48/128px）
+├── manifest.json         # 扩展清单（Manifest V3）
+├── background.js         # Service Worker（行情唯一所有者 / badge / tooltip / RPC 路由）
+├── router.js             # RPC 路由器（14 个 action）
+├── quote-format.js       # 共享格式化模块
+├── popup.html            # 弹窗 HTML 结构
+├── popup.css             # 弹窗样式（CSS 设计令牌系统）
+├── popup.js              # 弹窗入口（38 行）
+├── popup-bridge.js       # RPC 客户端
+├── popup-state.js        # 视图状态管理
+├── popup-render.js       # DOM 渲染
+├── popup-actions.js      # 用户操作
+├── stock-utils.js        # 共享视图/排序纯函数
+├── storage.js            # 本地存储层（schema v2 + 串行写入 + 行情缓存）
+├── quotes.js             # 行情传输层 + 搜索 API
+├── quote-service.js      # 行情编排层
+├── icons/                # 图标资源（16/32/48/128px）
+└── privacy/              # 隐私政策
 ```
 
 ---
