@@ -222,6 +222,15 @@ const App = {
     if (element) element.textContent = this.formatStatusSummary(this.state.quoteSnapshot);
   },
 
+  formatUpdateTime(ts) {
+    return new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(ts)) + ' 更新';
+  },
+
   updateTimeLabel() {
     const el = document.getElementById('update-time');
     if (!el) return;
@@ -231,12 +240,7 @@ const App = {
     if (diff < 5) el.textContent = '刚刚更新';
     else if (diff < 60) el.textContent = diff + ' 秒前更新';
     else if (diff < 3600) el.textContent = Math.floor(diff / 60) + ' 分钟前更新';
-    else {
-      const d = new Date(ts);
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      el.textContent = hh + ':' + mm + ' 更新';
-    }
+    else el.textContent = this.formatUpdateTime(ts);
   },
 
   async manualRefresh() {

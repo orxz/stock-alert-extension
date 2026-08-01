@@ -59,3 +59,7 @@ test('older quote generations cannot overwrite newer state', () => {
   assert.equal(applied, false);
   assert.equal(App.state.quoteGeneration, 2);
 });
+
+test('update time formats in Asia/Shanghai like the stale label', () => {
+  assert.equal(App.formatUpdateTime(Date.UTC(2026, 6, 31, 6, 32)), '14:32 更新');
+});
