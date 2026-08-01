@@ -51,7 +51,7 @@ App
 - 原生 DOM 操作（无虚拟 DOM、无框架）
 - HTML5 Drag and Drop API（卡片/行/列/分组拖拽排序）
 - QuoteService 缓存优先渲染 + 自适应定时刷新（盘中 10 秒 / 盘外 5 分钟）
-- 自定义防抖（配置保存 200ms、搜索 300ms）
+- 搜索防抖 300ms；看板配置经串行存储队列即时持久化（无防抖）
 
 ## coding_conventions
 
