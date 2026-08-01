@@ -45,6 +45,29 @@ test('formatUpdateTime formats in Asia/Shanghai', () => {
   assert.equal(QuoteFormat.formatUpdateTime(Date.UTC(2026, 6, 31, 6, 32)), '14:32 更新');
 });
 
+test('formatRelativeTime shows 刚刚更新 within 5 seconds', () => {
+  const now = Date.UTC(2026, 6, 31, 6, 32, 0);
+  assert.equal(QuoteFormat.formatRelativeTime(now, now), '刚刚更新');
+  assert.equal(QuoteFormat.formatRelativeTime(now - 4 * 1000, now), '刚刚更新');
+});
+
+test('formatRelativeTime shows N 秒前更新 under 60 seconds', () => {
+  const now = Date.UTC(2026, 6, 31, 6, 32, 0);
+  assert.equal(QuoteFormat.formatRelativeTime(now - 5 * 1000, now), '5 秒前更新');
+  assert.equal(QuoteFormat.formatRelativeTime(now - 59 * 1000, now), '59 秒前更新');
+});
+
+test('formatRelativeTime shows N 分钟前更新 under 1 hour', () => {
+  const now = Date.UTC(2026, 6, 31, 6, 32, 0);
+  assert.equal(QuoteFormat.formatRelativeTime(now - 60 * 1000, now), '1 分钟前更新');
+  assert.equal(QuoteFormat.formatRelativeTime(now - 59 * 60 * 1000, now), '59 分钟前更新');
+});
+
+test('formatRelativeTime falls back to formatUpdateTime at or beyond 1 hour', () => {
+  const now = Date.UTC(2026, 6, 31, 6, 32, 0);
+  assert.equal(QuoteFormat.formatRelativeTime(now - 3600 * 1000, now), '13:32 更新');
+});
+
 test('getRefreshToastMessage distinguishes outcomes', () => {
   const snap = (results, counts, succeededAt) => ({ results, counts, attemptedAt: 1, succeededAt });
   assert.equal(QuoteFormat.getRefreshToastMessage(snap({}, { fresh: 0, cached: 0, missing: 0 }, null)), '暂无自选股');

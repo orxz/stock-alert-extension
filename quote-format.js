@@ -122,4 +122,6 @@ const QuoteFormat = (() => {
   };
 })();
 
+if (typeof globalThis !== 'undefined') globalThis.QuoteFormat = QuoteFormat;
+
 if (typeof module !== 'undefined') module.exports = QuoteFormat;

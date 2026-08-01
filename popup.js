@@ -206,11 +206,7 @@ const App = {
     if (!el) return;
     const ts = this.state.quoteSnapshot?.succeededAt;
     if (!ts) { el.textContent = '未更新'; return; }
-    const diff = Math.floor((Date.now() - ts) / 1000);
-    if (diff < 5) el.textContent = '刚刚更新';
-    else if (diff < 60) el.textContent = diff + ' 秒前更新';
-    else if (diff < 3600) el.textContent = Math.floor(diff / 60) + ' 分钟前更新';
-    else el.textContent = this.formatUpdateTime(ts);
+    el.textContent = QuoteFormat.formatRelativeTime(ts);
   },
 
   async manualRefresh() {
