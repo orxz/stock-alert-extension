@@ -54,6 +54,7 @@ test('mixed cache state is explicit per summary and stock', async () => {
   ]));
   const { context, page } = await launchExtension({
     offline: true,
+    holdQuotes: true,
     seed: {
       schemaVersion: 2,
       groups: GROUPS,
@@ -62,9 +63,14 @@ test('mixed cache state is explicit per summary and stock', async () => {
       ...cacheValues
     }
   });
-  await expect(page.locator('#quote-status-summary')).toHaveText('实时 8 · 缓存 2');
-  await expect(page.locator('.quote-stale')).toHaveCount(2);
-  await context.close();
+  try {
+    // 行情请求被挂起，初始缓存渲染保持稳定，不受刷新失败时序影响
+    await expect(page.locator('#quote-status-summary')).toHaveText('实时 8 · 缓存 2');
+    await expect(page.locator('.quote-stale')).toHaveCount(2);
+  } finally {
+    context.holdQuotes.releaseHold?.();
+    await context.close();
+  }
 });
 
 test('cached first stock makes Badge gray and Tooltip stale', async () => {

@@ -41,7 +41,7 @@ export async function seedStorage(worker, values) {
   await seedStable(worker, values);
 }
 
-export async function launchExtension({ seed = null, offline = false, onPageError = null } = {}) {
+export async function launchExtension({ seed = null, offline = false, holdQuotes = false, onPageError = null } = {}) {
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
     headless: false,
@@ -52,9 +52,14 @@ export async function launchExtension({ seed = null, offline = false, onPageErro
   });
   if (offline) await context.setOffline(true);
   if (offline) {
-    await context.route('https://push2.eastmoney.com/**', (route) => route.abort());
-    await context.route('https://hq.sinajs.cn/**', (route) => route.abort());
-    await context.route('https://searchapi.eastmoney.com/**', (route) => route.abort());
+    // 挂起行情请求可让初始缓存渲染保持稳定可断言；调用方通过 releaseHold 放行
+    let releaseHold = null;
+    const holdGate = holdQuotes ? new Promise((resolve) => { releaseHold = resolve; }) : null;
+    const routeOrHold = (route) => (holdGate ? holdGate.then(() => route.abort()) : route.abort());
+    await context.route('https://push2.eastmoney.com/**', routeOrHold);
+    await context.route('https://hq.sinajs.cn/**', routeOrHold);
+    await context.route('https://searchapi.eastmoney.com/**', routeOrHold);
+    context.holdQuotes = { releaseHold };
   }
   let [worker] = context.serviceWorkers();
   if (!worker) worker = await context.waitForEvent('serviceworker');
