@@ -197,6 +197,12 @@ test('Sina parser drops a zero price instead of reporting a suspended quote', ()
   assert.deepEqual(result, {});
 });
 
+test('Sina parser never substitutes the open price for a zero current price', () => {
+  const text = 'var hq_str_sh600519="贵州茅台,10.00,9.50,0.00,0.00,0.00,0,0,0,0";';
+  const result = Quotes.parseSina(text, ['sh600519']);
+  assert.deepEqual(result, {});
+});
+
 test('Eastmoney skips a zero-price row instead of reporting a fake crash', async () => {
   const fetchImpl = async () => ({
     ok: true,

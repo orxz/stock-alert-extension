@@ -134,7 +134,7 @@ const Quotes = {
       if (!match) continue;
       const responseCode = match[1];
       const fields = match[2].split(',');
-      const price = Number.parseFloat(fields[3]) || Number.parseFloat(fields[1]);
+      const price = Number.parseFloat(fields[3]);
       if (fields.length < 4 || !fields[0] || !Number.isFinite(price)) continue;
       const matched = codes.find((code) => code.toLowerCase() === responseCode.toLowerCase()) || responseCode;
       const quote = this.enrich({
