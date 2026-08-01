@@ -266,7 +266,12 @@ const Render = {
           e.preventDefault();
           const action = state.batchMode ? 'select' : 'pin';
           if (action === 'select') {
-            Actions.toggleSelect(s.code);
+            // toggleSelect 同步触发重渲染（销毁旧卡片），用 Promise.resolve 对齐
+            // 非批量分支的 .finally() 模式，在微任务中恢复同 code 新卡片焦点。
+            Promise.resolve(Actions.toggleSelect(s.code)).finally(() => {
+              const newCard = grid.querySelector(`.grid-card[data-code="${s.code}"]`);
+              if (newCard) newCard.focus();
+            });
           } else {
             Actions.togglePin(s.code).finally(() => {
               // 重渲染会销毁旧 DOM，需在同 code 的新卡片上恢复焦点
@@ -517,7 +522,7 @@ const Render = {
       item.innerHTML = `
         <div class="cs-left">
           <span class="cs-name">${this.esc(s.name)}</span>
-          <span class="cs-code">${s.code}</span>
+          <span class="cs-code">${this.esc(s.code)}</span>
         </div>
         <div class="cs-right">
           ${matchBadge}

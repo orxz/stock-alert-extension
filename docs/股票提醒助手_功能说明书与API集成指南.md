@@ -1,6 +1,6 @@
 # 股票提醒助手 — 功能说明书与 API 集成指南
 
-> 版本：v1.2.1 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-07-31
+> 版本：v1.3.0 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-08-01
 
 ---
 
@@ -18,7 +18,7 @@
 
 「股票提醒助手」是一款基于 Chrome Manifest V3 的浏览器扩展，为用户提供自选股分组管理、实时行情看板、智能搜索补全和后台 Badge/Tooltip 提醒功能。插件不使用任何远程代码，所有逻辑均在本地执行。
 
-- **版本**：1.2.1
+- **版本**：1.3.0
 - **Manifest 版本**：V3
 - **权限**：`storage`、`alarms`
 - **主机权限**：`https://hq.sinajs.cn/*`、`https://push2.eastmoney.com/*`、`https://searchapi.eastmoney.com/*`

@@ -181,6 +181,10 @@
 
   <script src="stock-utils.js"></script>
   <script src="quote-format.js"></script>
+  <!-- quotes.js：纯传输层工具（fetch 可注入、无 Storage/SW 依赖）。
+       Popup 的添加股票联想补全 (Render._asyncSearch) 仍直接调用 Quotes.searchStocks，
+       因此需在 popup 中加载。行情编排 (QuoteService) 仍由 SW 通过 RPC 暴露。 -->
+  <script src="quotes.js"></script>
   <script src="popup-bridge.js"></script>
   <script src="popup-state.js"></script>
   <script src="popup-render.js"></script>

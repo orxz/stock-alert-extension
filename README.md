@@ -1,6 +1,6 @@
 # 股票提醒助手 — 自选股分组与看板
 
-[![Version](https://img.shields.io/badge/version-v1.2.1-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.2.1)
+[![Version](https://img.shields.io/badge/version-v1.3.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v1.3.0)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,12 +24,12 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 ### Chrome 商店（推荐）
 
 <a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
-  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.2.1-blue?logo=google-chrome" alt="Chrome Web Store">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v1.3.0-blue?logo=google-chrome" alt="Chrome Web Store">
 </a>
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v1.2.1.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v1.3.0.zip` 并解压
 2. 打开 `chrome://extensions`，启用「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压目录
 
@@ -67,6 +67,7 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 | 版本 | 要点 |
 |------|------|
+| **v1.3.0** | Service Worker 成为行情数据唯一所有者（Popup 走 RPC 消息总线）；popup.js 拆分为 bridge/state/render/actions 模块；提取 quote-format 共享模块；WCAG 2.1 AA 无障碍（ARIA、键盘导航、对比度、触控目标） |
 | **v1.2.1** | 「全部」改计算视图；schema v2 自动迁移（含备份）；行情三态如实标注；缓存灰显角标；串行写入防数据丢失；E2E + CI 质量门禁；移除 Demo 模拟价格 |
 | v1.2.0 | 底部状态栏（更新时间 + 手动刷新）；角标按排序联动；tooltip 显示排序后前 5 只 |
 | v1.1.0 | 科创板 / 北交所支持；搜索 API 联想补全；搜索防抖防竞态 |

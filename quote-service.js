@@ -133,6 +133,12 @@ const QuoteService = (() => {
     }
 
     async function executeRefresh(requested, currentGeneration, attemptedAt) {
+      // 空自选股守卫：直接返回空快照，不触碰 failureCount / nextAutomaticAttemptAt。
+      // v1.3.0 起 QuoteService 常驻 SW，退避状态会跨 Popup 重载存活；若放任空刷新累积
+      // 失败计数，新用户首屏（空自选）→ 退避 → 添加股票 → 刷新被推迟 30s → 行情缺失。
+      if (requested.length === 0) {
+        return summarize({}, attemptedAt, null, currentGeneration);
+      }
       const cached = await cache.readQuoteCache(requested);
       const freshResults = {};
       const cacheWrites = {};

@@ -84,7 +84,7 @@ const scenarios = [
 // v1.3.0 起 QuoteService 常驻 Service Worker，其退避状态会跨 Popup 重载存活。
 // 因此必须先播种再首屏加载（单次加载），避免「空自选股首屏 → refresh → 进入退避」
 // 使重载后的刷新走退避分支、把全部缓存判为过期。与 e2e mixed-cache 用例一致。
-const { context, page, worker, releaseHold } = await launchExtension({ offline: true, holdQuotes: true, seed: buildSeed() });
+const { context, page, releaseHold } = await launchExtension({ offline: true, holdQuotes: true, seed: buildSeed() });
 const marketingPage = await context.newPage();
 await page.setViewportSize({ width: 420, height: 640 });
 await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓存 1');

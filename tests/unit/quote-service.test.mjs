@@ -215,6 +215,31 @@ test('automatic failures back off while force allows one retry', async () => {
   assert.equal(calls, 4);
 });
 
+test('empty refresh does not prime backoff state', async () => {
+  let now = 1000;
+  let calls = 0;
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney(codes) { calls.push(['eastmoney', codes]); return {}; },
+    async fetchSina(codes) { calls.push(['sina', codes]); return {}; }
+  };
+  const cache = memoryCache();
+  const service = QuoteService.create({ transport, cache, clock: () => now });
+  calls = [];
+  // 空自选股刷新：不得触碰 failureCount / nextAutomaticAttemptAt
+  const empty = await service.refresh([]);
+  assert.deepEqual(empty.counts, { fresh: 0, cached: 0, missing: 0 });
+  assert.deepEqual(empty.results, {});
+  assert.equal(empty.succeededAt, null);
+  assert.deepEqual(calls, []);
+  // 下一次非空刷新必须立即执行（未被退避推迟）
+  now = 2000;
+  const next = await service.refresh(['sh600519']);
+  assert.equal(next.deferredUntil, undefined);
+  assert.ok(next.attemptedAt === 2000);
+  assert.deepEqual(calls, [['eastmoney', ['sh600519']], ['sina', ['sh600519']]]);
+});
+
 test('successful refresh resets failure backoff', async () => {
   let now = 1000;
   let available = false;
