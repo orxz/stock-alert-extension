@@ -81,7 +81,7 @@ const scenarios = [
   { file: 'screenshot3-add.png', title: '添加自选股', subtitle: '加入任意分组，始终出现在全部视图', prepare: (page) => page.click('#btn-add-stock') }
 ];
 
-const { context, page, worker } = await launchExtension({ offline: true });
+const { context, page, worker, releaseHold } = await launchExtension({ offline: true, holdQuotes: true });
 const marketingPage = await context.newPage();
 await seedStorage(worker, buildSeed());
 await page.setViewportSize({ width: 420, height: 640 });
@@ -104,4 +104,5 @@ for (const scenario of scenarios) {
   await renderMarketingCanvas(marketingPage, { ...scenario, popupPng, output: storePath });
   await copyFile(storePath, `docs/screenshots/${scenario.file}`);
 }
+releaseHold?.();
 await context.close();
