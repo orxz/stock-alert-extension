@@ -4,7 +4,7 @@
 **标签：** `v1.3.0`
 **下载：** `dist/stock-alert-extension-v1.3.0.zip`
 
-**SHA-256：** `11e88c96cbd763ef9ab42f53ff92891b6d55ff31acdb7bdfbca50da7086e6c42`
+**SHA-256：** `aed997fb2154891e65f963a438081e86bbe2873219872b9bb3358efe437ed3d5`
 
 ---
 
@@ -52,7 +52,7 @@
 ```bash
 shasum -a 256 stock-alert-extension-v1.3.0.zip
 # 期望输出：
-# 11e88c96cbd763ef9ab42f53ff92891b6d55ff31acdb7bdfbca50da7086e6c42
+# aed997fb2154891e65f963a438081e86bbe2873219872b9bb3358efe437ed3d5
 ```
 
 ---

@@ -26,7 +26,10 @@ export const RUNTIME_FILES = [
   'privacy/index.html'
 ];
 
-const FIXED_MTIME = new Date('1980-01-01T00:00:00.000Z');
+// 固定 1980-01-01 00:00:00。注意：不能带时区后缀（如 'Z'）——fflate 内部用
+// new Date(mtime) 的本地时间字段（getHours 等）编码 DOS 时间，带 Z 会在 CI(UTC)
+// 与本地(UTC+8) 产生不同产物。无后缀本地时间在任何时区下都解析为 00:00:00。
+const FIXED_MTIME = new Date('1980-01-01T00:00:00');
 
 export async function buildRelease(rootDir = new URL('../', import.meta.url)) {
   const manifest = JSON.parse(await readFile(new URL('manifest.json', rootDir), 'utf8'));
