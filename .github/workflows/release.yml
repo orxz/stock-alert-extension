@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check
+      - run: npm run test:unit
+      - run: xvfb-run -a npm run test:e2e
+      - run: npm run package:extension
+      - name: Compute SHA-256
+        id: sha
+        run: |
+          sha=$(shasum -a 256 dist/stock-alert-extension-*.zip | awk '{print $1}')
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "## SHA-256" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$sha" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ZIP to Release
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.sha.outputs.sha256 }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/stock-alert-extension-*.zip
+          body: |
+            **SHA-256:** `${SHA}`
+
+            详见 [CHANGELOG.md](https://github.com/${REPO}/blob/main/CHANGELOG.md)
+          draft: false
+          prerelease: false

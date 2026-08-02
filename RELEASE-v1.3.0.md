@@ -29,6 +29,14 @@
 - CSS 设计令牌系统（Custom Properties），主题色统一管理
 - 协议契约测试：弹窗 ↔ 后台 14 个 RPC action 一致性自动验证
 
+### 📊 可观测性
+
+- **后台行情链路诊断**：Service Worker 行情刷新从黑盒变为可追踪——通过共享 `runId` 将「触发→边界→恢复」三段关联输出到 console
+- **结构化诊断事件**：QuoteService 发出 `provider-failed` / `refresh-empty` / `refresh-deferred` / `refresh-done` 四种事件；Storage 发出 `cache-read/write/delete-failed` 三种缓存失败诊断并 rethrow 原错误
+- **触发来源标注**：`updateBadgeAndTitle` 标注 5 种触发来源（installed / startup / alarm / storage-change / retry）
+- **覆盖率门禁扩展**：`background.js` 和 `popup-render.js` 纳入 c8 单测覆盖率门禁
+- **智能体入口文档**：新增 `AGENTS.md`，涵盖入口文件、命令面、核心不变量与风险路由
+
 ---
 
 ## 安装方式
@@ -51,8 +59,9 @@ shasum -a 256 stock-alert-extension-v1.3.0.zip
 
 ## 测试与质量门禁
 
-- **133 个单元测试**，覆盖率门禁 90/85/90/90（实际 99.2 / 88.3 / 94.9 / 99.2）
+- **144 个单元测试**，覆盖率门禁 90/85/90/90
 - **13 个 Playwright E2E 测试**：真实 Chrome 扩展环境，覆盖键盘导航、ARIA 结构、行情三态、缓存降级
+- **0 个依赖漏洞**（`npm audit` 通过）
 - **确定性打包**：固定 mtime + SHA-256，同一源码每次构建产物一致
 
 ---

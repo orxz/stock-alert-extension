@@ -373,3 +373,44 @@ test('emits refresh-empty diagnostic for an empty request list', async () => {
   await service.refresh([]);
   assert.ok(events.some((event) => event.type === 'refresh-empty'));
 });
+
+test('emits refresh-done with aborted flag when cache read throws', async () => {
+  const events = [];
+  const cache = memoryCache();
+  cache.readQuoteCache = async () => { throw new Error('storage read denied'); };
+  const service = QuoteService.create({
+    transport: {
+      enrich: (value) => value,
+      async fetchEastmoney() { throw new Error('unexpected network call'); },
+      async fetchSina() { throw new Error('unexpected network call'); }
+    },
+    cache,
+    clock: () => 1000,
+    onDiagnostic: (event) => events.push(event)
+  });
+  await assert.rejects(() => service.refresh(['sh600519']), /storage read denied/);
+  const done = events.find((event) => event.type === 'refresh-done');
+  assert.ok(done, 'refresh-done emitted even on cache failure');
+  assert.equal(done.aborted, true);
+  assert.equal(done.requested, 1);
+});
+
+test('emits refresh-done with aborted flag when cache write throws', async () => {
+  const events = [];
+  const cache = memoryCache();
+  cache.writeQuoteCache = async () => { throw new Error('quota exceeded'); };
+  const service = QuoteService.create({
+    transport: {
+      enrich: (value) => value,
+      async fetchEastmoney() { return { sh600519: quote(10) }; },
+      async fetchSina() { return {}; }
+    },
+    cache,
+    clock: () => 1000,
+    onDiagnostic: (event) => events.push(event)
+  });
+  await assert.rejects(() => service.refresh(['sh600519']), /quota exceeded/);
+  const done = events.find((event) => event.type === 'refresh-done');
+  assert.ok(done, 'refresh-done emitted even on cache write failure');
+  assert.equal(done.aborted, true);
+});

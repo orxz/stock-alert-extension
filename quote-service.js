@@ -155,107 +155,118 @@ const QuoteService = (() => {
         diagnose('refresh-empty', { requested: 0 });
         return summarize({}, attemptedAt, null, currentGeneration);
       }
-      const cached = await cache.readQuoteCache(requested);
-      const freshResults = {};
-      const cacheWrites = {};
-      const errors = Object.fromEntries(requested.map((code) => [code, 'unavailable']));
+      try {
+        const cached = await cache.readQuoteCache(requested);
+        const freshResults = {};
+        const cacheWrites = {};
+        const errors = Object.fromEntries(requested.map((code) => [code, 'unavailable']));
 
-      for (const batch of chunk(requested, chunkSize)) {
-        const primary = await fetchProvider('fetchEastmoney', batch);
-        if (primary.error) {
-          for (const code of batch) errors[code] = primary.error;
-        }
-        for (const code of batch) {
-          const normalized = transport.enrich(primary.values[code]);
-          if (!isUsableQuote(normalized)) continue;
-          freshResults[code] = {
-            code,
-            status: 'fresh',
-            source: 'eastmoney',
-            provider: 'eastmoney',
-            fetchedAt: attemptedAt,
-            quote: normalized,
-            error: null
-          };
-          cacheWrites[code] = { provider: 'eastmoney', fetchedAt: attemptedAt, quote: normalized };
+        for (const batch of chunk(requested, chunkSize)) {
+          const primary = await fetchProvider('fetchEastmoney', batch);
+          if (primary.error) {
+            for (const code of batch) errors[code] = primary.error;
+          }
+          for (const code of batch) {
+            const normalized = transport.enrich(primary.values[code]);
+            if (!isUsableQuote(normalized)) continue;
+            freshResults[code] = {
+              code,
+              status: 'fresh',
+              source: 'eastmoney',
+              provider: 'eastmoney',
+              fetchedAt: attemptedAt,
+              quote: normalized,
+              error: null
+            };
+            cacheWrites[code] = { provider: 'eastmoney', fetchedAt: attemptedAt, quote: normalized };
+          }
+
+          const missing = batch.filter((code) => !freshResults[code]);
+          if (!missing.length) continue;
+          const secondary = await fetchProvider('fetchSina', missing);
+          if (secondary.error) {
+            for (const code of missing) errors[code] = secondary.error;
+          }
+          for (const code of missing) {
+            const normalized = transport.enrich(secondary.values[code]);
+            if (!isUsableQuote(normalized)) continue;
+            freshResults[code] = {
+              code,
+              status: 'fresh',
+              source: 'sina',
+              provider: 'sina',
+              fetchedAt: attemptedAt,
+              quote: normalized,
+              error: null
+            };
+            cacheWrites[code] = { provider: 'sina', fetchedAt: attemptedAt, quote: normalized };
+          }
         }
 
-        const missing = batch.filter((code) => !freshResults[code]);
-        if (!missing.length) continue;
-        const secondary = await fetchProvider('fetchSina', missing);
-        if (secondary.error) {
-          for (const code of missing) errors[code] = secondary.error;
+        if (Object.keys(cacheWrites).length) await cache.writeQuoteCache(cacheWrites);
+
+        const expired = [];
+        const results = {};
+        for (const code of requested) {
+          if (freshResults[code]) {
+            results[code] = freshResults[code];
+            continue;
+          }
+          const entry = cached[code];
+          const age = entry && Number.isFinite(entry.fetchedAt)
+            ? Math.max(0, attemptedAt - entry.fetchedAt)
+            : Number.POSITIVE_INFINITY;
+          if (entry && isUsableQuote(entry.quote) && age <= CACHE_MAX_AGE_MS) {
+            results[code] = {
+              code,
+              status: 'cached',
+              source: 'cache',
+              provider: entry.provider || 'unknown',
+              fetchedAt: entry.fetchedAt,
+              quote: entry.quote,
+              error: errors[code]
+            };
+          } else {
+            if (entry) expired.push(code);
+            results[code] = missingResult(code, errors[code]);
+          }
         }
-        for (const code of missing) {
-          const normalized = transport.enrich(secondary.values[code]);
-          if (!isUsableQuote(normalized)) continue;
-          freshResults[code] = {
-            code,
-            status: 'fresh',
-            source: 'sina',
-            provider: 'sina',
-            fetchedAt: attemptedAt,
-            quote: normalized,
-            error: null
-          };
-          cacheWrites[code] = { provider: 'sina', fetchedAt: attemptedAt, quote: normalized };
+        if (expired.length) await cache.deleteQuoteCache(expired);
+
+        const snapshot = summarize(
+          results,
+          attemptedAt,
+          Object.keys(freshResults).length ? attemptedAt : null,
+          currentGeneration
+        );
+        if (currentGeneration === generation) {
+          if (snapshot.counts.fresh > 0) {
+            failureCount = 0;
+            nextAutomaticAttemptAt = 0;
+          } else {
+            failureCount += 1;
+            const delay = BACKOFF_MS[Math.min(failureCount - 1, BACKOFF_MS.length - 1)];
+            nextAutomaticAttemptAt = attemptedAt + delay;
+          }
         }
+        diagnose('refresh-done', {
+          requested: requested.length,
+          counts: snapshot.counts,
+          succeededAt: snapshot.succeededAt,
+          nextRetryAt: nextAutomaticAttemptAt || null,
+          failureCount
+        });
+        return snapshot;
+      } catch (error) {
+        // 缓存读写异常时仍发出 refresh-done 收尾事件，保证诊断链路完整
+        diagnose('refresh-done', {
+          requested: requested.length,
+          aborted: true,
+          error: String(error?.message || error),
+          failureCount
+        });
+        throw error;
       }
-
-      if (Object.keys(cacheWrites).length) await cache.writeQuoteCache(cacheWrites);
-
-      const expired = [];
-      const results = {};
-      for (const code of requested) {
-        if (freshResults[code]) {
-          results[code] = freshResults[code];
-          continue;
-        }
-        const entry = cached[code];
-        const age = entry && Number.isFinite(entry.fetchedAt)
-          ? Math.max(0, attemptedAt - entry.fetchedAt)
-          : Number.POSITIVE_INFINITY;
-        if (entry && isUsableQuote(entry.quote) && age <= CACHE_MAX_AGE_MS) {
-          results[code] = {
-            code,
-            status: 'cached',
-            source: 'cache',
-            provider: entry.provider || 'unknown',
-            fetchedAt: entry.fetchedAt,
-            quote: entry.quote,
-            error: errors[code]
-          };
-        } else {
-          if (entry) expired.push(code);
-          results[code] = missingResult(code, errors[code]);
-        }
-      }
-      if (expired.length) await cache.deleteQuoteCache(expired);
-
-      const snapshot = summarize(
-        results,
-        attemptedAt,
-        Object.keys(freshResults).length ? attemptedAt : null,
-        currentGeneration
-      );
-      if (currentGeneration === generation) {
-        if (snapshot.counts.fresh > 0) {
-          failureCount = 0;
-          nextAutomaticAttemptAt = 0;
-        } else {
-          failureCount += 1;
-          const delay = BACKOFF_MS[Math.min(failureCount - 1, BACKOFF_MS.length - 1)];
-          nextAutomaticAttemptAt = attemptedAt + delay;
-        }
-      }
-      diagnose('refresh-done', {
-        requested: requested.length,
-        counts: snapshot.counts,
-        succeededAt: snapshot.succeededAt,
-        nextRetryAt: nextAutomaticAttemptAt || null,
-        failureCount
-      });
-      return snapshot;
     }
 
     function refresh(codes, { force = false } = {}) {

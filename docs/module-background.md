@@ -9,12 +9,19 @@ Manifest V3 Service Worker，负责在后台更新扩展图标的 badge 和 tool
 ```
 background.js
 ├── importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-format.js', 'quote-service.js', 'router.js')
-├── Router.init(QuoteService, Storage)  — 初始化 RPC 路由器（v1.3.0）
-├── updateBadgeAndTitle()       — 核心更新逻辑
+├── getBackgroundStorage()      — 懒初始化带 onDiagnostic 钩子的存储实例（v1.3.0+）
+├── getBackgroundQuoteService()  — 懒初始化带 onDiagnostic 钩子的行情实例（v1.3.0+）
+├── Router.init(service, storage) — 初始化 RPC 路由器
+├── updateBadgeAndTitle(source)  — 核心更新逻辑（source 标注触发来源）
 ├── scheduleNextAlarm()         — 一次性 alarm（盘中 30 秒 / 盘外 5 分钟）
 ├── chrome.runtime.onInstalled  — 安装时初始化
 ├── chrome.runtime.onStartup    — 浏览器启动时初始化
 └── chrome.storage.onChanged    — 数据变更即时更新
+
+可观测性三段诊断（v1.3.0+）：
+├── trigger:   emitDiagnostic(runId, 'trigger', {type:'run-start', trigger, startedAt})
+├── boundary:  QuoteService/Storage 的 onDiagnostic 事件（provider-failed / cache-*-failed / ...）
+└── recovery:  emitDiagnostic(runId, 'result', {type:'run-end', outcome, counts, durationMs})
 
 formatBadge / formatBadgeState / formatTooltipLine
   → 从 quote-format.js 导入（v1.3.0 提取为共享模块）
@@ -50,13 +57,25 @@ Tooltip：名称 + 涨跌箭头（▲▼—）+ 涨跌幅
 
 ### 重入保护
 
-alarms 和 storage.onChanged 可能同时触发 `updateBadgeAndTitle()`，导致并发问题。使用 `_updating`（互斥锁）+ `_pending`（待重试标记）：
+alarms 和 storage.onChanged 可能同时触发 `updateBadgeAndTitle()`，导致并发问题。使用 `updating`（互斥锁）+ `pending`（待重试标记）：
 
 ```javascript
-if (_updating) { _pending = true; return; }
-// ... 执行更新 ...
-if (_pending) { _pending = false; updateBadgeAndTitle(); } // 补偿更新
+if (updating) { pending = true; return; }
+// ... 执行更新（设置 activeRun 共享 runId）...
+if (pending) { pending = false; updateBadgeAndTitle('retry'); } // 补偿更新
 ```
+
+### 可观测性诊断框架
+
+`updateBadgeAndTitle` 通过共享 `runId` 将三段链路关联到 console：
+
+1. **触发段**（trigger）：`run-start` 事件标注触发来源（`installed` / `startup` / `alarm` / `storage-change` / `retry`）
+2. **边界段**（boundary）：QuoteService 和 Storage 通过注入的 `onDiagnostic` 钩子发出结构化事件：
+   - QuoteService: `provider-failed`（含 provider 名、错误分类、codeCount）、`refresh-empty`、`refresh-deferred`、`refresh-done`（含 counts/failureCount/nextRetryAt）
+   - Storage: `cache-read-failed` / `cache-write-failed` / `cache-delete-failed`（含 codes 与 error 文本，rethrow 原错误）
+3. **恢复段**（recovery）：`run-end` 事件标注结果（`outcome: ok|failed`）和耗时
+
+`runId` 格式为 `r-<timestamp>-<counter>`，保证跨段可关联。诊断事件通过 `console.log`（正常）或 `console.warn`（含 error 字段时）输出。
 
 ### Badge 字符限制
 
