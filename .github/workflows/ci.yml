@@ -20,6 +20,8 @@ jobs:
       - run: npm run check
       - run: npm run test:unit
       - run: xvfb-run -a npm run test:e2e
+      - run: npm run package:extension
+      - run: npm run check:bundle
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -124,8 +124,78 @@ test('formatVolume abbreviates large numbers', () => {
   assert.equal(QuoteFormat.formatVolume(200000000), '2.00亿');
 });
 
+test('formatVolume returns raw string for small numbers', () => {
+  assert.equal(QuoteFormat.formatVolume(1), '1');
+  assert.equal(QuoteFormat.formatVolume(9999), '9999');
+  assert.equal(QuoteFormat.formatVolume(999), '999');
+});
+
 test('formatAmount abbreviates large numbers', () => {
   assert.equal(QuoteFormat.formatAmount(0), '0');
   assert.equal(QuoteFormat.formatAmount(50000), '5.0万');
   assert.equal(QuoteFormat.formatAmount(300000000), '3.00亿');
+});
+
+test('formatAmount returns rounded integer for small numbers', () => {
+  assert.equal(QuoteFormat.formatAmount(1), '1');
+  assert.equal(QuoteFormat.formatAmount(9999), '9999');
+  assert.equal(QuoteFormat.formatAmount(123.6), '124');
+});
+
+test('formatTooltipLine shows stock.code when quote is null', () => {
+  const line = QuoteFormat.formatTooltipLine(
+    { code: 'sh600519', name: '' },
+    { status: 'missing', fetchedAt: null, quote: null }
+  );
+  // stock.code 被截断为 6 字符
+  assert.match(line, /sh6005/);
+  assert.match(line, /暂无行情/);
+});
+
+test('formatTooltipLine shows 暂无行情 when price is not finite', () => {
+  const line = QuoteFormat.formatTooltipLine(
+    { code: 'sh600519', name: '贵州茅台' },
+    { status: 'fresh', fetchedAt: 1, quote: { price: NaN, changePercent: 0, change: 0 } }
+  );
+  assert.match(line, /贵州茅台/);
+  assert.match(line, /暂无行情/);
+});
+
+test('formatTooltipLine shows -- for non-finite changePercent', () => {
+  const line = QuoteFormat.formatTooltipLine(
+    { code: 'sh600519', name: '贵州茅台' },
+    { status: 'fresh', fetchedAt: 1, quote: { price: 10, changePercent: NaN, change: 0 } }
+  );
+  // changePercent 为 NaN 时显示 '--'（不含 %）
+  assert.match(line, /--$/);
+});
+
+test('formatTooltipLine shows --:-- for non-finite cached fetchedAt', () => {
+  const line = QuoteFormat.formatTooltipLine(
+    { code: 'sh600519', name: '贵州茅台' },
+    { status: 'cached', fetchedAt: NaN, quote: { price: 10, changePercent: -2.5, change: -1 } }
+  );
+  assert.match(line, /--:--/);
+});
+
+test('formatBadgeState uses green for negative fresh', () => {
+  assert.deepEqual(
+    QuoteFormat.formatBadgeState({
+      status: 'fresh',
+      fetchedAt: 1,
+      quote: { changePercent: -3.2, price: 10 }
+    }),
+    { text: '3.2', color: '#27AE60' }
+  );
+});
+
+test('formatBadgeState uses gray for zero percent', () => {
+  assert.deepEqual(
+    QuoteFormat.formatBadgeState({
+      status: 'fresh',
+      fetchedAt: 1,
+      quote: { changePercent: 0, price: 10 }
+    }),
+    { text: '0.0', color: '#95A5A6' }
+  );
 });

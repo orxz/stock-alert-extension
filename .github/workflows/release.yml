@@ -23,6 +23,7 @@ jobs:
       - run: npm run test:unit
       - run: xvfb-run -a npm run test:e2e
       - run: npm run package:extension
+      - run: npm run check:bundle
       - name: Compute SHA-256
         id: sha
         run: |

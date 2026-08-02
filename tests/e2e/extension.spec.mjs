@@ -294,3 +294,75 @@ test('ARIA landmark roles are present on key elements', async () => {
     await context.close();
   }
 });
+
+test('icon buttons have accessible aria-labels', async () => {
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: { schemaVersion: 2, groups: GROUPS, watchlist: [], boardConfig: {} }
+  });
+  try {
+    for (const id of ['btn-add-stock', 'btn-edit', 'btn-toggle-price', 'btn-refresh']) {
+      const el = page.locator(`#${id}`);
+      const label = await el.getAttribute('aria-label');
+      expect(label).toBeTruthy();
+      expect(label.length).toBeGreaterThan(2);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test('CSS design tokens are defined on :root', async () => {
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: { schemaVersion: 2, groups: GROUPS, watchlist: [], boardConfig: {} }
+  });
+  try {
+    const tokens = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      return {
+        up: style.getPropertyValue('--color-up').trim(),
+        down: style.getPropertyValue('--color-down').trim(),
+        secondary: style.getPropertyValue('--text-secondary').trim(),
+        touchTarget: style.getPropertyValue('--touch-target-min').trim()
+      };
+    });
+    expect(tokens.up).toBeTruthy();
+    expect(tokens.down).toBeTruthy();
+    expect(tokens.secondary).toBeTruthy();
+    expect(tokens.touchTarget).toBe('44px');
+  } finally {
+    await context.close();
+  }
+});
+
+test('group tab has correct roving tabindex', async () => {
+  const { context, page } = await launchExtension({
+    offline: true,
+    seed: {
+      schemaVersion: 2, groups: GROUPS,
+      watchlist: [stock('sh600519', 0)],
+      boardConfig: {}
+    }
+  });
+  try {
+    const tabs = page.locator('[role="tab"]');
+    const count = await tabs.count();
+    expect(count).toBeGreaterThanOrEqual(2);
+    // 活动 tab 的 tabindex=0，非活动 tab 的 tabindex=-1
+    let activeFound = false;
+    for (let i = 0; i < count; i++) {
+      const tabIndex = await tabs.nth(i).getAttribute('tabindex');
+      const selected = await tabs.nth(i).getAttribute('aria-selected');
+      if (selected === 'true') {
+        expect(tabIndex).toBe('0');
+        activeFound = true;
+      } else {
+        expect(tabIndex).toBe('-1');
+      }
+    }
+    expect(activeFound).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
