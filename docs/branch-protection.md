@@ -26,7 +26,7 @@ main
 以下检查必须全部通过才能合并：
 
 ```
-check / build (pull_request)  — npm run check + test:unit + test:e2e + package + check:bundle
+test (pull_request)  — npm run check + test:unit + test:e2e + package + check:bundle（ci.yml 的 job 名）
 ```
 
 ## 配置命令（GitHub CLI）
@@ -37,7 +37,7 @@ check / build (pull_request)  — npm run check + test:unit + test:e2e + package
 # 设置分支保护（需要管理员权限）
 gh api repos/{owner}/{repo}/branches/main/protection \
   -X PUT \
-  -f required_status_checks='{"strict":true,"contexts":["check"]}' \
+  -f required_status_checks='{"strict":true,"contexts":["test (pull_request)"]}' \
   -f enforce_admins=true \
   -f required_pull_request_reviews='{"required_approving_review_count":1,"dismiss_stale_reviews":true}' \
   -f restrictions='null'

@@ -8,7 +8,7 @@ Manifest V3 Service Worker，负责在后台更新扩展图标的 badge 和 tool
 
 ```
 background.js
-├── importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-format.js', 'quote-service.js', 'router.js')
+├── importScripts('stock-utils.js', 'storage.js', 'quotes.js', 'quote-service.js', 'quote-format.js', 'router.js')
 ├── getBackgroundStorage()      — 懒初始化带 onDiagnostic 钩子的存储实例（v1.3.0+）
 ├── getBackgroundQuoteService()  — 懒初始化带 onDiagnostic 钩子的行情实例（v1.3.0+）
 ├── Router.init(service, storage) — 初始化 RPC 路由器
@@ -102,5 +102,5 @@ Manifest V3 中 `chrome.alarms` 是后台定时器的唯一可靠方式（`setIn
 ## coding_conventions
 
 - 颜色惯例：红涨绿跌（中国股市标准），与欧美市场相反
-- Service Worker 中通过 `importScripts()` 导入 stock-utils.js / storage.js / quotes.js / quote-format.js / quote-service.js / router.js
+- Service Worker 中通过 `importScripts()` 导入 stock-utils.js / storage.js / quotes.js / quote-service.js / quote-format.js / router.js
 - 所有 chrome API 调用不检查错误（fire-and-forget），异常由 try-catch 捕获后 console.warn
