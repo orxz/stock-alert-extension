@@ -16,9 +16,12 @@ const SCHEMA_VERSION = 2;
 const MIGRATION_BACKUP_KEY = 'migrationBackup:v1.2.1';
 
 /**
- * @param {{ area: StorageArea, clock?: () => number }} options
+ * @param {{ area: StorageArea, clock?: () => number, onDiagnostic?: (event: { type: string, [key: string]: any }) => void }} options
  */
-function createStorage({ area, clock = () => Date.now() }) {
+function createStorage({ area, clock = () => Date.now(), onDiagnostic = () => {} }) {
+  function diagnose(type, fields) {
+    onDiagnostic({ type, ...fields });
+  }
   async function loadAll() {
     const raw = await area.get([
       'schemaVersion', 'groups', 'watchlist', 'boardConfig',
@@ -156,19 +159,24 @@ function createStorage({ area, clock = () => Date.now() }) {
 
   async function readQuoteCache(codes) {
     const normalized = [...new Set(codes.map(StockUtils.normalizeStockCode).filter(Boolean))];
-    const raw = await area.get(normalized.map(quoteCacheKey));
-    const result = {};
-    for (const code of normalized) {
-      const value = raw[quoteCacheKey(code)];
-      if (
-        value?.cacheVersion === 1 &&
-        value.code === code &&
-        Number.isFinite(value.fetchedAt) &&
-        value.quote &&
-        typeof value.quote === 'object'
-      ) result[code] = value;
+    try {
+      const raw = await area.get(normalized.map(quoteCacheKey));
+      const result = {};
+      for (const code of normalized) {
+        const value = raw[quoteCacheKey(code)];
+        if (
+          value?.cacheVersion === 1 &&
+          value.code === code &&
+          Number.isFinite(value.fetchedAt) &&
+          value.quote &&
+          typeof value.quote === 'object'
+        ) result[code] = value;
+      }
+      return result;
+    } catch (error) {
+      diagnose('cache-read-failed', { codes: normalized, error: String(error?.message || error) });
+      throw error;
     }
-    return result;
   }
 
   async function writeQuoteCache(entries) {
@@ -177,23 +185,33 @@ function createStorage({ area, clock = () => Date.now() }) {
       patch[quoteCacheKey(code)] = { ...entry, cacheVersion: 1, code };
     }
     if (!Object.keys(patch).length) return;
-    await enqueueWrite(async () => {
-      const data = await loadAll();
-      const memberCodes = new Set(data.watchlist.map((stock) => stock.code));
-      const filtered = {};
-      for (const code of Object.keys(entries)) {
-        if (memberCodes.has(code)) filtered[quoteCacheKey(code)] = patch[quoteCacheKey(code)];
-      }
-      if (Object.keys(filtered).length) await area.set(filtered);
-    });
+    try {
+      await enqueueWrite(async () => {
+        const data = await loadAll();
+        const memberCodes = new Set(data.watchlist.map((stock) => stock.code));
+        const filtered = {};
+        for (const code of Object.keys(entries)) {
+          if (memberCodes.has(code)) filtered[quoteCacheKey(code)] = patch[quoteCacheKey(code)];
+        }
+        if (Object.keys(filtered).length) await area.set(filtered);
+      });
+    } catch (error) {
+      diagnose('cache-write-failed', { codes: Object.keys(entries), error: String(error?.message || error) });
+      throw error;
+    }
   }
 
   async function deleteQuoteCache(codes) {
     const keys = codes.map(StockUtils.normalizeStockCode).filter(Boolean).map(quoteCacheKey);
     if (!keys.length) return;
-    await enqueueWrite(async () => {
-      await area.remove(keys);
-    });
+    try {
+      await enqueueWrite(async () => {
+        await area.remove(keys);
+      });
+    } catch (error) {
+      diagnose('cache-delete-failed', { codes: codes.map(StockUtils.normalizeStockCode).filter(Boolean), error: String(error?.message || error) });
+      throw error;
+    }
   }
 
   // ===== 分组操作 =====

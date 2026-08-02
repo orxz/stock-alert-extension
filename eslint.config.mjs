@@ -27,6 +27,7 @@ const browserGlobals = {
   State: 'readonly',
   Render: 'readonly',
   Actions: 'readonly',
+  createStorage: 'readonly',
   DEFAULT_GROUP_ID: 'readonly'
 };
 

@@ -304,3 +304,54 @@ test('invalid stock codes are rejected and global removal deletes the quote cach
   assert.equal(area.data.watchlist.length, 0);
   assert.equal(area.data['quoteCache:sh600519'], undefined);
 });
+
+test('quote cache write failure emits a diagnostic and rethrows', async () => {
+  const base = createStorageArea({
+    schemaVersion: 2,
+    groups: [{ groupId: 'g_all', name: '全部', order: 0, isDefault: true }],
+    watchlist: [{ code: 'sh600519', name: '贵州茅台', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 1 }],
+    boardConfig: {}
+  });
+  const area = {
+    ...base,
+    async set() { throw new Error('quota exceeded'); }
+  };
+  const events = [];
+  const storage = createStorage({ area, clock: () => 100, onDiagnostic: (event) => events.push(event) });
+  await assert.rejects(
+    () => storage.writeQuoteCache({ sh600519: { provider: 'eastmoney', fetchedAt: 10, quote: { price: 1 } } }),
+    /quota exceeded/
+  );
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'cache-write-failed');
+  assert.deepEqual(events[0].codes, ['sh600519']);
+  assert.match(events[0].error, /quota exceeded/);
+});
+
+test('quote cache read failure emits a diagnostic and rethrows', async () => {
+  const base = createStorageArea({});
+  const area = {
+    ...base,
+    async get() { throw new Error('read denied'); }
+  };
+  const events = [];
+  const storage = createStorage({ area, clock: () => 100, onDiagnostic: (event) => events.push(event) });
+  await assert.rejects(() => storage.readQuoteCache(['sh600519']), /read denied/);
+  assert.equal(events[0].type, 'cache-read-failed');
+  assert.deepEqual(events[0].codes, ['sh600519']);
+  assert.match(events[0].error, /read denied/);
+});
+
+test('quote cache delete failure emits a diagnostic and rethrows', async () => {
+  const base = createStorageArea({});
+  const area = {
+    ...base,
+    async remove() { throw new Error('remove denied'); }
+  };
+  const events = [];
+  const storage = createStorage({ area, clock: () => 100, onDiagnostic: (event) => events.push(event) });
+  await assert.rejects(() => storage.deleteQuoteCache(['sh600519']), /remove denied/);
+  assert.equal(events[0].type, 'cache-delete-failed');
+  assert.deepEqual(events[0].codes, ['sh600519']);
+  assert.match(events[0].error, /remove denied/);
+});

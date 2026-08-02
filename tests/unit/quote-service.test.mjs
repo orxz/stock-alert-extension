@@ -289,3 +289,87 @@ test('market activity honors lunch break and inclusive boundaries', () => {
   assert.equal(QuoteService.isChinaMarketActive(new Date('2026-07-31T04:55:00.000Z')), true);
   assert.equal(QuoteService.isChinaMarketActive(new Date('2026-07-31T07:05:00.000Z')), true);
 });
+
+test('emits provider-failed and refresh-done diagnostics with error classification', async () => {
+  const events = [];
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney() { throw new Error('aborted'); },
+    async fetchSina() { throw new Error('sina HTTP 503'); }
+  };
+  const service = QuoteService.create({
+    transport,
+    cache: memoryCache(),
+    clock: () => 1000,
+    onDiagnostic: (event) => events.push(event)
+  });
+  const snapshot = await service.refresh(['sh600519']);
+  assert.equal(snapshot.results.sh600519.status, 'missing');
+  assert.deepEqual(events.map((event) => event.type), ['provider-failed', 'provider-failed', 'refresh-done']);
+  assert.deepEqual([events[0].provider, events[0].error], ['eastmoney', 'timeout']);
+  assert.deepEqual([events[1].provider, events[1].error], ['sina', 'http']);
+  assert.deepEqual(events[2].counts, { fresh: 0, cached: 0, missing: 1 });
+  assert.equal(events[2].failureCount, 1);
+  assert.equal(events[2].nextRetryAt, 31000);
+  assert.equal(events[2].succeededAt, null);
+});
+
+test('emits refresh-deferred diagnostic inside the backoff window', async () => {
+  let now = 1000;
+  const events = [];
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney() { return {}; },
+    async fetchSina() { return {}; }
+  };
+  const service = QuoteService.create({
+    transport,
+    cache: memoryCache(),
+    clock: () => now,
+    onDiagnostic: (event) => events.push(event)
+  });
+  await service.refresh(['sh600519']);
+  now = 2000;
+  await service.refresh(['sh600519']);
+  const deferred = events.find((event) => event.type === 'refresh-deferred');
+  assert.ok(deferred);
+  assert.equal(deferred.requested, 1);
+  assert.equal(deferred.deferredUntil, 31000);
+});
+
+test('emits refresh-done with reset backoff after a successful refresh', async () => {
+  const events = [];
+  const transport = {
+    enrich: (value) => value,
+    async fetchEastmoney() { return { sh600519: quote(10) }; },
+    async fetchSina() { return {}; }
+  };
+  const service = QuoteService.create({
+    transport,
+    cache: memoryCache(),
+    clock: () => 1000,
+    onDiagnostic: (event) => events.push(event)
+  });
+  await service.refresh(['sh600519']);
+  const done = events.find((event) => event.type === 'refresh-done');
+  assert.deepEqual(done.counts, { fresh: 1, cached: 0, missing: 0 });
+  assert.equal(done.failureCount, 0);
+  assert.equal(done.nextRetryAt, null);
+  assert.equal(done.succeededAt, 1000);
+});
+
+test('emits refresh-empty diagnostic for an empty request list', async () => {
+  const events = [];
+  const service = QuoteService.create({
+    transport: {
+      enrich: (value) => value,
+      async fetchEastmoney() { throw new Error('unexpected network call'); },
+      async fetchSina() { throw new Error('unexpected network call'); }
+    },
+    cache: memoryCache(),
+    clock: () => 1000,
+    onDiagnostic: (event) => events.push(event)
+  });
+  await service.refresh([]);
+  assert.ok(events.some((event) => event.type === 'refresh-empty'));
+});

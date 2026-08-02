@@ -60,6 +60,13 @@ const QuoteService = (() => {
     return [...new Set((codes || []).filter((code) => typeof code === 'string' && code))];
   }
 
+  // transport 方法名 → 诊断用的 provider 名
+  function providerName(method) {
+    if (method === 'fetchEastmoney') return 'eastmoney';
+    if (method === 'fetchSina') return 'sina';
+    return method;
+  }
+
   /**
    * @param {{
    *   transport: {
@@ -74,7 +81,8 @@ const QuoteService = (() => {
    *   },
    *   clock?: () => number,
    *   timeoutMs?: number,
-   *   chunkSize?: number
+   *   chunkSize?: number,
+   *   onDiagnostic?: (event: { type: string, [key: string]: any }) => void
    * }} options
    */
   function create({
@@ -82,12 +90,17 @@ const QuoteService = (() => {
     cache,
     clock = () => Date.now(),
     timeoutMs = DEFAULT_TIMEOUT_MS,
-    chunkSize = DEFAULT_CHUNK_SIZE
+    chunkSize = DEFAULT_CHUNK_SIZE,
+    onDiagnostic = () => {}
   }) {
     let generation = 0;
     let failureCount = 0;
     let nextAutomaticAttemptAt = 0;
     const inFlight = new Map();
+
+    function diagnose(type, fields) {
+      onDiagnostic({ type, ...fields });
+    }
 
     async function read(codes, { freshnessMs = DEFAULT_FRESHNESS_MS } = {}) {
       const requested = uniqueCodes(codes);
@@ -128,7 +141,9 @@ const QuoteService = (() => {
         );
         return { values: values || {}, error: null };
       } catch (error) {
-        return { values: {}, error: classifyError(error) };
+        const classified = classifyError(error);
+        diagnose('provider-failed', { provider: providerName(provider), codeCount: codes.length, error: classified });
+        return { values: {}, error: classified };
       }
     }
 
@@ -137,6 +152,7 @@ const QuoteService = (() => {
       // v1.3.0 起 QuoteService 常驻 SW，退避状态会跨 Popup 重载存活；若放任空刷新累积
       // 失败计数，新用户首屏（空自选）→ 退避 → 添加股票 → 刷新被推迟 30s → 行情缺失。
       if (requested.length === 0) {
+        diagnose('refresh-empty', { requested: 0 });
         return summarize({}, attemptedAt, null, currentGeneration);
       }
       const cached = await cache.readQuoteCache(requested);
@@ -232,6 +248,13 @@ const QuoteService = (() => {
           nextAutomaticAttemptAt = attemptedAt + delay;
         }
       }
+      diagnose('refresh-done', {
+        requested: requested.length,
+        counts: snapshot.counts,
+        succeededAt: snapshot.succeededAt,
+        nextRetryAt: nextAutomaticAttemptAt || null,
+        failureCount
+      });
       return snapshot;
     }
 
@@ -243,6 +266,7 @@ const QuoteService = (() => {
       const attemptedAt = clock();
       if (!force && attemptedAt < nextAutomaticAttemptAt) {
         // 退避期内存在失败记录，近期缓存不得再以 fresh 呈现（见设计 §6.1）
+        diagnose('refresh-deferred', { requested: requested.length, deferredUntil: nextAutomaticAttemptAt });
         return read(requested, { freshnessMs: 0 }).then((snapshot) => ({
           ...snapshot,
           attemptedAt,
