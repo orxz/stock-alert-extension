@@ -34,15 +34,12 @@ jobs:
           echo "$sha" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload ZIP to Release
-        env:
-          REPO: ${{ github.repository }}
-          SHA: ${{ steps.sha.outputs.sha256 }}
         uses: softprops/action-gh-release@v2
         with:
           files: dist/stock-alert-extension-*.zip
           body: |
-            **SHA-256:** `${SHA}`
+            **SHA-256:** `${{ steps.sha.outputs.sha256 }}`
 
-            详见 [CHANGELOG.md](https://github.com/${REPO}/blob/main/CHANGELOG.md)
+            详见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
           draft: false
           prerelease: false

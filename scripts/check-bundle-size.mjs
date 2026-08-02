@@ -1,12 +1,14 @@
 // scripts/check-bundle-size.mjs — 检查打包 ZIP 体积是否在合理范围内
-import { statSync } from 'node:fs';
+import { statSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-const ZIP_PATH = join(root, 'dist', 'stock-alert-extension-v1.3.0.zip');
+// 从 manifest.json 动态读取版本号，与 package-extension.mjs 保持一致
+const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
+const ZIP_PATH = join(root, 'dist', `stock-alert-extension-v${manifest.version}.zip`);
 const MAX_SIZE_KB = 200; // 200 KB 警告阈值
 const HARD_LIMIT_KB = 500; // 500 KB 硬限制
 
