@@ -20,6 +20,13 @@
 - 触控目标扩展至 44px
 - `prefers-reduced-motion` 支持
 
+### 可观测性
+- **后台行情链路诊断**：Service Worker 行情刷新从黑盒变为可追踪——通过共享 `runId` 将「触发→边界→恢复」三段关联输出到 console
+- **结构化诊断事件**：QuoteService 发出 `provider-failed` / `refresh-empty` / `refresh-deferred` / `refresh-done` 四种事件（含 provider 名、错误分类、counts、退避状态）；Storage 发出 `cache-read/write/delete-failed` 三种缓存失败诊断并 rethrow 原错误
+- **触发来源标注**：`updateBadgeAndTitle` 标注 5 种触发来源（installed / startup / alarm / storage-change / retry）
+- **覆盖率门禁扩展**：`background.js` 纳入 c8 单测覆盖率门禁（lines 91.5% / branches 87.9%）
+- **智能体入口文档**：新增 `AGENTS.md`，涵盖入口文件、命令面、核心不变量与风险路由
+
 ---
 
 ## v1.2.1
