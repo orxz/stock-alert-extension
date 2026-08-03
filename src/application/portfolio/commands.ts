@@ -174,6 +174,22 @@ export class PortfolioCommandsImpl implements PortfolioCommands {
 
   setPinned(payload: SetPinnedPayload): Promise<MutationResult<null>> {
     return this.storage.mutate(payload.expectedRevision, (draft) => {
+      // 计算当前可见 code 集：g_all 时为全部 stock，自定义组时为该组成员
+      const visibleCodes = new Set(
+        payload.groupId === ALL_GROUP_ID
+          ? draft.watchlist.map((s) => s.code)
+          : draft.watchlist
+              .filter((s) => s.groupIds.includes(payload.groupId))
+              .map((s) => s.code)
+      );
+      // 精确匹配校验：大小相同 + 每个元素互含
+      const orderedSet = new Set(payload.orderedCodes);
+      if (
+        orderedSet.size !== visibleCodes.size ||
+        ![...visibleCodes].every((c) => orderedSet.has(c))
+      ) {
+        throw validationError('orderedCodes must be exactly the current visible code set');
+      }
       for (let i = 0; i < draft.watchlist.length; i++) {
         const stock = draft.watchlist[i];
         const orderIndex = payload.orderedCodes.indexOf(stock.code);

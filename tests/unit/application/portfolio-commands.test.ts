@@ -337,6 +337,54 @@ test('setPinned can unpin', async () => {
   assert.equal(stock?.manualOrder.g_all, 1);
 });
 
+test('setPinned with incomplete orderedCodes throws VALIDATION_FAILED', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  // Visible set = {sh600519, sz000001}; pass only one → missing sz000001
+  await assert.rejects(
+    commands.setPinned({
+      expectedRevision: rev,
+      groupId: 'g_all' as GroupId,
+      code: 'sh600519' as StockCode,
+      pinned: true,
+      orderedCodes: ['sh600519' as StockCode]
+    }),
+    (error: { code: string }) => error.code === 'VALIDATION_FAILED'
+  );
+});
+
+test('setPinned with extra orderedCodes throws VALIDATION_FAILED', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  // Visible set = {sh600519, sz000001}; pass three → extra sh601318
+  await assert.rejects(
+    commands.setPinned({
+      expectedRevision: rev,
+      groupId: 'g_all' as GroupId,
+      code: 'sh600519' as StockCode,
+      pinned: true,
+      orderedCodes: ['sh600519' as StockCode, 'sz000001' as StockCode, 'sh601318' as StockCode]
+    }),
+    (error: { code: string }) => error.code === 'VALIDATION_FAILED'
+  );
+});
+
+test('setPinned with exact orderedCodes for custom group succeeds', async () => {
+  // sh600519 is in g_tech; sz000001 is not → visible set for g_tech = {sh600519}
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  const result = await commands.setPinned({
+    expectedRevision: rev,
+    groupId: 'g_tech' as GroupId,
+    code: 'sh600519' as StockCode,
+    pinned: true,
+    orderedCodes: ['sh600519' as StockCode]
+  });
+  const stock = result.userData.watchlist.find((s) => s.code === 'sh600519');
+  assert.equal(stock?.pinned.g_tech, true);
+  assert.equal(stock?.manualOrder.g_tech, 0);
+});
+
 // ============================================================
 // setOrder
 // ============================================================
