@@ -1,0 +1,16 @@
+/* v2 组件样式：Task 3+ 填充看板组件 */
+#btn-reload {
+  min-height: var(--touch-target-min);
+  min-width: 120px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+#btn-reload:active {
+  opacity: 0.85;
+}

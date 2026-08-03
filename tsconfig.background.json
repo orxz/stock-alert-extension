@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": false,
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["chrome"],
+    "tsBuildInfoFile": "build/cache/background.tsbuildinfo",
+    "declarationDir": "build/types/background"
+  },
+  "include": ["src/background", "src/infrastructure"],
+  "references": [{ "path": "./tsconfig.shared.json" }]
+}

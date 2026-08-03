@@ -1,0 +1,27 @@
+/* v2 popup 页面布局：Task 3+ 填充看板布局 */
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+stock-app {
+  display: block;
+  min-height: 100%;
+}
+
+#fatal-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+#fatal-fallback[hidden] {
+  display: none;
+}

@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": false,
+    "lib": ["ES2022"],
+    "types": [],
+    "tsBuildInfoFile": "build/cache/shared.tsbuildinfo",
+    "declarationDir": "build/types/shared"
+  },
+  "include": ["src/domain", "src/protocol", "src/application"]
+}
