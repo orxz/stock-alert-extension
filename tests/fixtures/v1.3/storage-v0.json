@@ -1,0 +1,40 @@
+{
+  "capturedAt": 1785720600000,
+  "contractVersion": 1,
+  "payload": {
+    "input": {
+      "watchlist_legacy": [
+        {
+          "addedAt": 1785720580000,
+          "code": "600519",
+          "name": "贵州茅台"
+        }
+      ]
+    },
+    "output": {
+      "boardConfig": {},
+      "groups": [
+        {
+          "createdAt": 1785720600000,
+          "groupId": "g_all",
+          "isDefault": true,
+          "name": "全部",
+          "order": 0,
+          "updatedAt": 1785720600000
+        }
+      ],
+      "schemaVersion": 2,
+      "watchlist": [
+        {
+          "addedAt": 1785720580000,
+          "code": "sh600519",
+          "groupIds": [],
+          "manualOrder": {},
+          "name": "贵州茅台",
+          "pinned": {}
+        }
+      ]
+    }
+  },
+  "sourceVersion": "1.3.0"
+}

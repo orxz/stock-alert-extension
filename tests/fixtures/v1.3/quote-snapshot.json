@@ -1,0 +1,30 @@
+{
+  "capturedAt": 1785720600000,
+  "contractVersion": 1,
+  "payload": {
+    "attemptedAt": 1785720600000,
+    "counts": {
+      "cached": 0,
+      "fresh": 1,
+      "missing": 0
+    },
+    "generation": 1,
+    "results": {
+      "sh600519": {
+        "code": "sh600519",
+        "fetchedAt": 1785720600000,
+        "quote": {
+          "amount": 2000000000,
+          "change": 12,
+          "changePercent": 0.81,
+          "code": "sh600519",
+          "price": 1500
+        },
+        "source": "eastmoney",
+        "status": "fresh"
+      }
+    },
+    "succeededAt": 1785720600000
+  },
+  "sourceVersion": "1.3.0"
+}
