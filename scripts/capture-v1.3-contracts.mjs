@@ -59,7 +59,7 @@ function createFixedCases(now) {
     quoteSnapshot: { results: { sh600519: { code: 'sh600519', status: 'fresh', source: 'eastmoney', fetchedAt: now, quote } }, counts: { fresh: 1, cached: 0, missing: 0 }, attemptedAt: now, succeededAt: now, generation: 1 },
     formatting: {
       badge: globalThis.QuoteFormat.formatBadge(quote.changePercent),
-      freshState: globalThis.QuoteFormat.formatBadgeState({ code: 'sh600519', name: '贵州茅台' }, { status: 'fresh', quote }),
+      freshState: globalThis.QuoteFormat.formatBadgeState({ status: 'fresh', quote }),
       cachedLine: globalThis.QuoteFormat.formatTooltipLine({ code: 'sh600519', name: '贵州茅台' }, { status: 'cached', fetchedAt: now - 60_000, quote }, now)
     }
   };
