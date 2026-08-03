@@ -17,6 +17,7 @@
     "check:bundle": "node scripts/check-bundle-size.mjs",
     "release:verify": "npm run ci && npm run capture:store && npm run package:extension && npm run check:bundle",
     "test:unit": "c8 --all --include=stock-utils.js --include=storage.js --include=quotes.js --include=quote-service.js --include=quote-format.js --include=router.js --include=popup-bridge.js --include=popup-state.js --include=background.js --check-coverage --lines 90 --branches 85 --functions 90 --statements 90 node --test tests/unit/*.test.mjs",
+    "test:domain": "node --import tsx --test tests/unit/domain/*.test.ts",
     "test:contracts": "node --test tests/contracts/*.test.mjs",
     "test:e2e": "playwright test",
     "check": "npm run check:types && npm run lint && npm run check:architecture && npm run build && npm run check:runtime-imports && npm run validate:manifest",

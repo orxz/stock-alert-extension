@@ -83,7 +83,10 @@ export default [
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-new-func': 'error',
-      'no-undef': 'error',
+      // TypeScript 的 tsc (check:types) 已比 ESLint 更彻底地覆盖未定义变量检查；
+      // @babel/eslint-parser 无法区分 TS 类型空间与值空间，no-undef 会误报所有类型注解。
+      // 参考：https://typescript-eslint.io/troubleshooting/faqs/general/#eslint-no-undef
+      'no-undef': 'off',
       'no-unsafe-finally': 'error'
     }
   },
