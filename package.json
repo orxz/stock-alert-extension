@@ -7,7 +7,9 @@
   },
   "scripts": {
     "check:syntax": "node --check stock-utils.js && node --check storage.js && node --check quotes.js && node --check quote-service.js && node --check quote-format.js && node --check router.js && node --check popup-bridge.js && node --check popup-state.js && node --check popup-render.js && node --check popup-actions.js && node --check popup.js && node --check background.js",
-    "check:types": "tsc -p tsconfig.json",
+    "check:types": "tsc --build tsconfig.json --pretty false",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check:runtime-imports": "node scripts/check-runtime-imports.mjs",
     "lint": "eslint .",
     "validate:manifest": "node scripts/validate-manifest.mjs",
     "capture:store": "node scripts/capture-store-assets.mjs",
@@ -17,12 +19,15 @@
     "test:unit": "c8 --all --include=stock-utils.js --include=storage.js --include=quotes.js --include=quote-service.js --include=quote-format.js --include=router.js --include=popup-bridge.js --include=popup-state.js --include=background.js --check-coverage --lines 90 --branches 85 --functions 90 --statements 90 node --test tests/unit/*.test.mjs",
     "test:contracts": "node --test tests/contracts/*.test.mjs",
     "test:e2e": "playwright test",
-    "check": "npm run check:syntax && npm run check:types && npm run lint && npm run validate:manifest",
+    "check": "npm run check:types && npm run lint && npm run check:architecture && npm run build && npm run check:runtime-imports && npm run validate:manifest",
     "ci": "npm run check && npm run test:unit && npm run test:e2e",
     "build": "node scripts/build-extension.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
+    "@babel/core": "^8.0.1",
+    "@babel/eslint-parser": "^8.0.1",
+    "@babel/preset-typescript": "^8.0.1",
     "@playwright/test": "^1.62.1",
     "@types/chrome": "^0.2.2",
     "@types/node": "^26.1.2",
