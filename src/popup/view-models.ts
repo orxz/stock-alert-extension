@@ -27,6 +27,10 @@ export interface StockCardViewModel {
   readonly staleLabel: string;
   /** priceHidden 时掩码；缺失时 '--'。 */
   readonly displayPrice: string;
+  /** 涨跌额展示文本（带符号）；缺失时 '--'。 */
+  readonly displayChange: string;
+  /** 成交额展示文本（亿/万分级）；缺失时 '--'。 */
+  readonly displayAmount: string;
 }
 
 /** 分组标签视图模型。 */
@@ -184,6 +188,17 @@ function formatPrice(price: number | null | undefined): string {
   return price.toFixed(2);
 }
 
+/**
+ * 格式化成交额展示文本（亿/万分级）；与 domain formatting.ts 的 formatAmount 语义一致。
+ * 非有限或非正→'--'；≥1 亿→「X.X亿」；≥1 万→「X.X万」；否则取整。
+ */
+function formatAmountText(v: number): string {
+  if (!Number.isFinite(v) || v <= 0) return '--';
+  if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}亿`;
+  if (v >= 10_000) return `${(v / 10_000).toFixed(1)}万`;
+  return v.toFixed(0);
+}
+
 const PRICE_MASK = '****';
 
 /** 将排序后的股票列表投影为 StockCardViewModel 列表。 */
@@ -199,8 +214,11 @@ export function toStockCardViewModels(
     const price = quote && Number.isFinite(quote.price) ? quote.price : null;
     const change = quote && Number.isFinite(quote.change) ? quote.change : null;
     const changePercent = quote && Number.isFinite(quote.changePercent) ? quote.changePercent : null;
+    const amount = quote && Number.isFinite(quote.amount) ? quote.amount : null;
     const status = result?.status ?? 'missing';
     const displayPrice = config.priceHidden ? PRICE_MASK : price === null ? '--' : formatPrice(price);
+    const displayChange = change === null ? '--' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}`;
+    const displayAmount = amount === null ? '--' : formatAmountText(amount);
     return {
       code: stock.code,
       name: stock.name,
@@ -210,7 +228,9 @@ export function toStockCardViewModels(
       status,
       pinned: stock.pinned[groupId] ?? false,
       staleLabel: status === 'cached' ? '已过期' : '',
-      displayPrice
+      displayPrice,
+      displayChange,
+      displayAmount
     };
   });
 }

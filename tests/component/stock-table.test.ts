@@ -22,6 +22,8 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
     pinned: false,
     staleLabel: '',
     displayPrice: '100.00',
+    displayChange: '+1.00',
+    displayAmount: '1.2亿',
     ...overrides
   };
 }
@@ -147,4 +149,16 @@ test('price masking shows bullets in table cell', () => {
   setupTable([card('sh600519', { displayPrice: '****' })]);
   const row = document.querySelector('tbody tr[data-key="sh600519"]') as HTMLElement;
   assert.ok(row.textContent?.includes('****'));
+});
+
+test('header includes 成交额 (amount) column', () => {
+  setupTable([card('sh600519')]);
+  const headers = Array.from(document.querySelectorAll('thead th')).map((th) => th.textContent);
+  assert.ok(headers.includes('成交额'), `expected 成交额 in headers, got ${JSON.stringify(headers)}`);
+});
+
+test('amount column renders displayAmount text in row', () => {
+  setupTable([card('sh600519', { displayAmount: '3.5亿' })]);
+  const row = document.querySelector('tbody tr[data-key="sh600519"]') as HTMLElement;
+  assert.ok(row.textContent?.includes('3.5亿'), 'row should contain the amount display text');
 });

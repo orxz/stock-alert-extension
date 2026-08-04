@@ -27,6 +27,7 @@ const COLUMNS: readonly ColumnDef[] = [
   { key: 'price', label: '现价', sortField: 'price' },
   { key: 'change', label: '涨跌额', sortField: 'change' },
   { key: 'changePercent', label: '涨跌幅', sortField: 'changePercent' },
+  { key: 'amount', label: '成交额', sortField: 'amount' },
   { key: 'status', label: '状态' }
 ];
 
@@ -254,6 +255,10 @@ export class StockTableElement extends HTMLElement {
     const pctTd = document.createElement('td');
     pctTd.className = 'stock-table-cell stock-table-cell--change-percent';
 
+    // Amount
+    const amountTd = document.createElement('td');
+    amountTd.className = 'stock-table-cell stock-table-cell--amount';
+
     // Status
     const statusTd = document.createElement('td');
     statusTd.className = 'stock-table-cell stock-table-cell--status';
@@ -282,7 +287,7 @@ export class StockTableElement extends HTMLElement {
     downBtn.textContent = '↓';
     actionsTd.append(downBtn);
 
-    tr.append(nameTd, codeTd, priceTd, changeTd, pctTd, statusTd, actionsTd);
+    tr.append(nameTd, codeTd, priceTd, changeTd, pctTd, amountTd, statusTd, actionsTd);
 
     this.updateRow(tr, vm);
     return tr;
@@ -309,21 +314,25 @@ export class StockTableElement extends HTMLElement {
       cells[4].classList.toggle('is-up', vm.changePercent !== null && vm.changePercent > 0);
       cells[4].classList.toggle('is-down', vm.changePercent !== null && vm.changePercent < 0);
     }
-    // Status
+    // Amount
     if (cells[5]) {
+      cells[5].textContent = vm.displayAmount;
+    }
+    // Status
+    if (cells[6]) {
       const label = vm.staleLabel || STATUS_LABELS[vm.status] || '';
-      cells[5].textContent = label;
+      cells[6].textContent = label;
     }
     // Actions
-    const pinBtn = cells[6]?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;
+    const pinBtn = cells[7]?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;
     if (pinBtn) {
       pinBtn.setAttribute('aria-pressed', String(vm.pinned));
       pinBtn.setAttribute('aria-label', vm.pinned ? `取消置顶 ${vm.name}` : `置顶 ${vm.name}`);
       pinBtn.textContent = vm.pinned ? '📌' : '📍';
     }
-    const upBtn = cells[6]?.querySelector('button[data-action="move-up"]') as HTMLButtonElement | null;
+    const upBtn = cells[7]?.querySelector('button[data-action="move-up"]') as HTMLButtonElement | null;
     if (upBtn) upBtn.setAttribute('aria-label', `上移 ${vm.name}`);
-    const downBtn = cells[6]?.querySelector('button[data-action="move-down"]') as HTMLButtonElement | null;
+    const downBtn = cells[7]?.querySelector('button[data-action="move-down"]') as HTMLButtonElement | null;
     if (downBtn) downBtn.setAttribute('aria-label', `下移 ${vm.name}`);
   }
 }

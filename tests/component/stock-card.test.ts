@@ -22,6 +22,8 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
     pinned: false,
     staleLabel: '',
     displayPrice: '100.50',
+    displayChange: '+2.30',
+    displayAmount: '1.2亿',
     ...overrides
   };
 }
