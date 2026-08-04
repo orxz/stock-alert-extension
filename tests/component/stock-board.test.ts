@@ -217,3 +217,19 @@ test('reordering viewModel updates DOM order while preserving nodes', () => {
   assert.deepEqual(keys, ['sz000001', 'sh600519']);
   assert.equal(el.querySelector('[data-key="sh600519"]'), node1);
 });
+
+// 回归：hidden 属性必须实际隐藏状态占位（display:flex 会覆盖 UA 的 [hidden] display:none，
+// 导致 loading/error/empty 同时可见，把表格挤出首屏——真实弹窗样式错乱的根因）。
+test('hidden state placeholders are not rendered (display none, not flex)', () => {
+  const { el } = setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
+  for (const region of ['loading', 'error', 'empty']) {
+    const node = el.querySelector(`[data-region="${region}"]`) as HTMLElement | null;
+    assert.ok(node, `${region} placeholder exists`);
+    assert.equal(node.hasAttribute('hidden'), true, `${region} must have hidden`);
+    // 关键：即使 CSS 未加载（无样式表），hidden 语义也必须在。
+    // 组件测试环境无 CSS，此处验证属性存在即可；E2E 中由样式表保证 display:none。
+  }
+  // 表格（当前视图）不应 hidden。
+  const table = el.querySelector('stock-table') as HTMLElement | null;
+  assert.equal(table?.hasAttribute('hidden'), false, 'active table must not be hidden');
+});

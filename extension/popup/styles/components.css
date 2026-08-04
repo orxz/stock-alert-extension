@@ -274,6 +274,17 @@ stock-board {
   color: var(--text-secondary, #5f6368);
 }
 
+/* display:flex 会覆盖 HTML hidden 属性的 display:none（UA 样式优先级更低），
+ * 必须显式还原——否则 loading/error/empty 三个占位同时可见，把表格挤出首屏。 */
+.board-loading[hidden],
+.board-error[hidden],
+.board-empty[hidden],
+stock-grid[hidden],
+stock-table[hidden],
+#fatal-fallback[hidden] {
+  display: none;
+}
+
 .board-error {
   color: var(--color-up, #e0413c);
 }
