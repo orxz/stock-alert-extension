@@ -1,18 +1,10 @@
 /* v2 组件样式：Task 3+ 填充看板组件 */
 
-/* ===== Touch target & focus-visible baseline ===== */
+/* ===== Touch target & focus-visible baseline =====
+ * 44px 仅用于主操作区（header 按钮、重载按钮）；
+ * 紧凑区（tabs/toolbar/表格行内/状态栏）使用各自显式尺寸，避免撑爆 560px 布局。 */
 .header-btn,
-.group-tab,
-.group-tab-move,
-.toolbar-view-btn,
-.toolbar-btn,
-.stock-card-btn,
-.stock-card-action,
-.stock-table-btn,
-.stock-table-sort-btn,
-.batch-toolbar-btn,
-.column-panel-btn,
-.quote-status-btn {
+#btn-reload {
   min-height: var(--touch-target-min);
   min-width: var(--touch-target-min);
   box-sizing: border-box;
@@ -182,7 +174,17 @@ stock-header {
 }
 
 /* ===== Group Tabs ===== */
+group-tabs {
+  display: block;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
 .group-tabs-nav {
+  display: flex;
+  align-items: center;
+  height: 38px;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -193,29 +195,21 @@ stock-header {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 4px 0;
   min-width: max-content;
+  flex: 1;
 }
 
 .group-tabs-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 4px 4px;
+  gap: 0;
   min-width: max-content;
 }
-
-.group-tab-move-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  flex-shrink: 0;
-}
-
 .group-tab {
-  padding: 0 14px;
+  height: 38px;
+  padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: 8px 8px 0 0;
+  border-bottom: 3px solid transparent;
   background: transparent;
   color: var(--text2);
   font-size: 13px;
@@ -236,14 +230,14 @@ stock-header {
 }
 
 .group-tab-move {
-  padding: 10px 8px;
+  padding: 0 4px;
   border: none;
   background: transparent;
   color: var(--text2);
   font-size: 10px;
   cursor: pointer;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 24px;
+  height: 24px;
 }
 
 .group-tab-move:hover:not(:disabled) {
@@ -256,38 +250,49 @@ stock-header {
 }
 
 /* ===== Stock Toolbar ===== */
+stock-toolbar {
+  display: block;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
 .stock-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  flex-wrap: wrap;
+  gap: 6px;
+  height: 42px;
+  padding: 0 10px;
+  flex-wrap: nowrap;
 }
 
 .toolbar-search {
   flex: 1;
-  min-width: 80px;
+  min-width: 60px;
 }
 
 .toolbar-search-input {
   width: 100%;
-  height: var(--touch-target-min);
-  padding: 0 12px;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   box-sizing: border-box;
+  background: var(--surface2);
+  color: var(--text);
 }
 
 .toolbar-sort {
-  height: var(--touch-target-min);
-  padding: 0 8px;
+  height: 30px;
+  padding: 0 6px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
+  max-width: 96px;
 }
 
 .toolbar-view-group {
@@ -295,15 +300,18 @@ stock-header {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .toolbar-view-btn {
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 8px;
   border: none;
   background: var(--surface);
   color: var(--text2);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 /* aria-pressed 可见状态：背景 + 加粗（不仅靠颜色区分） */
@@ -314,13 +322,16 @@ stock-header {
 }
 
 .toolbar-btn {
-  padding: 0 12px;
+  height: 30px;
+  padding: 0 8px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .toolbar-btn:hover {
@@ -361,6 +372,12 @@ stock-board {
   padding: 24px;
   text-align: center;
   color: var(--text2);
+}
+
+/* 自定义元素默认 inline，必须显式 block（table/grid 容器） */
+stock-table,
+stock-grid {
+  display: block;
 }
 
 /* display:flex 会覆盖 HTML hidden 属性的 display:none（UA 样式优先级更低），
@@ -512,11 +529,21 @@ stock-table[hidden],
 
 .stock-table th {
   text-align: left;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border-bottom: 2px solid var(--border-strong);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text2);
+  white-space: nowrap;
+}
+
+.stock-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 12px;
+  height: 44px;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .stock-table-sort-btn {
@@ -533,11 +560,6 @@ stock-table[hidden],
   text-decoration: underline;
 }
 
-.stock-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-strong);
-  font-size: 13px;
-}
 
 .stock-table-cell--name {
   font-weight: 600;
@@ -548,12 +570,9 @@ stock-table[hidden],
   color: var(--up);
 }
 
-.stock-table-cell--change.is-down,
-.stock-table-cell--change-percent.is-down {
-  color: var(--down);
-}
-
 .stock-table-btn {
+  height: 28px;
+  min-width: 28px;
   padding: 0 6px;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
