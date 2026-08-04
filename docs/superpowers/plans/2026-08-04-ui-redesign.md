@@ -32,7 +32,7 @@
 - 产出：`:root` 默认深色 token + `:root[data-theme="light"]` 浅色覆盖
 - 消费方：layout.css / components.css / accessibility.css 引用变量
 
-- [ ] **Step 1: 重写 tokens.css 为双主题 token**
+- [x] **Step 1: 重写 tokens.css 为双主题 token**
 
 ```css
 /* v2.x 双主题设计令牌
@@ -96,12 +96,12 @@ body {
 }
 ```
 
-- [ ] **Step 2: 验证构建通过**
+- [x] **Step 2: 验证构建通过**
 
 Run: `npm run build`
 Expected: PASS（CSS 不参与 tsc，但 build 复制静态资源）
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add extension/popup/styles/tokens.css
@@ -119,7 +119,7 @@ git commit -m "style: dual-theme design tokens (dark default + light)"
 - 产出：固定宽高 + overflow hidden + 行情区滚动 + 状态栏固定底部
 - 依赖：Task 1 的 token 变量
 
-- [ ] **Step 1: 重写 layout.css**
+- [x] **Step 1: 重写 layout.css**
 
 ```css
 /* v2.x 固定 420×560 布局：顶部/底部固定，行情区内部滚动 */
@@ -214,12 +214,12 @@ quote-status {
 }
 ```
 
-- [ ] **Step 2: 验证构建**
+- [x] **Step 2: 验证构建**
 
 Run: `npm run build`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add extension/popup/styles/layout.css
@@ -241,7 +241,7 @@ git commit -m "style: fixed 420x560 layout with internal scroll"
 - `AppAction: { type: 'view/theme'; theme: 'dark' | 'light' }`
 - Reducer：更新 `view.theme`，其余分支引用不变
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `tests/unit/popup/reducer.test.ts` 末尾追加：
 
@@ -263,12 +263,12 @@ test('view/theme to dark works', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `node --import tsx --test tests/unit/popup/reducer.test.ts`
 Expected: FAIL — `theme` 不存在于 `view`
 
-- [ ] **Step 3: 修改 state.ts — 添加 theme 字段**
+- [x] **Step 3: 修改 state.ts — 添加 theme 字段**
 
 在 `src/popup/store/state.ts` 的 `AppState.view` 中添加：
 
@@ -289,7 +289,7 @@ readonly view: Readonly<{
 theme: 'dark' as const,
 ```
 
-- [ ] **Step 4: 修改 actions.ts — 添加 theme action**
+- [x] **Step 4: 修改 actions.ts — 添加 theme action**
 
 在 `AppAction` 联合的 `// view` 区添加：
 
@@ -297,7 +297,7 @@ theme: 'dark' as const,
 | { readonly type: 'view/theme'; readonly theme: 'dark' | 'light' }
 ```
 
-- [ ] **Step 5: 修改 reducer.ts — 处理 theme action**
+- [x] **Step 5: 修改 reducer.ts — 处理 theme action**
 
 在 `// view` 区的 switch 分支中添加（在 `view/selectionMode` 之后）：
 
@@ -306,12 +306,12 @@ case 'view/theme':
   return { ...state, view: { ...state.view, theme: action.theme } };
 ```
 
-- [ ] **Step 6: 运行测试确认通过**
+- [x] **Step 6: 运行测试确认通过**
 
 Run: `node --import tsx --test tests/unit/popup/reducer.test.ts`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/popup/store/state.ts src/popup/store/actions.ts src/popup/store/reducer.ts tests/unit/popup/reducer.test.ts
@@ -333,7 +333,7 @@ git commit -m "feat: add theme state to popup store"
 - AppShell：`on('theme-change', ...)` → dispatch + localStorage + data-theme
 - main.ts：bootstrap 前读 `localStorage.getItem('uiTheme')` 设初始主题
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `tests/unit/popup/app-shell.test.ts` 追加：
 
@@ -356,12 +356,12 @@ test('theme-change event dispatches view/theme and sets localStorage', async () 
 
 注意：此测试需要参考 `tests/unit/popup/app-shell.test.ts` 中已有的 `createTestShell` 或等价 helper。如果不存在，使用文件中已有的 setup 模式。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `node --import tsx --test tests/unit/popup/app-shell.test.ts`
 Expected: FAIL — `theme-change` 未注册
 
-- [ ] **Step 3: 修改 events.ts — 添加 theme-change**
+- [x] **Step 3: 修改 events.ts — 添加 theme-change**
 
 在 `PopupEventMap` 接口中添加：
 
@@ -369,7 +369,7 @@ Expected: FAIL — `theme-change` 未注册
 'theme-change': { readonly theme: 'dark' | 'light' };
 ```
 
-- [ ] **Step 4: 修改 app-shell.ts — 路由 theme-change**
+- [x] **Step 4: 修改 app-shell.ts — 路由 theme-change**
 
 在 `// ===== 导航/视图事件 =====` 区（`selection-mode-change` 之后）添加：
 
@@ -381,7 +381,7 @@ on('theme-change', (d) => {
 });
 ```
 
-- [ ] **Step 5: 修改 main.ts — 启动时读主题**
+- [x] **Step 5: 修改 main.ts — 启动时读主题**
 
 在 `definePopupElements();` 之后、`const sink = ...` 之前添加：
 
@@ -398,7 +398,7 @@ document.documentElement.dataset.theme = initialTheme;
 const store = createStore(reducer, createInitialState(initialTheme));
 ```
 
-- [ ] **Step 6: 修改 state.ts — createInitialState 接受初始主题**
+- [x] **Step 6: 修改 state.ts — createInitialState 接受初始主题**
 
 ```ts
 export function createInitialState(theme: 'dark' | 'light' = 'dark'): AppState {
@@ -413,17 +413,17 @@ export function createInitialState(theme: 'dark' | 'light' = 'dark'): AppState {
 }
 ```
 
-- [ ] **Step 7: 运行测试确认通过**
+- [x] **Step 7: 运行测试确认通过**
 
 Run: `node --import tsx --test tests/unit/popup/app-shell.test.ts`
 Expected: PASS
 
-- [ ] **Step 8: 运行全量 popup 单测确认无回归**
+- [x] **Step 8: 运行全量 popup 单测确认无回归**
 
 Run: `node --import tsx --test tests/unit/popup/*.test.ts`
 Expected: ALL PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/popup/components/events.ts src/popup/app-shell.ts src/popup/main.ts src/popup/store/state.ts tests/unit/popup/app-shell.test.ts
@@ -445,7 +445,7 @@ git commit -m "feat: theme persistence via localStorage + AppShell routing"
 - 4 个按钮：主题（SVG 半圆 + 文字）/ 价格（SVG 眼睛 + 文字）/ 多选（SVG 勾选框 + 文字）/ 添加（SVG 加号 + 文字，品牌色）
 - 主题按钮发 `theme-change`；其余保持现有事件
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `tests/component/stock-header.test.ts` 追加：
 
@@ -478,12 +478,12 @@ test('theme button emits theme-change event', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `node --import tsx --test tests/component/stock-header.test.ts`
 Expected: FAIL — 按钮数量/结构不匹配
 
-- [ ] **Step 3: 修改 view-models.ts — HeaderViewModel 添加 theme**
+- [x] **Step 3: 修改 view-models.ts — HeaderViewModel 添加 theme**
 
 ```ts
 export interface HeaderViewModel {
@@ -496,11 +496,11 @@ export interface HeaderViewModel {
 }
 ```
 
-- [ ] **Step 4: 修改 selectors.ts — selectHeader 传递 theme**
+- [x] **Step 4: 修改 selectors.ts — selectHeader 传递 theme**
 
 在 `selectHeader` 返回对象中添加 `theme: state.view.theme`。
 
-- [ ] **Step 5: 重写 stock-header.ts buildSkeleton + bindEvents + applyViewModel**
+- [x] **Step 5: 重写 stock-header.ts buildSkeleton + bindEvents + applyViewModel**
 
 完全替换 `buildSkeleton()`：
 
@@ -616,17 +616,17 @@ private applyViewModel(vm: HeaderViewModel): void {
 }
 ```
 
-- [ ] **Step 6: 运行测试确认通过**
+- [x] **Step 6: 运行测试确认通过**
 
 Run: `node --import tsx --test tests/component/stock-header.test.ts`
 Expected: PASS
 
-- [ ] **Step 7: 运行全量 component 测试确认无回归**
+- [x] **Step 7: 运行全量 component 测试确认无回归**
 
 Run: `node --import tsx --test tests/component/*.test.ts`
 Expected: ALL PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/popup/components/stock-header.ts src/popup/view-models.ts src/popup/store/selectors.ts tests/component/stock-header.test.ts
@@ -646,7 +646,7 @@ git commit -m "feat: header A1 redesign with SVG icons + theme toggle"
 - 新增 header-btn--labeled 样式（A1 按钮）
 - 新增骨架屏样式
 
-- [ ] **Step 1: 重写 components.css**
+- [x] **Step 1: 重写 components.css**
 
 这是最大的一个文件改动。核心原则：
 1. 所有 `var(--color-up, #e0413c)` → `var(--up)`（去掉 fallback，token 已定义）
@@ -907,12 +907,12 @@ stock-header {
 
 注意：实现时需要将现有 components.css 中所有旧变量引用替换为新 token，并删除重复块。上述代码段是新增/修改的关键部分；其余现有样式（toolbar、dialog、combobox、batch、column-panel、quote-status）保持结构不变，仅替换颜色变量。
 
-- [ ] **Step 2: 验证构建**
+- [x] **Step 2: 验证构建**
 
 Run: `npm run build`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add extension/popup/styles/components.css
@@ -935,7 +935,7 @@ git commit -m "style: migrate components.css to dual-theme tokens + remove dupli
 - stock-table COLUMNS 添加 `{ key: 'amount', label: '成交额', sortField: 'amount' }`
 - 三态：fresh 正常色 / cached 降透明度+staleLabel / missing 灰色+`--`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `tests/component/stock-table.test.ts` 追加：
 
@@ -954,12 +954,12 @@ test('table renders amount column', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `node --import tsx --test tests/component/stock-table.test.ts`
 Expected: FAIL — 无成交额列
 
-- [ ] **Step 3: 修改 view-models.ts — 添加 displayChange/displayAmount**
+- [x] **Step 3: 修改 view-models.ts — 添加 displayChange/displayAmount**
 
 在 `StockCardViewModel` 接口添加：
 
@@ -997,7 +997,7 @@ function formatAmountText(v: number): string {
 const amount = quote && Number.isFinite(quote.amount) ? quote.amount : null;
 ```
 
-- [ ] **Step 4: 修改 stock-table.ts — 添加成交额列**
+- [x] **Step 4: 修改 stock-table.ts — 添加成交额列**
 
 在 `COLUMNS` 数组中，`changePercent` 之后添加：
 
@@ -1016,17 +1016,17 @@ case 'amount': {
 }
 ```
 
-- [ ] **Step 5: 运行测试确认通过**
+- [x] **Step 5: 运行测试确认通过**
 
 Run: `node --import tsx --test tests/component/stock-table.test.ts tests/component/stock-card.test.ts`
 Expected: PASS
 
-- [ ] **Step 6: 运行全量 component 测试**
+- [x] **Step 6: 运行全量 component 测试**
 
 Run: `node --import tsx --test tests/component/*.test.ts`
 Expected: ALL PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/popup/view-models.ts src/popup/components/stock-card.ts src/popup/components/stock-table.ts tests/component/stock-table.test.ts tests/component/stock-card.test.ts
@@ -1045,7 +1045,7 @@ git commit -m "feat: add amount column + displayChange to quote views"
 - Loading 态渲染 5 个 `.skeleton-row` 占位条（无假数字）
 - `aria-busy="true"` 在 loading 态
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `tests/component/stock-board.test.ts` 追加：
 
@@ -1061,12 +1061,12 @@ test('loading state renders skeleton rows with aria-busy', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `node --import tsx --test tests/component/stock-board.test.ts`
 Expected: FAIL — loading 态无 skeleton-row
 
-- [ ] **Step 3: 修改 stock-board.ts buildSkeleton — loading 态用骨架条**
+- [x] **Step 3: 修改 stock-board.ts buildSkeleton — loading 态用骨架条**
 
 替换 loading 容器构建：
 
@@ -1086,12 +1086,12 @@ for (let i = 0; i < 5; i++) {
 this.loadingEl = loadingEl;
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `node --import tsx --test tests/component/stock-board.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/popup/components/stock-board.ts tests/component/stock-board.test.ts
@@ -1110,7 +1110,7 @@ git commit -m "feat: skeleton loading state for stock board"
 - 当 `displayPrice` 变化时，给价格元素添加 `.flash` class，250ms 后移除
 - `reduced-motion` 下 CSS 已将 animation-duration 归零（accessibility.css 覆盖）
 
-- [ ] **Step 1: 修改 stock-table.ts — 价格变化检测**
+- [x] **Step 1: 修改 stock-table.ts — 价格变化检测**
 
 在行渲染/更新逻辑中，当 price cell 的 textContent 即将变化时：
 
@@ -1124,7 +1124,7 @@ if (oldPrice !== vm.displayPrice && vm.displayPrice !== '--') {
 }
 ```
 
-- [ ] **Step 2: 修改 stock-card.ts — 同样逻辑**
+- [x] **Step 2: 修改 stock-card.ts — 同样逻辑**
 
 在 `applyViewModel` 的 priceEl 更新处：
 
@@ -1139,12 +1139,12 @@ if (this.priceEl) {
 }
 ```
 
-- [ ] **Step 3: 运行 component 测试确认无回归**
+- [x] **Step 3: 运行 component 测试确认无回归**
 
 Run: `node --import tsx --test tests/component/*.test.ts`
 Expected: ALL PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/popup/components/stock-table.ts src/popup/components/stock-card.ts
@@ -1158,7 +1158,7 @@ git commit -m "feat: price flash animation on quote update"
 **Files:**
 - Modify: `extension/popup/styles/accessibility.css`
 
-- [ ] **Step 1: 确认现有 reduced-motion 覆盖已包含新动效**
+- [x] **Step 1: 确认现有 reduced-motion 覆盖已包含新动效**
 
 现有 `accessibility.css` 已有：
 
@@ -1175,7 +1175,7 @@ git commit -m "feat: price flash animation on quote update"
 
 这已覆盖所有新增的 `price-flash`、`skeleton-pulse`、主题过渡。无需修改。验证即可。
 
-- [ ] **Step 2: 验证（无改动则跳过 commit）**
+- [x] **Step 2: 验证（无改动则跳过 commit）**
 
 Run: `npm run build`
 Expected: PASS
@@ -1193,7 +1193,7 @@ Expected: PASS
 - 行情区内部滚动：body 无纵向滚动
 - 成交额列存在
 
-- [ ] **Step 1: 写 E2E 测试**
+- [x] **Step 1: 写 E2E 测试**
 
 ```ts
 // tests/e2e/ui-redesign.spec.ts
@@ -1282,12 +1282,12 @@ test('table shows amount column', async () => {
 });
 ```
 
-- [ ] **Step 2: 运行 E2E**
+- [x] **Step 2: 运行 E2E**
 
 Run: `npx playwright test tests/e2e/ui-redesign.spec.ts`
 Expected: 4 PASSED
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/e2e/ui-redesign.spec.ts
@@ -1301,7 +1301,7 @@ git commit -m "test: e2e for theme toggle, fixed layout, amount column"
 **Files:**
 - Modify: `tests/e2e/accessibility.spec.ts`（扩展双主题）
 
-- [ ] **Step 1: 在 accessibility.spec.ts 中添加深色主题扫描**
+- [x] **Step 1: 在 accessibility.spec.ts 中添加深色主题扫描**
 
 在现有 `STATES` 循环之后添加：
 
@@ -1336,12 +1336,12 @@ test('axe has no critical/serious violation in light theme (grid)', async () => 
 
 注意：需要在文件顶部确认 `AxeBuilder` 的 import 已存在（应该已有）。
 
-- [ ] **Step 2: 运行 a11y 测试**
+- [x] **Step 2: 运行 a11y 测试**
 
 Run: `RUN_A11Y=1 npx playwright test tests/e2e/accessibility.spec.ts`
 Expected: ALL PASS（含新增浅色主题测试）
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/e2e/accessibility.spec.ts
@@ -1355,7 +1355,7 @@ git commit -m "test: axe scan for light theme"
 **Files:**
 - 无新建；修复任何回归
 
-- [ ] **Step 1: 运行完整 CI 门禁**
+- [x] **Step 1: 运行完整 CI 门禁**
 
 Run: `npm run ci`
 Expected: ALL PASS
@@ -1366,16 +1366,16 @@ a11y 在 CI 环境下需要 `RUN_A11Y=1`（当前 shell CI=1）。
 如果 CI 变量导致 a11y 跳过，单独运行：
 Run: `RUN_A11Y=1 npx playwright test tests/e2e/accessibility.spec.ts`
 
-- [ ] **Step 2: 运行 6 个核心 e2e 确认无回归**
+- [x] **Step 2: 运行 6 个核心 e2e 确认无回归**
 
 Run: `npx playwright test tests/e2e/portfolio.spec.ts tests/e2e/groups.spec.ts tests/e2e/keyboard.spec.ts tests/e2e/recovery.spec.ts tests/e2e/preferences.spec.ts tests/e2e/quotes.spec.ts`
 Expected: 37 PASSED
 
-- [ ] **Step 3: 修复任何回归（如有）**
+- [x] **Step 3: 修复任何回归（如有）**
 
 根据失败信息修复，重新运行直到全绿。
 
-- [ ] **Step 4: 最终 commit（如有修复）**
+- [x] **Step 4: 最终 commit（如有修复）**
 
 ```bash
 git add -A
@@ -1389,12 +1389,12 @@ git commit -m "fix: resolve regressions from UI redesign"
 **Files:**
 - Modify: `scripts/capture-store-assets.mjs`（viewport 已是 420×640，确认兼容）
 
-- [ ] **Step 1: 重新捕获商店截图**
+- [x] **Step 1: 重新捕获商店截图**
 
 Run: `npm run capture:store`
 Expected: 生成 store-assets/screenshot*.png（深色主题）
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add store-assets/
