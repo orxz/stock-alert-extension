@@ -162,8 +162,8 @@ test('popup remains usable after SW restart', async () => {
     seed: baseSeed({ watchlist: [stock('sh600519')] })
   });
   try {
-    // 确保 popup 已加载。
-    await expect(launched.page.locator('#stock-board')).toContainText('贵州茅台');
+    // 确保 popup 已加载（seed 中 sh600519 的名称为 股票0）。
+    await expect(launched.page.locator('#stock-board')).toContainText('股票0');
     // 在 worker 中触发 SW 重启（通过 terminate + 等待重新注册）。
     await launched.worker.evaluate(() => {
       // 触发 SW 主动注销。
