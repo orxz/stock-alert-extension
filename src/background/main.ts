@@ -93,9 +93,12 @@ function createRuntimeDependencies() {
     const quoteCacheRepository = new QuoteCacheRepositoryImpl(coordinator);
     const sessionState = createChromeSessionState();
 
-    const primary = new EastmoneyQuoteProvider(fetch);
-    const fallback = new SinaQuoteProvider(fetch);
-    const searchProvider = new EastmoneySearchProvider(fetch);
+    // fetch 必须绑定 globalThis：provider 以 this.fetchFn(url) 方法调用，
+    // 未绑定会抛 "Illegal invocation"（调用方 this 为 undefined）。
+    const boundFetch = fetch.bind(globalThis);
+    const primary = new EastmoneyQuoteProvider(boundFetch);
+    const fallback = new SinaQuoteProvider(boundFetch);
+    const searchProvider = new EastmoneySearchProvider(boundFetch);
 
     const bootstrap = new BootstrapService(userDataRepository, clock);
     const portfolio = new PortfolioCommandsImpl(userDataRepository, clock);
