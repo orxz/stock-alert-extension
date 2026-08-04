@@ -1,19 +1,34 @@
 // src/background/main.ts
 // Background 控制平面入口（Service Worker 顶层模块）。
 //
-// 核心契约（brief Step 6 逐字）：
+// 核心契约（brief Step 6 逐字 + Task 11 扩展）：
 // - 同步注册所有 Chrome listener（onMessage/onAlarm/onInstalled/onStartup/onStorageChanged），
 //   无顶层 await 先于 listener 注册——SW 在任何事件到达前完成接线。
-// - createRuntimeDependencies() 仅创建轻量 adapter + 惰性 barrier（initialize factory 推迟到首次 get()）。
-// - ensureInitialized('module-activation') fire-and-forget：失败经诊断 sink 记录，下一事件经 barrier 重试。
-// - router.handle 绑定到 onMessage listener；其余 listener 当前为 no-op（Task 11 接入 scheduler）。
+// - createRuntimeDependencies() 创建轻量 adapter + scheduler（eager）+ 惰性 barrier。
+//   scheduler 的 bootstrap/quotes delegate 通过 barrier.get() 惰性获取服务。
+// - barrier.initialize factory 在首次 get() 时：
+//   (a) 创建 Coordinator + Repositories + Services（迁移/备份）；
+//   (b) coordinator.reconcileOrphanQuoteCache()——孤儿缓存清理；
+//   (c) session.readQuoteBackoff——清理非法退避值后写回；
+//   (d) scheduler.ensureAlarm()——SW 重建后恢复 alarm。
+// - ensureInitialized('module-activation') fire-and-forget：失败经诊断 sink 记录，下一事件重试。
+// - onAlarm：alarm.name === ALARM_NAME → scheduler.runQuoteCycle('alarm')。
+// - onInstalled/onStartup → scheduler.runQuoteCycle('installed'/'startup')。
+// - onStorageChanged：groups/watchlist/boardConfig 变更 → scheduler.runQuoteCycle('storage-change')；
+//   quoteCache 变更不触发（防递归）。
 import type { Clock, Cancelable } from '../application/ports/clock.js';
 import type { DiagnosticEvent } from '../application/ports/diagnostics.js';
+import type { StockCode } from '../domain/brands.js';
+import type { QuoteSnapshot } from '../domain/quote.js';
+import type { BootstrapResult } from '../protocol/messages.js';
+import type { RefreshOptions } from '../application/quotes/quote-service.js';
 import { createInitializationBarrier } from './initialization-barrier.js';
 import { createRouter } from './router.js';
 import type { AppServices } from './rpc-handlers.js';
 import { createConsoleDiagnosticSink } from '../infrastructure/chrome/console-diagnostic-sink.js';
 import { createChromeSessionState } from '../infrastructure/chrome/chrome-session-state.js';
+import { createChromeAlarmAdapter } from '../infrastructure/chrome/chrome-alarm-adapter.js';
+import { createChromeActionPresenter } from '../infrastructure/chrome/chrome-action-presenter.js';
 import { ChromeStorageAdapter } from '../infrastructure/storage/chrome-storage-adapter.js';
 import { StorageCoordinator } from '../infrastructure/storage/storage-coordinator.js';
 import { UserDataRepositoryImpl } from '../infrastructure/storage/user-data-repository.js';
@@ -26,6 +41,7 @@ import { EastmoneyQuoteProvider } from '../infrastructure/quote-providers/eastmo
 import { SinaQuoteProvider } from '../infrastructure/quote-providers/sina-quote-provider.js';
 import { EastmoneySearchProvider } from '../infrastructure/quote-providers/eastmoney-search-provider.js';
 import { searchLocalCatalog } from '../infrastructure/quote-providers/local-stock-catalog.js';
+import { QuoteScheduler, ALARM_NAME } from './scheduler.js';
 
 /**
  * SystemClock：生产时钟。now() 委托 Date.now()；schedule() 委托 setTimeout/clearTimeout。
@@ -47,15 +63,28 @@ function createSystemClock(): Clock {
   };
 }
 
+/** onStorageChanged 触发 cycle 的键集合。 */
+const STORAGE_TRIGGER_KEYS = new Set(['groups', 'watchlist', 'boardConfig']);
+
 /**
- * 创建运行时依赖：轻量 adapter + 惰性初始化 barrier + router。
+ * 创建运行时依赖：轻量 adapter + scheduler（eager）+ 惰性初始化 barrier + router。
  *
- * barrier.initialize factory 在首次 get() 时创建 Coordinator + Repositories + Services，
- * 返回 AppServices 捆绑。失败回 idle，下一事件重试。
+ * scheduler 在 barrier 之前 eager 创建——其 bootstrap/quotes delegate 通过 barrier.get()
+ * 惰性获取已初始化的服务。barrier.initialize factory 在首次 get() 时：
+ * (a) 创建 Coordinator + Repositories + Services（迁移/备份）；
+ * (b) coordinator.reconcileOrphanQuoteCache()——孤儿缓存清理；
+ * (c) session.readQuoteBackoff——清理非法退避值后写回；
+ * (d) scheduler.ensureAlarm()——SW 重建后恢复 alarm。
  */
 function createRuntimeDependencies() {
   const sink = createConsoleDiagnosticSink();
   const clock = createSystemClock();
+  const alarm = createChromeAlarmAdapter();
+  const action = createChromeActionPresenter();
+
+  // scheduler 先声明（let）后赋值——barrier factory 引用 scheduler.ensureAlarm()，
+  // lazyBootstrap/lazyQuotes 引用 barrier；所有引用在 factory 首次执行时已初始化。
+  let scheduler: QuoteScheduler;
 
   const barrier = createInitializationBarrier<AppServices>(async () => {
     const area = new ChromeStorageAdapter();
@@ -73,7 +102,54 @@ function createRuntimeDependencies() {
     const quotes = new QuoteService(primary, fallback, quoteCacheRepository, clock, sessionState, sink);
     const search = new SearchService(searchProvider, searchLocalCatalog, clock);
 
+    // ── 初始化工厂扩展（brief Step 6）──
+    // (b) 孤儿缓存清理：删除不在 watchlist 中的 quoteCache:* 条目。
+    await coordinator.reconcileOrphanQuoteCache().catch((error: unknown) => {
+      sink.emit({
+        timestamp: clock.now(),
+        version: '2.0.0',
+        scope: 'storage',
+        type: 'reconcile-orphan-cache-failed',
+        outcome: 'failed'
+      });
+      void error;
+    });
+
+    // (c) session 退避清理：读取退避状态（ChromeSessionState 内部 clamp 非法值），写回清洁值。
+    const backoff = await sessionState.readQuoteBackoff();
+    await sessionState.writeQuoteBackoff(backoff);
+
+    // (d) ensureAlarm：SW 重建后 alarm 丢失时恢复 safety alarm。
+    await scheduler.ensureAlarm();
+
     return { bootstrap, portfolio, quotes, search };
+  });
+
+  // Lazy bootstrap/quotes delegate：通过 barrier.get() 惰性获取已初始化的服务。
+  // scheduler 用这些 delegate 构造，在 barrier ready 后才实际调用 bootstrap/quotes。
+  const lazyBootstrap: { execute(): Promise<BootstrapResult> } = {
+    async execute(): Promise<BootstrapResult> {
+      const services = await barrier.get();
+      return services.bootstrap.execute();
+    }
+  };
+  const lazyQuotes: {
+    refresh(codes: readonly StockCode[], options?: RefreshOptions): Promise<QuoteSnapshot>;
+  } = {
+    async refresh(codes: readonly StockCode[], options?: RefreshOptions): Promise<QuoteSnapshot> {
+      const services = await barrier.get();
+      return services.quotes.refresh(codes, options);
+    }
+  };
+
+  // Eager scheduler：bootstrap/quotes 惰性，alarm/action/clock/sink eager。
+  scheduler = new QuoteScheduler({
+    bootstrap: lazyBootstrap,
+    quotes: lazyQuotes,
+    alarm,
+    action,
+    clock,
+    sink
   });
 
   const router = createRouter({ barrier, sink, clock });
@@ -92,28 +168,33 @@ function createRuntimeDependencies() {
         outcome: 'failed'
       };
       sink.emit(event);
-      // 诊断记录错误标签但不泄漏 stack/message 到控制台之外。
       void error;
     });
   };
 
-  // ── Chrome listener：当前 onAlarm/onInstalled/onStartup/onStorageChanged 为 no-op ──
-  // Task 11 将接入完整 scheduler（行情刷新调度 / 安装迁移 / 存储变更广播）。
-  const onAlarm = (_alarm: chrome.alarms.Alarm): void => {
-    void _alarm;
+  // ── Chrome listener ──
+  const onAlarm = (alarm: chrome.alarms.Alarm): void => {
+    if (alarm.name === ALARM_NAME) {
+      void scheduler.runQuoteCycle('alarm');
+    }
   };
   const onInstalled = (_details: chrome.runtime.InstalledDetails): void => {
-    void _details;
+    void scheduler.runQuoteCycle('installed');
   };
   const onStartup = (): void => {
-    // no-op：Task 11 接入。
+    void scheduler.runQuoteCycle('startup');
   };
   const onStorageChanged = (
-    _changes: Record<string, chrome.storage.StorageChange>,
+    changes: Record<string, chrome.storage.StorageChange>,
     _areaName: chrome.storage.AreaName
   ): void => {
-    void _changes;
-    void _areaName;
+    // groups/watchlist/boardConfig 变更触发 coalesced cycle；quoteCache 变更不触发（防递归）。
+    for (const key of Object.keys(changes)) {
+      if (STORAGE_TRIGGER_KEYS.has(key)) {
+        void scheduler.runQuoteCycle('storage-change');
+        return;
+      }
+    }
   };
 
   return { router, onAlarm, onInstalled, onStartup, onStorageChanged, ensureInitialized };
