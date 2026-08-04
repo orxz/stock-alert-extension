@@ -155,6 +155,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'view/clearSelection':
       return { ...state, view: { ...state.view, selectedCodes: [] } };
 
+    case 'view/theme':
+      return { ...state, view: { ...state.view, theme: action.theme } };
+
     // ===== overlay =====
     case 'overlay/dialog':
       return { ...state, overlay: { ...state.overlay, dialog: action.dialog } };

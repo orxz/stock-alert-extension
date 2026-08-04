@@ -403,3 +403,21 @@ test('reducer does not throw on deeply frozen input across all branches', () => 
   assert.doesNotThrow(() => reducer(frozen, { type: 'overlay/toast', toast: { message: 'hi', kind: 'info' } }));
   assert.doesNotThrow(() => reducer(frozen, { type: 'mutation/pending', key: 'k' }));
 });
+
+// ===== theme（view 区纯展示偏好）=====
+
+test('view/theme updates theme and preserves other branches', () => {
+  const state = createInitialState();
+  const next = reducer(state, { type: 'view/theme', theme: 'light' });
+  assert.equal(next.view.theme, 'light');
+  assert.equal(next.domain, state.domain); // 未变更分支引用相等
+  assert.equal(next.async, state.async);
+  assert.equal(next.overlay, state.overlay);
+});
+
+test('view/theme to dark works', () => {
+  const state = createInitialState();
+  const light = reducer(state, { type: 'view/theme', theme: 'light' });
+  const dark = reducer(light, { type: 'view/theme', theme: 'dark' });
+  assert.equal(dark.view.theme, 'dark');
+});

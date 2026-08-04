@@ -61,7 +61,7 @@ export interface AppState {
     searchKeyword: string;
     selectionMode: boolean;
     selectedCodes: readonly StockCode[];
-    searchResults: readonly StockSearchResult[];
+    theme: 'dark' | 'light';
   }>;
   readonly async: Readonly<{
     bootstrap: AsyncState;
@@ -108,7 +108,7 @@ export function createInitialState(): AppState {
       searchKeyword: '',
       selectionMode: false,
       selectedCodes: [],
-      searchResults: []
+      theme: 'dark' as const,
     },
     async: {
       bootstrap: { status: 'idle' },
