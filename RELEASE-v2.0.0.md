@@ -4,7 +4,9 @@
 **标签：** `v2.0.0`
 **下载：** `dist/stock-alert-extension-v2.0.0.zip`
 
-**SHA-256：** `71ee50bbaa2f82cc383b37d87041068f0e4d8f3ca364dba156c3a78cc6942136`
+**SHA-256：** `c90b87ecb1ba008d7de19115fa08475a00c6ba840196b81463b0ddee068f87a4`
+
+> 注：SHA 随 a11y 修复（`2b0edf3`）后的重打包更新（94 条目，含 accessibility.css）。
 
 ---
 
