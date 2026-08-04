@@ -45,12 +45,18 @@ export class StockBoardElement extends HTMLElement {
     this.setAttribute('role', 'region');
     this.setAttribute('aria-label', '股票看板');
 
-    // Loading container
+    // Loading container — 骨架屏（5 个灰色占位条，无假数字）
     const loadingEl = document.createElement('div');
     loadingEl.setAttribute('data-region', 'loading');
     loadingEl.className = 'board-loading';
     loadingEl.setAttribute('hidden', '');
-    loadingEl.textContent = '加载中…';
+    loadingEl.setAttribute('aria-busy', 'true');
+    loadingEl.setAttribute('aria-label', '加载中');
+    for (let i = 0; i < 5; i++) {
+      const row = document.createElement('div');
+      row.className = 'skeleton-row';
+      loadingEl.append(row);
+    }
     this.loadingEl = loadingEl;
 
     // Error container

@@ -120,6 +120,21 @@ test('loading state shows loading container and hides grid/table', () => {
   assert.ok(table.hasAttribute('hidden'));
 });
 
+// Task 8: 骨架屏 loading——5 个灰色占位条（无假数字）+ aria-busy 无障碍状态。
+test('loading state renders skeleton rows with aria-busy', () => {
+  setupBoard(board({ loading: true, stocks: [] }));
+  const loading = document.querySelector('[data-region="loading"]') as HTMLElement;
+  assert.ok(loading, 'loading container exists');
+  assert.equal(loading.getAttribute('hidden'), null, 'loading is visible');
+  assert.equal(loading.getAttribute('aria-busy'), 'true');
+  assert.ok(
+    loading.querySelectorAll('.skeleton-row').length >= 3,
+    'has at least 3 skeleton rows'
+  );
+  // 不变量：骨架屏绝不渲染假价格/假数字
+  assert.equal(loading.textContent, '', 'skeleton must not render fake data text');
+});
+
 test('error state shows error container with message', () => {
   setupBoard(board({ error: '网络错误', stocks: [] }));
   const error = document.querySelector('[data-region="error"]') as HTMLElement;
