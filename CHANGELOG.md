@@ -1,5 +1,42 @@
 # 更新日志
 
+## v2.0.0 — 基础架构重建
+
+> **基础架构重建，不新增提醒功能。** 用户数据（schema v2）与权限保持不变，v1.3.0 发布包可安全回滚。
+
+### 架构升级
+- **TypeScript + 原生 ES Modules**：所有运行时 JavaScript 改为 TypeScript 源码，`tsc` 输出原生 ESM；`module: ES2022`、`target: ES2022`、`moduleResolution: Bundler`、`strict: true`
+- **分层架构与 Project References**：Domain / Protocol / Application / Infrastructure / Background / Popup 六层，依赖只能由外向内；架构检查脚本拒绝反向 import 和循环依赖
+- **单一 StorageCoordinator**：`chrome.storage.local` 的唯一业务调用者和唯一写入队列；用户数据、缓存写入、缓存删除、一致性读取均进入同一串行临界区
+- **内容 revision 乐观并发**：`userDataRevision` 是规范化 `groups + watchlist + boardConfig` 的 SHA-256 摘要；所有写命令携带 `expectedRevision`，冲突返回 `CONFLICT` 不执行写入
+- **版本化 RPC v2**：单一注册表 `rpcRegistry` 统一方法 / payload / result / 运行时校验；`requestId` 贯穿 Popup、Router、Application、Repository；结构化错误码 + `retryable` 标记
+- **不可变 Popup Store**：纯 Reducer 是唯一状态写入口；Selector 派生 ViewModel；Command 负责 RPC / 副作用 / uncertain 对账（超时 → bootstrap 对账 → desired-state predicate → 安全重试）
+- **Light DOM Web Components**：组件只接收 ViewModel、发出语义事件；`connectedCallback` 使用每次连接新建的 `AbortController`；keyed update 保留节点身份、焦点、滚动
+- **可重试初始化屏障**：Service Worker listener 同步注册，handler 等待共享 `idle/running/ready` 三态屏障；失败回到 `idle` 让下一事件重试
+- **持久化退避**：退避状态写入 `chrome.storage.session`，Service Worker 重建后恢复；空自选股不请求网络也不改变退避
+- **安全 Alarm 调度**：每次任务开始前创建最迟安全 Alarm，结束后替换为精确一次性 Alarm；每次激活执行 `ensureAlarm`
+
+### 数据与权限保证
+- **schema v2 不变**：`groups` / `watchlist` / `boardConfig` / `quoteCache:<code>` 持久化语义不变；不执行破坏性迁移
+- **权限不变**：`storage` + `alarms`；host permissions 仍为 `hq.sinajs.cn` / `push2.eastmoney.com` / `searchapi.eastmoney.com`
+- **行情语义不变**：`price > 0`、东财主源 + 新浪备源、50 只/批、4 秒 Provider 超时、8 秒总 deadline、fresh `<30s`、cached `30s–7d`、退避 `30s→2m→5m`；缺失行情绝不生成模拟价格
+- **回滚兼容**：v2.0.0 写出的 schema v2 数据可被冻结的 v1.3.0 发布包安全读取；v2.0.0 不持久化只有新版本才能解释的必需字段
+
+### 质量门禁
+- **架构检查**：TypeScript Compiler API 解析 import graph，拒绝反向跨层 import 和循环依赖
+- **覆盖率**：全局 `src/**` lines/statements/functions 90% + branches 85%；Domain/Protocol/Storage/Reducer 95% + 90%
+- **无障碍**：axe-core 零 critical/serious；44×44px 触控目标；WCAG 2.1 AA 对比度；完整键盘操作等价；`prefers-reduced-motion`
+- **性能**：20 分组 / 500 股票夹具；bootstrap p95 ≤ 250ms；首次可交互 p95 ≤ 500ms；缓存 ViewModel + keyed DOM 更新 p95 ≤ 100ms
+- **确定性构建**：两次清洁构建产生字节一致 ZIP；ZIP 只含运行时文件（无源码 / 测试 / map / 文档）；200 KB 提醒 / 500 KB 硬限制
+- **回滚验证**：`verify-rollback.mjs` 验证 v1.3 → v2 写入 → v1.3 回读 → v2 再升级的数据兼容性
+
+### 变更文件
+- **新增**：`src/`（84 个 TypeScript 源文件）、`extension/`（manifest.json + popup.html + styles + icons + privacy）、`tsconfig*.json`（4 个）、`scripts/build-extension.mjs` / `check-architecture.mjs` / `check-runtime-imports.mjs` / `verify-deterministic-build.mjs` / `verify-rollback.mjs`、`tests/fixtures/v1.3/`（冻结契约）、`tests/fixtures/capacity/`
+- **删除**：`background.js` / `popup-actions.js` / `popup-bridge.js` / `popup-render.js` / `popup-state.js` / `popup.js` / `quote-format.js` / `quote-service.js` / `quotes.js` / `router.js` / `stock-utils.js` / `storage.js`（v1 运行时）及对应 v1 测试
+- **修改**：`package.json`（v2 scripts）、`eslint.config.mjs`、`playwright.config.mjs`、`scripts/validate-manifest.mjs` / `package-extension.mjs` / `check-bundle-size.mjs` / `capture-store-assets.mjs`
+
+---
+
 ## v1.3.0 — 架构与体验
 
 ### 架构升级

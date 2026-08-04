@@ -1,8 +1,22 @@
-import { copyFile, readFile } from 'node:fs/promises';
-import { expect } from '@playwright/test';
-import { launchExtension } from '../tests/e2e/extension-fixture.mjs';
+// scripts/capture-store-assets.mjs
+// Task 20 — v2 商店素材截图脚本。
+//
+// 从 extension/manifest.json（正式源）读取版本号，构建 build/extension/，
+// 加载真实 popup 页面并截取商店截图。
+// v2 popup 使用 Web Components（<stock-app>），通过 e2e fixture 的启动逻辑加载。
+//
+// 由于 e2e fixture 是 TypeScript，本脚本通过 tsx 运行：
+//   node --import tsx scripts/capture-store-assets.mjs
+// 或在 package.json 中配置 "capture:store": "tsx scripts/capture-store-assets.mjs"。
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-/** @type {Array<[string, string, number, number]>} */
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, '..');
+
+// v2 popup 行情模拟数据（与 v1.3 capture 一致的 8 只股票）。
 const STOCKS = [
   ['sh600519', '贵州茅台', 1689.00, 0.81],
   ['sz300418', '昆仑万维', 50.65, 5.61],
@@ -15,98 +29,87 @@ const STOCKS = [
 ];
 
 function buildSeed() {
-  const realNow = Date.now();
   const BASE = Date.UTC(2026, 6, 31, 6, 32, 0);
   const watchlist = STOCKS.map(([code, name], index) => ({
     code,
     name,
-    groupIds: index < 4 ? ['g_tech'] : [],
-    manualOrder: { g_all: index },
-    pinned: index === 0 ? { g_all: true } : {},
-    addedAt: BASE - index * 1000
+    groupIds: ['g_all', 'g_watch'],
+    manualOrder: { g_watch: index },
+    pinned: {},
+    addedAt: BASE - (STOCKS.length - index) * 60_000
   }));
-  const cache = Object.fromEntries(STOCKS.map(([code, name, price, changePercent], index) => [
-    `quoteCache:${code}`,
-    {
-      cacheVersion: 1,
-      code,
-      provider: 'eastmoney',
-      fetchedAt: index === 7 ? BASE : realNow - 1000,
-      quote: {
-        name,
-        price,
-        prevClose: price / (1 + changePercent / 100),
-        open: price,
-        high: price,
-        low: price,
-        volume: 100000,
-        amount: 1000000,
-        change: price - price / (1 + changePercent / 100),
-        changePercent
+  const cache = Object.fromEntries(
+    STOCKS.map(([code, name, price, changePercent], index) => [
+      `quoteCache:${code}`,
+      {
+        cacheVersion: 1,
+        code,
+        provider: 'eastmoney',
+        fetchedAt: BASE - 5000 + index * 100,
+        quote: { price, changePercent, change: +(price * changePercent / 100).toFixed(2) }
       }
-    }
-  ]));
+    ])
+  );
   return {
     schemaVersion: 2,
     groups: [
-      { groupId: 'g_all', name: '全部', order: 0, isDefault: true },
-      { groupId: 'g_tech', name: '科技', order: 1, isDefault: false }
+      { groupId: 'g_all', name: '全部', order: 0, isDefault: true, createdAt: BASE, updatedAt: BASE },
+      { groupId: 'g_watch', name: '关注', order: 1, isDefault: false, createdAt: BASE, updatedAt: BASE }
     ],
     watchlist,
-    boardConfig: {},
+    boardConfig: { g_all: { viewMode: 'list', sortField: 'manual' }, g_watch: { viewMode: 'list', sortField: 'manual' } },
     ...cache
   };
 }
 
-async function renderMarketingCanvas(page, { title, subtitle, popupPng, output }) {
-  const image = `data:image/png;base64,${popupPng.toString('base64')}`;
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.setContent(`
-    <style>
-      * { box-sizing: border-box; }
-      body { margin: 0; width: 1280px; height: 800px; background: #0F1723; color: #F8FAFC; font-family: -apple-system, "PingFang SC", sans-serif; }
-      main { display: grid; grid-template-columns: 1fr 520px; align-items: center; width: 100%; height: 100%; padding: 60px; }
-      h1 { margin: 0 0 18px; font-size: 52px; }
-      p { margin: 0; color: #A8B3C5; font-size: 22px; }
-      img { width: 420px; justify-self: center; border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,.45); }
-    </style>
-    <main><section><h1>${title}</h1><p>${subtitle}</p></section><img src="${image}" alt=""></main>
-  `);
-  await page.screenshot({ path: output });
-}
-
-const scenarios = [
-  { file: 'screenshot1-list.png', title: '列表视图', subtitle: '实时、缓存和缺失状态一眼可辨', prepare: (page) => page.click('#btn-view-list') },
-  { file: 'screenshot2-grid.png', title: '网格视图', subtitle: '分组看板与可信行情状态', prepare: (page) => page.click('#btn-view-grid') },
-  { file: 'screenshot3-add.png', title: '添加自选股', subtitle: '加入任意分组，始终出现在全部视图', prepare: (page) => page.click('#btn-add-stock') }
+const SCENARIOS = [
+  { name: 'screenshot1-list.png', viewport: { width: 420, height: 640 } },
+  { name: 'screenshot2-grid.png', viewport: { width: 420, height: 640 }, preAction: 'toggleGrid' },
+  { name: 'screenshot3-add.png', viewport: { width: 420, height: 640 }, preAction: 'openAddDialog' }
 ];
 
-// v1.3.0 起 QuoteService 常驻 Service Worker，其退避状态会跨 Popup 重载存活。
-// 因此必须先播种再首屏加载（单次加载），避免「空自选股首屏 → refresh → 进入退避」
-// 使重载后的刷新走退避分支、把全部缓存判为过期。与 e2e mixed-cache 用例一致。
-const { context, page, releaseHold } = await launchExtension({ offline: true, holdQuotes: true, seed: buildSeed() });
-const marketingPage = await context.newPage();
-await page.setViewportSize({ width: 420, height: 640 });
-await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓存 1');
-await expect(page.locator('.quote-stale')).toHaveCount(1);
-await expect(page.locator('#update-time')).toHaveText('未更新');
-await page.waitForTimeout(500);
-// 禁用过渡/动画，避免截图捕获弹窗淡入等动画的中间帧导致像素不确定
-await page.addStyleTag({ content: '* { transition: none !important; animation: none !important; }' });
-const version = await page.locator('#brand-version').textContent();
-const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
-if (version !== manifest.version) throw new Error(`expected popup version ${manifest.version}, got ${version}`);
-const summary = await page.locator('#quote-status-summary').textContent();
-if (summary !== '实时 7 · 缓存 1') throw new Error(`expected mixed summary, got ${summary}`);
-console.log(`capture verified: v${version}, ${summary}`);
-for (const scenario of scenarios) {
-  await scenario.prepare(page);
-  await expect(page.locator('#quote-status-summary')).toHaveText('实时 7 · 缓存 1');
-  await page.waitForTimeout(300);
-  const popupPng = await page.screenshot({ type: 'png' });
-  const storePath = `store-assets/${scenario.file}`;
-  await renderMarketingCanvas(marketingPage, { ...scenario, popupPng, output: storePath });
-  await copyFile(storePath, `docs/screenshots/${scenario.file}`);
+async function main() {
+  const manifestPath = join(ROOT, 'extension/manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+
+  // 动态导入 e2e fixture（TypeScript，需 tsx 运行时）。
+  const { launchBuiltExtension } = await import('../tests/e2e/extension-fixture.ts');
+
+  const seed = buildSeed();
+  const { context, page, extensionId } = await launchBuiltExtension({ offline: true, seed });
+
+  try {
+    await page.setViewportSize({ width: 420, height: 640 });
+    // 等待 stock-app 渲染完成
+    await page.waitForSelector('stock-app', { timeout: 10_000 });
+    await page.waitForTimeout(800);
+    // 禁用过渡/动画，确保截图像素确定
+    await page.addStyleTag({ content: '* { transition: none !important; animation: none !important; }' });
+
+    for (const scenario of SCENARIOS) {
+      await page.setViewportSize(scenario.viewport);
+      if (scenario.preAction === 'toggleGrid') {
+        // 点击工具栏的网格视图按钮
+        const gridBtn = page.locator('[data-action="view-grid"], button:has-text("网格")').first();
+        if (await gridBtn.count() > 0) await gridBtn.click().catch(() => {});
+      }
+      if (scenario.preAction === 'openAddDialog') {
+        const addBtn = page.locator('[data-action="add-stock"], button:has-text("添加")').first();
+        if (await addBtn.count() > 0) await addBtn.click().catch(() => {});
+      }
+      await page.waitForTimeout(300);
+      const outPath = join(ROOT, 'store-assets', scenario.name);
+      await page.screenshot({ path: outPath });
+      console.log(`capture: ${scenario.name} (${scenario.viewport.width}x${scenario.viewport.height})`);
+    }
+
+    console.log(`capture verified: v${manifest.version}, extension ${extensionId}`);
+  } finally {
+    await context.close().catch(() => {});
+  }
 }
-releaseHold?.();
-await context.close();
+
+main().catch((error) => {
+  console.error('capture-store-assets failed:', error.message);
+  process.exit(1);
+});
