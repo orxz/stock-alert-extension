@@ -1,13 +1,59 @@
-/* v2 popup 页面布局：Task 3+ 填充看板布局 */
+/* v2.x 固定 420×560 布局：顶部/底部固定，行情区内部滚动 */
 body {
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: var(--bg-page);
-  color: var(--text-primary);
+  background: var(--bg-grad);
+  background-color: var(--bg);
+  color: var(--text);
+  width: 420px;
+  height: 560px;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  transition: background-color 0.35s, color 0.35s;
 }
 
 stock-app {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  height: 560px;
+  overflow: hidden;
+}
+
+stock-app[hidden] {
+  display: none;
+}
+
+/* 行情区：唯一纵向滚动区 */
+stock-board {
   display: block;
-  min-height: 100%;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+stock-board::-webkit-scrollbar {
+  width: 7px;
+}
+
+stock-board::-webkit-scrollbar-thumb {
+  background: var(--surface3);
+  border-radius: 4px;
+}
+
+/* 状态栏固定底部（不随行情区滚动） */
+quote-status {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 13px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text2);
+  gap: 13px;
 }
 
 #fatal-fallback {
@@ -16,12 +62,29 @@ stock-app {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  min-height: 100%;
+  width: 420px;
+  height: 560px;
   padding: 24px;
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text2);
 }
 
 #fatal-fallback[hidden] {
   display: none;
+}
+
+#btn-reload {
+  min-height: var(--touch-target-min);
+  min-width: 120px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#btn-reload:active {
+  opacity: 0.85;
 }
