@@ -42,14 +42,18 @@ export interface ToolbarViewModel {
   readonly sortField: SortField;
   readonly sortDirection: SortDirection;
   readonly priceHidden: boolean;
+  readonly searchKeyword: string;
   readonly totalCount: number;
   readonly hasStocks: boolean;
 }
 
-/** 头部视图模型（当前分组名 + 计数）。 */
+/** 头部视图模型（当前分组名 + 计数 + 按钮状态）。 */
 export interface HeaderViewModel {
   readonly groupName: string;
   readonly stockCount: number;
+  readonly selectionMode: boolean;
+  readonly priceHidden: boolean;
+  readonly canAddStock: boolean;
 }
 
 /** 批量工具栏视图模型（选中态）。 */

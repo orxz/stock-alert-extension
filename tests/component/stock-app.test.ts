@@ -14,7 +14,7 @@ function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
   return {
     currentGroupId: 'g_all' as GroupId,
     searchKeyword: '',
-    header: { groupName: '全部', stockCount: 0 },
+    header: { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true },
     groupTabs: [],
     stocks: [],
     toolbar: {
@@ -22,6 +22,7 @@ function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
       sortField: 'manual',
       sortDirection: 'asc',
       priceHidden: false,
+      searchKeyword: '',
       totalCount: 0,
       hasStocks: false
     },

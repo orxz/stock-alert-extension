@@ -21,10 +21,14 @@ globalThis.customElements = win.customElements;
 globalThis.HTMLElement = win.HTMLElement as unknown as typeof HTMLElement;
 globalThis.CustomEvent = win.CustomEvent as unknown as typeof CustomEvent;
 globalThis.Event = win.Event as unknown as typeof Event;
+globalThis.KeyboardEvent = win.KeyboardEvent as unknown as typeof KeyboardEvent;
 globalThis.EventTarget = win.EventTarget as unknown as typeof EventTarget;
 globalThis.Node = win.Node as unknown as typeof Node;
 globalThis.Element = win.Element as unknown as typeof Element;
 globalThis.DocumentFragment = win.DocumentFragment as unknown as typeof DocumentFragment;
+globalThis.HTMLButtonElement = win.HTMLButtonElement as unknown as typeof HTMLButtonElement;
+globalThis.HTMLInputElement = win.HTMLInputElement as unknown as typeof HTMLInputElement;
+globalThis.HTMLSelectElement = win.HTMLSelectElement as unknown as typeof HTMLSelectElement;
 
 /** 清空 body 子节点，保证测试隔离（customElements 注册是全局持久的，不重置）。 */
 export function resetDom(): void {

@@ -1,4 +1,222 @@
 /* v2 组件样式：Task 3+ 填充看板组件 */
+
+/* ===== Touch target & focus-visible baseline ===== */
+.header-btn,
+.group-tab,
+.group-tab-move,
+.toolbar-view-btn,
+.toolbar-btn {
+  min-height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  box-sizing: border-box;
+}
+
+.header-btn:focus-visible,
+.group-tab:focus-visible,
+.group-tab-move:focus-visible,
+.toolbar-view-btn:focus-visible,
+.toolbar-btn:focus-visible,
+.toolbar-sort:focus-visible,
+.toolbar-search-input:focus-visible {
+  outline: 2px solid var(--brand, #1a73e8);
+  outline-offset: 2px;
+}
+
+/* ===== Stock Header ===== */
+.header-title {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.header-btn {
+  padding: 0 12px;
+  border: 1px solid var(--border-color, #dadce0);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-primary, #202124);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.header-btn:hover:not(:disabled) {
+  background: var(--surface-hover, #f1f3f4);
+}
+
+.header-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.header-btn--primary {
+  background: var(--brand, #1a73e8);
+  color: #fff;
+  border-color: var(--brand, #1a73e8);
+}
+
+.header-btn--primary:hover:not(:disabled) {
+  opacity: 0.9;
+  background: var(--brand, #1a73e8);
+}
+
+/* aria-pressed 可见状态：加粗边框 + 背景色变化（不仅靠颜色区分） */
+.header-btn--toggle.is-active {
+  border-width: 2px;
+  border-color: var(--brand, #1a73e8);
+  background: var(--surface-active, #e8f0fe);
+  font-weight: 600;
+}
+
+/* ===== Group Tabs ===== */
+.group-tabs-nav {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.group-tabs-tablist {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  min-width: max-content;
+}
+
+.group-tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.group-tab {
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--text-secondary, #5f6368);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.group-tab:hover {
+  color: var(--text-primary, #202124);
+}
+
+/* aria-selected 可见状态：底部加粗边框 + 文字加粗（不仅靠颜色区分） */
+.group-tab.is-active {
+  color: var(--brand, #1a73e8);
+  font-weight: 600;
+  border-bottom: 3px solid var(--brand, #1a73e8);
+}
+
+.group-tab-move {
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #5f6368);
+  font-size: 10px;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.group-tab-move:hover:not(:disabled) {
+  color: var(--brand, #1a73e8);
+}
+
+.group-tab-move:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ===== Stock Toolbar ===== */
+.stock-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+
+.toolbar-search {
+  flex: 1;
+  min-width: 80px;
+}
+
+.toolbar-search-input {
+  width: 100%;
+  height: var(--touch-target-min, 44px);
+  padding: 0 12px;
+  border: 1px solid var(--border-color, #dadce0);
+  border-radius: 8px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.toolbar-sort {
+  height: var(--touch-target-min, 44px);
+  padding: 0 8px;
+  border: 1px solid var(--border-color, #dadce0);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+}
+
+.toolbar-view-group {
+  display: inline-flex;
+  border: 1px solid var(--border-color, #dadce0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.toolbar-view-btn {
+  padding: 0 10px;
+  border: none;
+  background: var(--surface, #fff);
+  color: var(--text-secondary, #5f6368);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* aria-pressed 可见状态：背景 + 加粗（不仅靠颜色区分） */
+.toolbar-view-btn.is-active {
+  background: var(--brand, #1a73e8);
+  color: #fff;
+  font-weight: 600;
+}
+
+.toolbar-btn {
+  padding: 0 12px;
+  border: 1px solid var(--border-color, #dadce0);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-primary, #202124);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toolbar-btn:hover {
+  background: var(--surface-hover, #f1f3f4);
+}
+
+/* ===== Legacy ===== */
 #btn-reload {
   min-height: var(--touch-target-min);
   min-width: 120px;

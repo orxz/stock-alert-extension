@@ -65,17 +65,25 @@ export function selectToolbar(state: AppState): ToolbarViewModel {
     sortField: config.sortField,
     sortDirection: config.sortDirection,
     priceHidden: config.priceHidden,
+    searchKeyword: state.view.searchKeyword,
     totalCount: total,
     hasStocks: total > 0
   };
 }
 
-/** 头部视图模型：当前分组名 + 该分组股票数。 */
+/** 头部视图模型：当前分组名 + 股票数 + 按钮状态。 */
 export function selectHeader(state: AppState): HeaderViewModel {
   const group = state.domain.userData.groups.find((g) => g.groupId === state.view.currentGroupId);
   const groupName = group?.name ?? '全部';
   const stockCount = stocksForGroup(state.domain.userData.watchlist, state.view.currentGroupId).length;
-  return { groupName, stockCount };
+  const config = selectCurrentBoardConfig(state);
+  return {
+    groupName,
+    stockCount,
+    selectionMode: state.view.selectedCodes.length > 0,
+    priceHidden: config.priceHidden,
+    canAddStock: true
+  };
 }
 
 /** 批量工具栏视图模型：选中态。 */
