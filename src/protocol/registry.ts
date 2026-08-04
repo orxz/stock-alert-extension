@@ -182,7 +182,7 @@ export function validateRpcRequest(input: unknown): ValidateRpcRequestResult {
     return { ok: false, errors: ['requestId must be a non-empty string'] };
   }
   const methodName = envelope.method;
-  if (typeof methodName !== 'string' || !(methodName in rpcRegistry)) {
+  if (typeof methodName !== 'string' || !Object.prototype.hasOwnProperty.call(rpcRegistry, methodName)) {
     return { ok: false, errors: [`unknown method: ${String(methodName)}`] };
   }
   const contract = rpcRegistry[methodName as RpcMethod];

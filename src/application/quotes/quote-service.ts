@@ -195,23 +195,17 @@ export class QuoteService {
   private async singleFlight(
     task: () => Promise<QuoteSnapshot>
   ): Promise<QuoteSnapshot> {
-    // 若有活跃 run，设 pendingRun=true 并等待；结束后若 pendingRun 则再跑一次。
-    while (this.activeRun !== undefined) {
-      this.pendingRun = true;
-      const current = this.activeRun;
-      await current;
-      if (this.pendingRun) {
-        this.pendingRun = false;
-        break; // 我是第一个拾取 pending 标志的——继续执行
+    // 标准 single-flight：并发调用共享同一 Promise 结果。
+    // 第一个调用方执行 task，后续调用方直接 await 同一 Promise。
+    if (this.activeRun) return this.activeRun;
+    this.activeRun = (async () => {
+      try {
+        return await task();
+      } finally {
+        this.activeRun = undefined;
       }
-      // 其他人已在执行——回到循环等待
-    }
-    this.activeRun = task();
-    try {
-      return await this.activeRun;
-    } finally {
-      this.activeRun = undefined;
-    }
+    })();
+    return this.activeRun;
   }
 
   // ── 核心刷新逻辑 ──

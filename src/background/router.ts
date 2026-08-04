@@ -127,7 +127,7 @@ export function createRouter(deps: RouterDeps): Router {
 
       // ── Layer 4: method 在注册表 ──
       const methodName = envelope.method;
-      if (typeof methodName !== 'string' || !(methodName in rpcRegistry)) {
+      if (typeof methodName !== 'string' || !Object.prototype.hasOwnProperty.call(rpcRegistry, methodName)) {
         endSpan('failed', 'UNKNOWN_METHOD');
         return errorResponse(reqId, 'UNKNOWN_METHOD', `unknown method: ${String(methodName)}`, false);
       }

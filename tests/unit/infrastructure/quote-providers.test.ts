@@ -33,16 +33,16 @@ function mockJsonResponse(body: unknown) {
 
 test('Eastmoney keeps partial valid rows and drops zero prices', () => {
   const result = parseEastmoney({ data: { diff: [
-    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 150000, f3: 120 },
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2 },
     { f12: '000001', f13: 0, f14: '平安银行', f2: 0, f3: 0 }
   ] } });
   assert.equal(result.sh600519?.price, 1500);
   assert.equal(result.sz000001, undefined);
 });
 
-test('Eastmoney scales price fields by /100', () => {
+test('Eastmoney uses fltt=2 float values directly', () => {
   const result = parseEastmoney({ data: { diff: [
-    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 150000, f3: 120, f4: 1800 }
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2, f4: 18 }
   ] } });
   assert.equal(result.sh600519?.price, 1500);
   assert.equal(result.sh600519?.changePercent, 1.2);
@@ -51,7 +51,7 @@ test('Eastmoney scales price fields by /100', () => {
 
 test('Eastmoney computes change from price and prevClose when f4 is absent', () => {
   const result = parseEastmoney({ data: { diff: [
-    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 150000, f3: 120, f18: 148200 }
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2, f18: 1482 }
   ] } });
   // price=1500, prevClose=1482 → change=18
   assert.equal(result.sh600519?.price, 1500);
@@ -60,7 +60,7 @@ test('Eastmoney computes change from price and prevClose when f4 is absent', () 
 
 test('Eastmoney maps f13=1 to sh prefix', () => {
   const result = parseEastmoney({ data: { diff: [
-    { f12: '601318', f13: 1, f14: '中国平安', f2: 5000, f3: 50 }
+    { f12: '601318', f13: 1, f14: '中国平安', f2: 50, f3: 0.5 }
   ] } });
   assert.ok(result.sh601318);
   assert.equal(result.sh601318?.name, '中国平安');
@@ -68,14 +68,14 @@ test('Eastmoney maps f13=1 to sh prefix', () => {
 
 test('Eastmoney maps bj prefix for codes starting with 4/8/9', () => {
   const result = parseEastmoney({ data: { diff: [
-    { f12: '430047', f13: 0, f14: '诺思兰德', f2: 500, f3: 5 }
+    { f12: '430047', f13: 0, f14: '诺思兰德', f2: 5, f3: 0.05 }
   ] } });
   assert.ok(result.bj430047);
 });
 
 test('Eastmoney defaults to sz for unknown f13', () => {
   const result = parseEastmoney({ data: { diff: [
-    { f12: '000001', f13: 0, f14: '平安银行', f2: 1300, f3: 13 }
+    { f12: '000001', f13: 0, f14: '平安银行', f2: 13, f3: 0.13 }
   ] } });
   assert.ok(result.sz000001);
 });
@@ -89,8 +89,8 @@ test('Eastmoney returns empty for missing diff array', () => {
 test('Eastmoney skips rows without f12', () => {
   const result = parseEastmoney({ data: { diff: [
     null,
-    { f13: 1, f14: 'NoCode', f2: 100 },
-    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 150000, f3: 120 }
+    { f13: 1, f14: 'NoCode', f2: 1 },
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2 }
   ] } });
   assert.equal(Object.keys(result).length, 1);
   assert.ok(result.sh600519);
@@ -204,7 +204,7 @@ test('EastmoneyQuoteProvider constructs correct URL with secids mapping', async 
   const mockFetch = async (url: string) => {
     capturedUrl = url;
     return mockJsonResponse({ data: { diff: [
-      { f12: '600519', f13: 1, f14: '贵州茅台', f2: 150000, f3: 120 }
+      { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2 }
     ] } });
   };
   const provider = new EastmoneyQuoteProvider(mockFetch);

@@ -115,15 +115,8 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     store.dispatch({ type: 'view/selection', codes: newCodes });
   });
 
-  on('column-panel-open-request', () => {
-    // 打开列设置对话框。
-    const activeId = document.activeElement?.id ?? null;
-    store.dispatch({ type: 'overlay/focusReturn', id: activeId });
-    store.dispatch({
-      type: 'overlay/dialog',
-      dialog: { kind: 'add-stock' } as DialogState // Placeholder; column-panel has its own overlay
-    });
-  });
+  // column-panel-open-request: 列设置功能尚未完整接线（ColumnPanelElement 已注册但未接入 AppViewModel）。
+  // 暂不处理此事件，避免打开错误的对话框。待列设置功能完成后在此接入 overlay 路径。
 
   // ===== 行情事件 =====
 

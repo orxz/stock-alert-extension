@@ -35,6 +35,16 @@ test('unknown method is rejected', () => {
   assert.equal(validateRpcRequest({ protocol: 2, requestId: 'r1', method: 'nope', payload: {} }).ok, false);
 });
 
+test('inherited Object.prototype method names are rejected (not in rpcRegistry)', () => {
+  for (const method of ['toString', 'constructor', 'hasOwnProperty', 'valueOf', '__proto__']) {
+    assert.equal(
+      validateRpcRequest({ protocol: 2, requestId: 'r1', method, payload: {} }).ok,
+      false,
+      `method "${method}" must be rejected as unknown`
+    );
+  }
+});
+
 test('protocol 1 is rejected', () => {
   assert.equal(validateRpcRequest({ protocol: 1, requestId: 'r1', method: 'app:bootstrap', payload: {} }).ok, false);
 });

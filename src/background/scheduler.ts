@@ -127,21 +127,23 @@ export class QuoteScheduler {
       this.activeRun = undefined;
     });
 
-    await this.activeRun;
+    try {
+      await this.activeRun;
+    } finally {
+      span.end({
+        timestamp: clock.now(),
+        version: '2.0.0',
+        runId,
+        scope: 'scheduler',
+        type: 'cycle',
+        outcome: 'ok',
+        durationMs: clock.now() - startedAt
+      });
 
-    span.end({
-      timestamp: clock.now(),
-      version: '2.0.0',
-      runId,
-      scope: 'scheduler',
-      type: 'cycle',
-      outcome: 'ok',
-      durationMs: clock.now() - startedAt
-    });
-
-    if (this.pendingRun) {
-      this.pendingRun = false;
-      await this.runQuoteCycle('coalesced');
+      if (this.pendingRun) {
+        this.pendingRun = false;
+        await this.runQuoteCycle('coalesced');
+      }
     }
   }
 

@@ -2,12 +2,11 @@
 // 纯解析器：parseEastmoney / parseSina / parseEastmoneySearch。
 // 无 fetch 依赖——接收已解析的 JSON 或文本，返回规范化的 domain Quote / StockSearchResult。
 // 可独立测试（Task 8 Step 1 的纯函数测试直接调用）。
-// 从 v1.3 quotes.js 移植，适配 v2 domain Quote 类型（精简字段 + 价格缩放）。
+// 从 v1.3 quotes.js 移植，适配 v2 domain Quote 类型（精简字段）。fltt=2 返回浮点值，无价格缩放。
 import type { StockCode } from '../../domain/brands.js';
 import type { Quote, StockSearchResult } from '../../domain/quote.js';
 
-/** Eastmoney fltt=2 返回的数值需 ÷100 还原为正确小数。 */
-const PRICE_SCALE = 100;
+// fltt=2 返回浮点值（元/百分比），无需缩放。与 v1.3 enrich._num 一致：直接 parseFloat。
 
 /**
  * 安全数值解析：接受 number/string，返回有限数或 null。
@@ -19,11 +18,6 @@ function num(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** 缩放价格类字段：num(value) / 100。 */
-function scalePrice(value: unknown): number | null {
-  const n = num(value);
-  return n !== null ? n / PRICE_SCALE : null;
-}
 
 /** Eastmoney 行情行（f 字段）原始形状。 */
 interface EastmoneyRow {
@@ -80,8 +74,7 @@ function enrichQuote(raw: {
 
 /**
  * 解析 Eastmoney 行情 JSON：json.data.diff 数组 → Record<StockCode, Quote>。
- * 价格类字段（f2/f3/f4/f18）÷100 缩放；价格为 0 或非有限 → 丢弃。
- * 市场前缀：f13===1?'sh':/^[489]\d{5}$/.test(code)?'bj':'sz'。
+ * fltt=2 返回浮点值（元/百分比），与 v1.3 一致直接使用；价格为 0 或非有限 → 丢弃。
  */
 export function parseEastmoney(json: unknown): Readonly<Record<StockCode, Quote>> {
   const result = {} as Record<StockCode, Quote>;
@@ -98,10 +91,10 @@ export function parseEastmoney(json: unknown): Readonly<Record<StockCode, Quote>
     const quote = enrichQuote({
       code,
       name: String(row.f14 || rawCode),
-      price: scalePrice(row.f2),
-      prevClose: scalePrice(row.f18),
-      change: scalePrice(row.f4),
-      changePercent: scalePrice(row.f3),
+      price: num(row.f2),
+      prevClose: num(row.f18),
+      change: num(row.f4),
+      changePercent: num(row.f3),
       amount: num(row.f6)
     });
     if (quote) result[code] = quote;
