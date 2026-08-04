@@ -300,8 +300,16 @@ export class StockTableElement extends HTMLElement {
     if (nameSpan) nameSpan.textContent = vm.name;
     // Code
     if (cells[1]) cells[1].textContent = vm.code;
-    // Price
-    if (cells[2]) cells[2].textContent = vm.displayPrice;
+    // Price (flash on real change)
+    if (cells[2]) {
+      const priceCell = cells[2] as HTMLElement;
+      const oldPrice = priceCell.textContent;
+      priceCell.textContent = vm.displayPrice;
+      if (oldPrice !== vm.displayPrice && vm.displayPrice !== '--') {
+        priceCell.classList.add('flash');
+        setTimeout(() => priceCell.classList.remove('flash'), 250);
+      }
+    }
     // Change
     if (cells[3]) {
       cells[3].textContent = vm.change !== null ? vm.change.toFixed(2) : '--';

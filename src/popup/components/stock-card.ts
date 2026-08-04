@@ -227,7 +227,12 @@ export class StockCardElement extends HTMLElement {
       this.nameEl.textContent = vm.name;
     }
     if (this.priceEl) {
+      const old = this.priceEl.textContent;
       this.priceEl.textContent = vm.displayPrice;
+      if (old !== vm.displayPrice && vm.displayPrice !== '--') {
+        this.priceEl.classList.add('flash');
+        setTimeout(() => this.priceEl?.classList.remove('flash'), 250);
+      }
     }
     if (this.changeEl) {
       const changeText = vm.change !== null ? vm.change.toFixed(2) : '--';
