@@ -120,20 +120,16 @@ test('keyboard Tab journey reaches all primary controls without mouse', async ()
   try {
     const visited = await launched.page.evaluate(async () => {
       const seen: string[] = [];
-      for (let i = 0; i < 20; i++) {
-        const el = document.activeElement as HTMLElement | null;
-        if (!el || el === document.body) break;
+      const focusable = Array.from(document.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [tabindex="0"]'
+      ));
+      // 从第一个可聚焦元素开始模拟 Tab 旅程（popup 打开时焦点可能在 body）。
+      let index = 0;
+      for (let i = 0; i < 20 && index < focusable.length; i++) {
+        const el = focusable[index];
+        el.focus();
         seen.push(el.getAttribute('data-action') || el.tagName);
-        // 模拟 Tab。
-        const focusable = Array.from(document.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), [tabindex="0"]'
-        ));
-        const current = focusable.indexOf(el);
-        if (current >= 0 && current < focusable.length - 1) {
-          focusable[current + 1].focus();
-        } else {
-          break;
-        }
+        index += 1;
       }
       return seen;
     });

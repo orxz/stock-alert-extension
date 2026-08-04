@@ -109,7 +109,15 @@
   min-width: max-content;
 }
 
-.group-tab-item {
+.group-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 4px;
+  min-width: max-content;
+}
+
+.group-tab-move-group {
   display: inline-flex;
   align-items: center;
   gap: 0;

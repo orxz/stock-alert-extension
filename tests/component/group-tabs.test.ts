@@ -49,7 +49,7 @@ function press(key: string): void {
 }
 
 function clickReorder(groupId: string, direction: 'left' | 'right'): void {
-  const item = document.querySelector(`[data-key="${groupId}"]`);
+  const item = document.querySelector(`[data-region="tab-actions"] [data-group-id="${groupId}"]`);
   if (!item) throw new Error(`Tab item ${groupId} not found`);
   const btn = item.querySelector(`button[data-action="move-${direction}"]`) as HTMLButtonElement | null;
   if (!btn) throw new Error(`move-${direction} button for ${groupId} not found`);
@@ -163,14 +163,14 @@ test('clicking a tab selects it', () => {
 
 test('g_all (default group) has no reorder buttons', () => {
   setup();
-  const allItem = document.querySelector('[data-key="g_all"]');
+  const allItem = document.querySelector('[data-region="tab-actions"] [data-group-id="g_all"]');
   assert.ok(allItem);
   assert.equal(allItem?.querySelectorAll('button[data-action^="move-"]').length, 0);
 });
 
 test('custom groups expose 左移 and 右移 buttons', () => {
   setup();
-  const watchItem = document.querySelector('[data-key="g_watch"]');
+  const watchItem = document.querySelector('[data-region="tab-actions"] [data-group-id="g_watch"]');
   assert.ok(watchItem?.querySelector('button[data-action="move-left"]'));
   assert.ok(watchItem?.querySelector('button[data-action="move-right"]'));
 });
@@ -195,21 +195,21 @@ test('左移 button emits group-order-request with the complete reordered array'
 
 test('左移 is disabled for the first custom group (cannot move before g_all)', () => {
   setup();
-  const watchItem = document.querySelector('[data-key="g_watch"]');
+  const watchItem = document.querySelector('[data-region="tab-actions"] [data-group-id="g_watch"]');
   const leftBtn = watchItem?.querySelector('button[data-action="move-left"]') as HTMLButtonElement;
   assert.equal(leftBtn.disabled, true);
 });
 
 test('右移 is disabled for the last custom group', () => {
   setup();
-  const techItem = document.querySelector('[data-key="g_tech"]');
+  const techItem = document.querySelector('[data-region="tab-actions"] [data-group-id="g_tech"]');
   const rightBtn = techItem?.querySelector('button[data-action="move-right"]') as HTMLButtonElement;
   assert.equal(rightBtn.disabled, true);
 });
 
 test('reorder buttons have accessible labels', () => {
   setup();
-  const watchItem = document.querySelector('[data-key="g_watch"]');
+  const watchItem = document.querySelector('[data-region="tab-actions"] [data-group-id="g_watch"]');
   const leftBtn = watchItem?.querySelector('button[data-action="move-left"]') as HTMLElement;
   const rightBtn = watchItem?.querySelector('button[data-action="move-right"]') as HTMLElement;
   assert.ok((leftBtn.getAttribute('aria-label') ?? '').includes('左移'));

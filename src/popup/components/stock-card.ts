@@ -92,8 +92,10 @@ export class StockCardElement extends HTMLElement {
   }
 
   private buildSkeleton(): void {
+    // 卡片可聚焦（tabindex=0）+ Enter/Space 切换 pin；容器用 role=group 而非
+    // role=button，避免 axe nested-interactive（group 是容器角色，允许内部按钮）。
     this.setAttribute('tabindex', '0');
-    this.setAttribute('role', 'button');
+    this.setAttribute('role', 'group');
 
     const article = document.createElement('article');
     article.className = 'stock-card';
@@ -204,7 +206,7 @@ export class StockCardElement extends HTMLElement {
       emitPopupEvent(this, 'stock-toggle-select', { code: this._viewModel.code });
     }, { signal });
 
-    // 键盘快捷键：Enter/Space 切换 pin。
+    // 键盘快捷键：Enter/Space 切换 pin（卡片可聚焦，role=group 不构成嵌套交互）。
     this.addEventListener('keydown', (e) => {
       if (!this._viewModel) return;
       if (e.key === 'Enter' || e.key === ' ') {
