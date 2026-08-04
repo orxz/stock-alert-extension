@@ -1,14 +1,50 @@
-/* v2 设计令牌与基础重置：Task 3+ 迁移 v1 令牌体系 */
+/* v2.x 双主题设计令牌
+ * 深色（默认）：交易终端气质
+ * 浅色：通过 [data-theme="light"] 覆盖
+ * 所有组件样式只引用变量，不硬编码颜色。
+ */
 :root {
-  --color-up: #c62828; /* 白底 5.62:1 ≥ 4.5 WCAG AA（原 #e0413c 仅 4.21:1） */
-  --color-down: #188038; /* 白底 5.02:1 ≥ 4.5 WCAG AA（原 #0f9d58 仅 3.51:1） */
-  --text-primary: #212121;
-  --text-secondary: #5f6368; /* bg-page #f5f6f8 上 5.59:1 ≥ 4.5 WCAG AA（原 #757575 仅 4.26:1） */
-  --bg-page: #f5f6f8;
-  --bg-surface: #ffffff;
-  --border: #e0e0e0;
-  --brand: #3a6ea5;
+  /* 深色主题（默认） */
+  --bg: #0a0e15;
+  --bg-grad: linear-gradient(180deg, #0d1220 0%, #0a0e15 40%);
+  --surface: #121722;
+  --surface2: #1a2130;
+  --surface3: #222b3d;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #e9edf5;
+  --text2: #96a0b5;
+  --text3: #5f6a80;
+  --up: #ff5b5b;
+  --up-soft: rgba(255, 91, 91, 0.12);
+  --down: #2fd18c;
+  --down-soft: rgba(47, 209, 140, 0.12);
+  --brand: #4d9fff;
+  --brand-soft: rgba(77, 159, 255, 0.15);
+  --gold: #e8b341;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   --touch-target-min: 44px;
+}
+
+:root[data-theme="light"] {
+  --bg: #f2f4f8;
+  --bg-grad: linear-gradient(180deg, #ffffff 0%, #f2f4f8 45%);
+  --surface: #ffffff;
+  --surface2: #eef1f6;
+  --surface3: #e3e8f0;
+  --border: rgba(20, 30, 55, 0.08);
+  --border-strong: rgba(20, 30, 55, 0.14);
+  --text: #1c2333;
+  --text2: #5c6779;
+  --text3: #9aa3b2;
+  --up: #d93025;
+  --up-soft: rgba(217, 48, 37, 0.09);
+  --down: #0f8a4c;
+  --down-soft: rgba(15, 138, 76, 0.09);
+  --brand: #2f6fbd;
+  --brand-soft: rgba(47, 111, 189, 0.11);
+  --gold: #c98a12;
+  --shadow: 0 10px 40px rgba(30, 45, 80, 0.14);
 }
 
 * {
