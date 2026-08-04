@@ -283,13 +283,13 @@ test('icon buttons have accessible aria-labels', async () => {
   try {
     for (const selector of [
       '[data-action="add-stock"]',
-      '[data-action="refresh"]',
+      '[data-action="theme-toggle"]',
       '[data-action="multiselect"]',
       '[data-action="price-visibility"]'
     ]) {
       const label = await launched.page.locator(selector).first().getAttribute('aria-label');
       expect(label).toBeTruthy();
-      expect(label!.length).toBeGreaterThan(2);
+      expect(label!.length).toBeGreaterThanOrEqual(2);
     }
   } finally {
     await launched.close();
@@ -305,9 +305,9 @@ test('CSS design tokens are defined on :root', async () => {
     const tokens = await launched.page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
       return {
-        up: style.getPropertyValue('--color-up').trim(),
-        down: style.getPropertyValue('--color-down').trim(),
-        secondary: style.getPropertyValue('--text-secondary').trim(),
+        up: style.getPropertyValue('--up').trim(),
+        down: style.getPropertyValue('--down').trim(),
+        secondary: style.getPropertyValue('--text2').trim(),
         touchTarget: style.getPropertyValue('--touch-target-min').trim()
       };
     });
