@@ -10,6 +10,8 @@ import { StockTableElement } from './stock-table.js';
 import { BatchToolbarElement } from './batch-toolbar.js';
 import { ColumnPanelElement } from './column-panel.js';
 import { QuoteStatusElement } from './quote-status.js';
+import { AppDialogHostElement } from './app-dialog-host.js';
+import { StockSearchComboboxElement } from './stock-search-combobox.js';
 
 export function definePopupElements(): void {
   if (!customElements.get('stock-app')) {
@@ -47,5 +49,11 @@ export function definePopupElements(): void {
   }
   if (!customElements.get('quote-status')) {
     customElements.define('quote-status', QuoteStatusElement);
+  }
+  if (!customElements.get('app-dialog-host')) {
+    customElements.define('app-dialog-host', AppDialogHostElement);
+  }
+  if (!customElements.get('stock-search-combobox')) {
+    customElements.define('stock-search-combobox', StockSearchComboboxElement);
   }
 }

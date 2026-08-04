@@ -7,7 +7,8 @@ import type { AppState } from './state.js';
 import {
   defaultBoardConfig,
   toStockCardViewModels,
-  toGroupTabs
+  toGroupTabs,
+  closedDialog
 } from '../view-models.js';
 import type {
   AppViewModel,
@@ -18,8 +19,13 @@ import type {
   HeaderViewModel,
   BatchToolbarViewModel,
   QuoteStatusViewModel,
-  LiveRegionViewModel
+  LiveRegionViewModel,
+  DialogViewModel,
+  DialogGroupOption
 } from '../view-models.js';
+
+/** 固定计算视图分组 ID。 */
+const ALL_GROUP_ID = 'g_all' as GroupId;
 
 /**
  * 当前看板配置：从 domain.userData.boardConfig[currentGroupId] 派生；缺省回退 defaultBoardConfig。
@@ -147,6 +153,77 @@ export function selectLiveRegion(state: AppState): LiveRegionViewModel {
 }
 
 /**
+ * 对话框视图模型：从 overlay.dialog + async.mutations + view.searchResults 派生。
+ * dialog=null 时返回关闭态。
+ */
+export function selectDialog(state: AppState): DialogViewModel {
+  const dialog = state.overlay.dialog;
+  if (!dialog) return closedDialog();
+
+  // 检查是否有 pending / uncertain mutation。
+  const mutationValues = Object.values(state.async.mutations);
+  const pending = mutationValues.some((m) => m.status === 'pending');
+  const uncertain = mutationValues.some((m) => m.status === 'uncertain');
+  const failedMutation = mutationValues.find((m) => m.status === 'failed');
+  const errorMessage = failedMutation?.error?.message ?? null;
+
+  // 可用分组列表（按 order 升序）。
+  const allGroups: DialogGroupOption[] = state.domain.userData.groups
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((g) => ({ groupId: g.groupId, name: g.name }));
+
+  // 非 g_all 的分组用于 move-stocks 目标选择。
+  const customGroups = allGroups.filter((g) => g.groupId !== ALL_GROUP_ID);
+
+  const base: DialogViewModel = {
+    ...closedDialog(),
+    open: true,
+    focusReturnId: state.overlay.focusReturnId,
+    pending,
+    uncertain,
+    errorMessage,
+    searchResults: state.view.searchResults,
+    searchStatus: state.async.stockSearch.status,
+    searchKeyword: state.view.searchKeyword,
+    searchGeneration: state.async.searchGeneration,
+    groups: []
+  };
+
+  switch (dialog.kind) {
+    case 'add-stock':
+      return { ...base, kind: 'add-stock', groups: allGroups };
+    case 'create-group':
+      return { ...base, kind: 'create-group' };
+    case 'rename-group':
+      return {
+        ...base,
+        kind: 'rename-group',
+        renameGroupId: dialog.groupId,
+        renameCurrentName: dialog.currentName,
+        canDeleteGroup: dialog.groupId !== ALL_GROUP_ID
+      };
+    case 'move-stocks':
+      return {
+        ...base,
+        kind: 'move-stocks',
+        moveCodes: dialog.codes,
+        moveFromGroupId: dialog.fromGroupId,
+        groups: customGroups
+      };
+    case 'confirm-remove':
+      return {
+        ...base,
+        kind: 'confirm-remove',
+        removeCodes: dialog.codes,
+        removeGroupId: dialog.groupId
+      };
+    default:
+      return closedDialog();
+  }
+}
+
+/**
  * 根 AppViewModel：聚合所有子 ViewModel，供 stock-app 根组件单次渲染（Task 14）。
  * 各子 selector 独立派生、只读；任一分支异常会向上传播（被 AppShell.renderAppSafely 捕获）。
  */
@@ -160,6 +237,7 @@ export function selectAppViewModel(state: AppState): AppViewModel {
     toolbar: selectToolbar(state),
     batchToolbar: selectBatchToolbar(state),
     quoteStatus: selectQuoteStatus(state),
-    liveRegion: selectLiveRegion(state)
+    liveRegion: selectLiveRegion(state),
+    dialog: selectDialog(state)
   };
 }

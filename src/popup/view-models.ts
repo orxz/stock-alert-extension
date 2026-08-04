@@ -11,7 +11,8 @@ import type {
   BoardConfig,
   ViewMode,
   SortField,
-  SortDirection
+  SortDirection,
+  StockSearchResult
 } from '../domain/index.js';
 
 /** 单只股票卡片视图模型。 */
@@ -105,6 +106,72 @@ export interface LiveRegionViewModel {
   readonly kind: 'info' | 'success' | 'error' | 'none';
 }
 
+/** 对话框分组选项（add-stock / move-stocks 选择器用）。 */
+export interface DialogGroupOption {
+  readonly groupId: GroupId;
+  readonly name: string;
+}
+
+/** 对话框状态种类（与 store DialogState kind 对齐）。 */
+export type DialogKind = 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove';
+
+/**
+ * 对话框视图模型：app-dialog-host 渲染所需的全部信息。
+ * 当 open=false/kind=null 时表示关闭态。
+ * pending/uncertain/errorMessage 反映当前 mutation 异步状态。
+ */
+export interface DialogViewModel {
+  readonly open: boolean;
+  readonly kind: DialogKind | null;
+  readonly focusReturnId: string | null;
+  readonly pending: boolean;
+  readonly uncertain: boolean;
+  readonly errorMessage: string | null;
+  readonly searchResults: readonly StockSearchResult[];
+  readonly searchStatus: 'idle' | 'loading' | 'success' | 'error';
+  readonly searchKeyword: string;
+  readonly searchGeneration: number;
+  readonly renameGroupId: GroupId | null;
+  readonly renameCurrentName: string;
+  readonly moveCodes: readonly StockCode[];
+  readonly moveFromGroupId: GroupId | null;
+  readonly removeCodes: readonly StockCode[];
+  readonly removeGroupId: GroupId | null;
+  readonly groups: readonly DialogGroupOption[];
+  readonly canDeleteGroup: boolean;
+}
+
+/** 搜索 combobox 视图模型。 */
+export interface SearchComboboxViewModel {
+  readonly results: readonly StockSearchResult[];
+  readonly status: 'idle' | 'loading' | 'success' | 'error';
+  readonly generation: number;
+}
+
+/** 关闭态 DialogViewModel（所有字段归零）。 */
+export function closedDialog(): DialogViewModel {
+  return {
+    open: false,
+    kind: null,
+    focusReturnId: null,
+    pending: false,
+    uncertain: false,
+    errorMessage: null,
+    searchResults: [],
+    searchStatus: 'idle',
+    searchKeyword: '',
+    searchGeneration: 0,
+    renameGroupId: null,
+    renameCurrentName: '',
+    moveCodes: [],
+    moveFromGroupId: null,
+    removeCodes: [],
+    removeGroupId: null,
+    groups: [],
+    canDeleteGroup: false
+  };
+}
+
 /** 默认看板配置：list + manual + asc + 价格可见。 */
 export function defaultBoardConfig(): BoardConfig {
   return { viewMode: 'list', sortField: 'manual', sortDirection: 'asc', priceHidden: false };
@@ -161,6 +228,7 @@ export interface AppViewModel {
   readonly batchToolbar: BatchToolbarViewModel;
   readonly quoteStatus: QuoteStatusViewModel;
   readonly liveRegion: LiveRegionViewModel;
+  readonly dialog: DialogViewModel;
 }
 
 /** 将 Group 列表投影为 GroupTabViewModel 列表（按 order 升序）。 */
