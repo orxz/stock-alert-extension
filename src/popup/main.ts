@@ -12,8 +12,10 @@ import { createAppShell } from './app-shell.js';
 
 definePopupElements();
 // 主题初始化：读 localStorage，设 data-theme（在 Store 创建前执行，避免闪烁）。
-const savedTheme = localStorage.getItem('uiTheme');
-const initialTheme = savedTheme === 'light' ? 'light' : 'dark';
+let initialTheme: 'dark' | 'light' = 'dark';
+try {
+  if (localStorage.getItem('uiTheme') === 'light') initialTheme = 'light';
+} catch { /* 隐私模式：默认深色 */ }
 document.documentElement.dataset.theme = initialTheme;
 
 

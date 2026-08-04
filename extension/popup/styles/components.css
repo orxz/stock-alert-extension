@@ -126,8 +126,8 @@ stock-header {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  height: 34px;
-  min-width: 34px;
+  height: 40px;
+  min-width: 40px;
   padding: 0 9px;
   border-radius: 9px;
   color: var(--text2);
