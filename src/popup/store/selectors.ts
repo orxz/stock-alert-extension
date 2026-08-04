@@ -11,6 +11,7 @@ import {
 } from '../view-models.js';
 import type {
   AppViewModel,
+  BoardViewModel,
   StockCardViewModel,
   GroupTabViewModel,
   ToolbarViewModel,
@@ -51,6 +52,25 @@ export function selectVisibleStocks(state: AppState): readonly StockCardViewMode
   return toStockCardViewModels(visible, state.domain.quotes, config, groupId);
 }
 
+/** 看板视图模型：视图模式 + 股票列表 + 加载/空/错误状态。 */
+export function selectBoard(state: AppState): BoardViewModel {
+  const config = selectCurrentBoardConfig(state);
+  const stocks = selectVisibleStocks(state);
+  const loading = state.async.bootstrap.status === 'loading';
+  const error = state.async.bootstrap.status === 'error'
+    ? (state.async.bootstrap.error?.message ?? '加载失败')
+    : null;
+  return {
+    viewMode: config.viewMode,
+    groupId: state.view.currentGroupId,
+    stocks,
+    loading,
+    error,
+    empty: !loading && !error && stocks.length === 0,
+    emptyMessage: '暂无股票，点击添加'
+  };
+}
+
 /** 分组标签（按 order 升序，标记当前激活）。 */
 export function selectGroupTabs(state: AppState): GroupTabViewModel[] {
   return toGroupTabs(state.domain.userData.groups, state.view.currentGroupId);
@@ -89,7 +109,12 @@ export function selectHeader(state: AppState): HeaderViewModel {
 /** 批量工具栏视图模型：选中态。 */
 export function selectBatchToolbar(state: AppState): BatchToolbarViewModel {
   const codes = state.view.selectedCodes;
-  return { visible: codes.length > 0, selectedCount: codes.length, selectedCodes: codes };
+  return {
+    visible: codes.length > 0,
+    selectedCount: codes.length,
+    selectedCodes: codes,
+    groupId: state.view.currentGroupId
+  };
 }
 
 /** 行情刷新状态视图模型。 */
@@ -100,7 +125,18 @@ export function selectQuoteStatus(state: AppState): QuoteStatusViewModel {
     : status === 'success' ? '已更新'
     : status === 'error' ? (state.async.quoteRefresh.error?.message ?? '刷新失败')
     : '';
-  return { status, message };
+  const q = state.domain.quotes;
+  const lastRefreshTime = q.succeededAt ? new Date(q.succeededAt).toLocaleTimeString('zh-CN') : '';
+  const deferredUntil = q.deferredUntil ? new Date(q.deferredUntil).toLocaleTimeString('zh-CN') : '';
+  return {
+    status,
+    message,
+    freshCount: q.counts.fresh,
+    cachedCount: q.counts.cached,
+    missingCount: q.counts.missing,
+    lastRefreshTime,
+    deferredUntil
+  };
 }
 
 /** 无障碍实时区域视图模型：toast 优先，否则空。 */
@@ -120,7 +156,7 @@ export function selectAppViewModel(state: AppState): AppViewModel {
     searchKeyword: state.view.searchKeyword,
     header: selectHeader(state),
     groupTabs: selectGroupTabs(state),
-    stocks: selectVisibleStocks(state),
+    board: selectBoard(state),
     toolbar: selectToolbar(state),
     batchToolbar: selectBatchToolbar(state),
     quoteStatus: selectQuoteStatus(state),

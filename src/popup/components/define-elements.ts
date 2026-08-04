@@ -3,6 +3,13 @@ import { AppLiveRegion } from './app-live-region.js';
 import { StockHeaderElement } from './stock-header.js';
 import { GroupTabsElement } from './group-tabs.js';
 import { StockToolbarElement } from './stock-toolbar.js';
+import { StockBoardElement } from './stock-board.js';
+import { StockGridElement } from './stock-grid.js';
+import { StockCardElement } from './stock-card.js';
+import { StockTableElement } from './stock-table.js';
+import { BatchToolbarElement } from './batch-toolbar.js';
+import { ColumnPanelElement } from './column-panel.js';
+import { QuoteStatusElement } from './quote-status.js';
 
 export function definePopupElements(): void {
   if (!customElements.get('stock-app')) {
@@ -19,5 +26,26 @@ export function definePopupElements(): void {
   }
   if (!customElements.get('stock-toolbar')) {
     customElements.define('stock-toolbar', StockToolbarElement);
+  }
+  if (!customElements.get('stock-board')) {
+    customElements.define('stock-board', StockBoardElement);
+  }
+  if (!customElements.get('stock-grid')) {
+    customElements.define('stock-grid', StockGridElement);
+  }
+  if (!customElements.get('stock-card')) {
+    customElements.define('stock-card', StockCardElement);
+  }
+  if (!customElements.get('stock-table')) {
+    customElements.define('stock-table', StockTableElement);
+  }
+  if (!customElements.get('batch-toolbar')) {
+    customElements.define('batch-toolbar', BatchToolbarElement);
+  }
+  if (!customElements.get('column-panel')) {
+    customElements.define('column-panel', ColumnPanelElement);
+  }
+  if (!customElements.get('quote-status')) {
+    customElements.define('quote-status', QuoteStatusElement);
   }
 }

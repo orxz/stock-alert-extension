@@ -61,12 +61,42 @@ export interface BatchToolbarViewModel {
   readonly visible: boolean;
   readonly selectedCount: number;
   readonly selectedCodes: readonly StockCode[];
+  readonly groupId: GroupId;
+}
+
+/** 看板视图模型：视图模式 + 股票列表 + 加载/空/错误状态。 */
+export interface BoardViewModel {
+  readonly viewMode: ViewMode;
+  readonly groupId: GroupId;
+  readonly stocks: readonly StockCardViewModel[];
+  readonly loading: boolean;
+  readonly error: string | null;
+  readonly empty: boolean;
+  readonly emptyMessage: string;
+}
+
+/** 单列配置项。 */
+export interface ColumnConfig {
+  readonly key: string;
+  readonly label: string;
+  readonly enabled: boolean;
+}
+
+/** 列设置面板视图模型。 */
+export interface ColumnPanelViewModel {
+  readonly columns: readonly ColumnConfig[];
+  readonly columnOrder: readonly string[];
 }
 
 /** 行情刷新状态视图模型。 */
 export interface QuoteStatusViewModel {
   readonly status: 'idle' | 'loading' | 'success' | 'error';
   readonly message: string;
+  readonly freshCount: number;
+  readonly cachedCount: number;
+  readonly missingCount: number;
+  readonly lastRefreshTime: string;
+  readonly deferredUntil: string;
 }
 
 /** 无障碍实时区域视图模型（toast / 状态播报）。 */
@@ -126,7 +156,7 @@ export interface AppViewModel {
   readonly searchKeyword: string;
   readonly header: HeaderViewModel;
   readonly groupTabs: readonly GroupTabViewModel[];
-  readonly stocks: readonly StockCardViewModel[];
+  readonly board: BoardViewModel;
   readonly toolbar: ToolbarViewModel;
   readonly batchToolbar: BatchToolbarViewModel;
   readonly quoteStatus: QuoteStatusViewModel;

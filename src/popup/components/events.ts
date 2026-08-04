@@ -20,7 +20,11 @@ export interface PopupEventMap {
   'stock-order-request': { readonly groupId: GroupId; readonly orderedCodes: readonly StockCode[] };
   'batch-move-request': { readonly codes: readonly StockCode[]; readonly fromGroupId: GroupId; readonly targetGroupIds: readonly GroupId[] };
   'view-mode-change': { readonly viewMode: ViewMode };
-  'preferences-change': { readonly patch: Readonly<Partial<BoardConfig>> };
+  'preferences-change': {
+    readonly patch: Readonly<Partial<BoardConfig>>;
+    readonly columns?: readonly string[];
+    readonly columnOrder?: readonly string[];
+  };
   'selection-mode-change': { readonly enabled: boolean };
   'search-keyword-change': { readonly keyword: string };
   'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove' };
