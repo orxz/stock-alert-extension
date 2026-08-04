@@ -92,6 +92,9 @@ export class StockCardElement extends HTMLElement {
   }
 
   private buildSkeleton(): void {
+    this.setAttribute('tabindex', '0');
+    this.setAttribute('role', 'button');
+
     const article = document.createElement('article');
     article.className = 'stock-card';
 
@@ -191,6 +194,24 @@ export class StockCardElement extends HTMLElement {
         orderedCodes
       });
     }, { signal });
+
+    // 卡片点击：发出 stock-toggle-select（app-shell 在选择模式下处理）。
+    this.addEventListener('click', (e) => {
+      if (!this._viewModel) return;
+      // 忽略来自按钮的点击。
+      const target = e.target as HTMLElement;
+      if (target.closest('button')) return;
+      emitPopupEvent(this, 'stock-toggle-select', { code: this._viewModel.code });
+    }, { signal });
+
+    // 键盘快捷键：Enter/Space 切换 pin。
+    this.addEventListener('keydown', (e) => {
+      if (!this._viewModel) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.pinBtn?.click();
+      }
+    }, { signal });
   }
 
   private applyViewModel(vm: StockCardViewModel): void {
@@ -223,6 +244,7 @@ export class StockCardElement extends HTMLElement {
     }
     if (this.staleEl) {
       this.staleEl.textContent = vm.staleLabel;
+      this.staleEl.classList.toggle('stock-card-stale', Boolean(vm.staleLabel));
     }
     if (this.pinBtn) {
       this.pinBtn.setAttribute('aria-pressed', String(vm.pinned));

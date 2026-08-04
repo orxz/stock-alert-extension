@@ -31,8 +31,8 @@ function fail(...errors: string[]): ValidationResult<never> {
 /** 任何对象层级都禁止的危险键——读取即拒绝，防止 __proto__/constructor 污染。 */
 const FORBIDDEN_KEYS: ReadonlySet<string> = new Set(['__proto__', 'prototype', 'constructor']);
 
-/** 自定义分组 ID 规则：g_all 计算视图或 g_<字母数字>（v1.3 storage.js 用 'g_' + timestamp 生成）。 */
-const GROUP_ID_RE = /^g_all$|^g_[a-zA-Z0-9]+$/;
+/** 自定义分组 ID 规则：g_all 计算视图或 g_<字母数字连字符>（v2 用 crypto.randomUUID()，含连字符）。 */
+const GROUP_ID_RE = /^g_all$|^g_[a-zA-Z0-9-]+$/;
 
 /** UserDataRevision 规则：sha256:<hex>（与 §3 乐观并发控制一致；测试夹具允许短 hex）。 */
 const REVISION_RE = /^sha256:[0-9a-fA-F]+$/;

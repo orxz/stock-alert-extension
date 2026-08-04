@@ -94,6 +94,7 @@ function stateWith(stocks: Stock[], opts?: { quotes?: QuoteSnapshot; boardConfig
       ...base.view,
       currentGroupId: (opts?.currentGroupId ?? 'g_all') as GroupId,
       searchKeyword: opts?.keyword ?? '',
+      selectionMode: (opts?.selectedCodes?.length ?? 0) > 0,
       selectedCodes: (opts?.selectedCodes ?? []).map((c) => c as StockCode)
     }
   };

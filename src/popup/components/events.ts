@@ -26,6 +26,7 @@ export interface PopupEventMap {
     readonly columnOrder?: readonly string[];
   };
   'selection-mode-change': { readonly enabled: boolean };
+  'stock-toggle-select': { readonly code: StockCode };
   'search-keyword-change': { readonly keyword: string };
   'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove' };
   'column-panel-open-request': Record<never, never>;

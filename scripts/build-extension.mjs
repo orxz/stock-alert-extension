@@ -28,3 +28,13 @@ export async function buildExtension(root = new URL('../', import.meta.url)) {
   await exec('node_modules/.bin/tsc', ['--build', 'tsconfig.json'], { cwd: new URL('.', root) });
   return build;
 }
+
+const entryPath = process.argv[1];
+if (entryPath && resolve(entryPath) === fileURLToPath(import.meta.url)) {
+  buildExtension().then(() => {
+    console.log('build: extension ready');
+  }).catch((error) => {
+    console.error('build: FAILED', error && error.stack ? error.stack : error);
+    process.exit(1);
+  });
+}

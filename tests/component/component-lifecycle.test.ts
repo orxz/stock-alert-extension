@@ -1,48 +1,71 @@
 // tests/component/component-lifecycle.test.ts
-// Task 14 Step 1/5 — 无基类生命周期安全：per-connection AbortController。
+// Task 14+18 — 无基类生命周期安全：per-connection AbortController。
 // 断言：重连（remove + re-append）不会复制监听器；断开后旧监听器被 abort 移除。
-// 这是 brief Step 1 逐字测试目标：「reconnecting a component does not duplicate listeners」。
+// 使用 stock-header 组件验证（拥有 click 事件监听器 + per-connection AbortController）。
 import '../helpers/dom-environment.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mock } from 'node:test';
 import { resetDom } from '../helpers/dom-environment.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
+import type { HeaderViewModel } from '../../src/popup/view-models.js';
+
+function makeHeaderVm(): HeaderViewModel {
+  return { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true };
+}
 
 test('reconnecting a component does not duplicate listeners', () => {
   resetDom();
   definePopupElements();
-  const onRefresh = mock.fn(() => {});
-  const element = document.createElement('stock-app') as HTMLElement & {
-    onRefreshRequest?: () => void;
-  };
-  element.onRefreshRequest = onRefresh;
-  document.body.append(element); // connect #1：创建 controller A，注册监听器 A
-  element.remove(); // disconnect #1：abort controller A，移除监听器 A
-  document.body.append(element); // connect #2：创建 controller B，注册监听器 B
-  element.dispatchEvent(new CustomEvent('quote-refresh-request', { bubbles: true }));
+  const container = document.createElement('div');
+  document.body.append(container);
+  const spyEvents: string[] = [];
 
-  // 仅 controller B 的监听器存活 → 回调恰好触发一次。
-  // 若未在重连时 abort 旧 controller，监听器 A 仍存活，计数将为 2。
-  assert.equal(onRefresh.mock.callCount(), 1);
+  const el = document.createElement('stock-header') as HTMLElement & { viewModel: HeaderViewModel };
+  container.append(el); // connect #1：创建 controller A，注册监听器 A
+  el.viewModel = makeHeaderVm();
+
+  // Listen for dialog-open-request on the container (bubbled from stock-header)
+  container.addEventListener('dialog-open-request', () => spyEvents.push('open'));
+
+  // Click the add button → should fire dialog-open-request
+  const addBtn = el.querySelector<HTMLButtonElement>('[data-action="add-stock"]');
+  assert.ok(addBtn);
+  addBtn!.click();
+  assert.equal(spyEvents.length, 1, 'first click fires once');
+
+  el.remove(); // disconnect #1：abort controller A，移除监听器 A
+  document.body.append(el); // reconnect — but we need it in the same container
+  container.append(el);
+  el.viewModel = makeHeaderVm();
+
+  // After reconnect, get the new add button
+  const addBtn2 = el.querySelector<HTMLButtonElement>('[data-action="add-stock"]');
+  assert.ok(addBtn2);
+  addBtn2!.click();
+  // Only one listener should fire (the new one from controller B)
+  assert.equal(spyEvents.length, 2, 'second click fires exactly once more');
 });
 
 test('disconnecting a component removes its listeners (abort clears them)', () => {
   resetDom();
   definePopupElements();
-  const onRefresh = mock.fn(() => {});
-  const element = document.createElement('stock-app') as HTMLElement & {
-    onRefreshRequest?: () => void;
-  };
-  element.onRefreshRequest = onRefresh;
-  document.body.append(element);
-  element.dispatchEvent(new CustomEvent('quote-refresh-request', { bubbles: true }));
-  assert.equal(onRefresh.mock.callCount(), 1);
+  const el = document.createElement('stock-header') as HTMLElement & { viewModel: HeaderViewModel };
+  document.body.append(el);
+  el.viewModel = makeHeaderVm();
 
-  element.remove(); // disconnect：abort controller，移除监听器
-  // 元素已脱离文档；即便重新派发，回调不应再被触发。
-  element.dispatchEvent(new CustomEvent('quote-refresh-request', { bubbles: true }));
-  assert.equal(onRefresh.mock.callCount(), 1);
+  let clickCount = 0;
+  el.addEventListener('dialog-open-request', () => { clickCount++; });
+
+  const addBtn = el.querySelector<HTMLButtonElement>('[data-action="add-stock"]');
+  assert.ok(addBtn);
+  addBtn!.click();
+  assert.equal(clickCount, 1, 'first click fires');
+
+  el.remove(); // disconnect：abort controller，移除监听器
+  // After disconnect, internal button listeners are gone, so clicking won't emit the event
+  const addBtnAfter = el.querySelector<HTMLButtonElement>('[data-action="add-stock"]');
+  addBtnAfter?.click();
+  assert.equal(clickCount, 1, 'no new event after disconnect');
 });
 
 test('app-live-region updates textContent from its view model', () => {

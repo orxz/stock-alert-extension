@@ -7,8 +7,8 @@
 import type { BoardViewModel } from '../view-models.js';
 import './stock-grid.js';
 import './stock-table.js';
-import { StockGridElement } from './stock-grid.js';
-import { StockTableElement } from './stock-table.js';
+import type { StockGridElement } from './stock-grid.js';
+import type { StockTableElement } from './stock-table.js';
 
 export class StockBoardElement extends HTMLElement {
   private skeletonBuilt = false;
@@ -42,6 +42,7 @@ export class StockBoardElement extends HTMLElement {
   }
 
   private buildSkeleton(): void {
+    this.setAttribute('role', 'region');
     this.setAttribute('aria-label', '股票看板');
 
     // Loading container
@@ -67,16 +68,16 @@ export class StockBoardElement extends HTMLElement {
     this.emptyEl = emptyEl;
 
     // Grid view
-    const gridEl = new StockGridElement();
+    const gridEl = document.createElement('stock-grid') as StockGridElement;
     gridEl.setAttribute('hidden', '');
     this.gridEl = gridEl;
 
     // Table view
-    const tableEl = new StockTableElement();
+    const tableEl = document.createElement('stock-table') as StockTableElement;
     tableEl.setAttribute('hidden', '');
     this.tableEl = tableEl;
 
-    this.append(loadingEl, errorEl, emptyEl, gridEl as unknown as HTMLElement, tableEl as unknown as HTMLElement);
+    this.append(loadingEl, errorEl, emptyEl, gridEl, tableEl);
   }
 
   private applyViewModel(vm: BoardViewModel): void {

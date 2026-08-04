@@ -149,6 +149,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'view/selection':
       return { ...state, view: { ...state.view, selectedCodes: action.codes } };
 
+    case 'view/selectionMode':
+      return { ...state, view: { ...state.view, selectionMode: action.enabled, selectedCodes: action.enabled ? state.view.selectedCodes : [] } };
+
     case 'view/clearSelection':
       return { ...state, view: { ...state.view, selectedCodes: [] } };
 

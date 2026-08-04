@@ -47,6 +47,7 @@ export class QuoteStatusElement extends HTMLElement {
 
   private buildSkeleton(): void {
     this.className = 'quote-status';
+    this.setAttribute('role', 'status');
 
     const freshEl = document.createElement('span');
     freshEl.className = 'quote-status-count quote-status-count--fresh';

@@ -199,7 +199,7 @@ export function toStockCardViewModels(
     const change = quote && Number.isFinite(quote.change) ? quote.change : null;
     const changePercent = quote && Number.isFinite(quote.changePercent) ? quote.changePercent : null;
     const status = result?.status ?? 'missing';
-    const displayPrice = price === null ? '--' : config.priceHidden ? PRICE_MASK : formatPrice(price);
+    const displayPrice = config.priceHidden ? PRICE_MASK : price === null ? '--' : formatPrice(price);
     return {
       code: stock.code,
       name: stock.name,

@@ -106,7 +106,7 @@ export function selectHeader(state: AppState): HeaderViewModel {
   return {
     groupName,
     stockCount,
-    selectionMode: state.view.selectedCodes.length > 0,
+    selectionMode: state.view.selectionMode,
     priceHidden: config.priceHidden,
     canAddStock: true
   };
@@ -116,7 +116,7 @@ export function selectHeader(state: AppState): HeaderViewModel {
 export function selectBatchToolbar(state: AppState): BatchToolbarViewModel {
   const codes = state.view.selectedCodes;
   return {
-    visible: codes.length > 0,
+    visible: state.view.selectionMode,
     selectedCount: codes.length,
     selectedCodes: codes,
     groupId: state.view.currentGroupId

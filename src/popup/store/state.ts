@@ -59,6 +59,7 @@ export interface AppState {
   readonly view: Readonly<{
     currentGroupId: GroupId;
     searchKeyword: string;
+    selectionMode: boolean;
     selectedCodes: readonly StockCode[];
     searchResults: readonly StockSearchResult[];
   }>;
@@ -105,6 +106,7 @@ export function createInitialState(): AppState {
     view: {
       currentGroupId: 'g_all' as GroupId,
       searchKeyword: '',
+      selectionMode: false,
       selectedCodes: [],
       searchResults: []
     },

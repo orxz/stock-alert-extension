@@ -7,7 +7,7 @@ import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { StockCardViewModel } from '../view-models.js';
 import { updateKeyedChildren } from './keyed-update.js';
 import './stock-card.js';
-import { StockCardElement } from './stock-card.js';
+import type { StockCardElement } from './stock-card.js';
 
 export class StockGridElement extends HTMLElement {
   private connection: AbortController | undefined;
@@ -49,8 +49,8 @@ export class StockGridElement extends HTMLElement {
     this._groupId = value;
     // Propagate to all child cards
     for (const child of this.container?.children ?? []) {
-      if (child instanceof StockCardElement) {
-        child.groupId = value;
+      if (child.localName === 'stock-card') {
+        (child as StockCardElement).groupId = value;
       }
     }
   }
@@ -92,11 +92,11 @@ export class StockGridElement extends HTMLElement {
   }
 
   private createCard(vm: StockCardViewModel, orderedCodes: readonly StockCode[]): HTMLElement {
-    const card = new StockCardElement();
+    const card = document.createElement('stock-card') as StockCardElement;
     card.groupId = this._groupId;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
-    return card as unknown as HTMLElement;
+    return card;
   }
 
   private updateCard(node: HTMLElement, vm: StockCardViewModel, orderedCodes: readonly StockCode[]): void {

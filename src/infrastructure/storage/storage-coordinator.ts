@@ -114,6 +114,8 @@ export class StorageCoordinator {
     const revision = await computeUserDataRevision(userData);
     const codes = userData.watchlist.map((stock) => stock.code);
     const quoteCache = await this.readCacheInternal(codes);
+    // 清理孤儿缓存（在 readBootstrap 中执行确保每次冷启动都清理）。
+    await this.doReconcile().catch(() => {});
     return { userData, revision, quoteCache };
   }
 
