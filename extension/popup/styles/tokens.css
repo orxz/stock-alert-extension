@@ -19,8 +19,7 @@
   --up-soft: rgba(255, 91, 91, 0.12);
   --down: #2fd18c;
   --down-soft: rgba(47, 209, 140, 0.12);
-  --brand: #4d9fff;
-  --brand-soft: rgba(77, 159, 255, 0.15);
+  --brand-strong: #2563eb;
   --gold: #e8b341;
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   --touch-target-min: 44px;
@@ -39,9 +38,9 @@
   --text3: #9aa3b2;
   --up: #d93025;
   --up-soft: rgba(217, 48, 37, 0.09);
-  --down: #0f8a4c;
+  --down: #0d8042;
   --down-soft: rgba(15, 138, 76, 0.09);
-  --brand: #2f6fbd;
+  --brand: #2a66b3;
   --brand-soft: rgba(47, 111, 189, 0.11);
   --gold: #c98a12;
   --shadow: 0 10px 40px rgba(30, 45, 80, 0.14);

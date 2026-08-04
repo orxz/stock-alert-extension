@@ -7,7 +7,7 @@
 // （如 CI 无头无扩展），测试将通过 SKIP_REASON 条件跳过。
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { launchBuiltExtension, stock, baseSeed, type LaunchedExtension } from './extension-fixture.js';
+import { launchBuiltExtension, stock, baseSeed, CODES, cache, type LaunchedExtension } from './extension-fixture.js';
 
 const SKIP_REASON = 'axe scan needs a Chrome build with --load-extension (skipped in sandbox/headless-no-ext)';
 
@@ -109,6 +109,37 @@ for (const state of STATES) {
     }
   });
 }
+
+// ===== 浅色主题 axe 扫描：切换主题后再扫描，确保双主题均无 critical/serious 违规 =====
+test.skip(!canRunA11y, SKIP_REASON);
+test('axe has no critical/serious violation in light theme (grid)', async () => {
+  const launched = await launchBuiltExtension({
+    offline: true,
+    seed: baseSeed({
+      watchlist: CODES.map((code, i) => stock(code, i)),
+      boardConfig: { g_all: { viewMode: 'grid', sortField: 'manual' } },
+      ...Object.fromEntries(CODES.slice(0, 3).map((code) => [`quoteCache:${code}`, cache(code, Date.now())]))
+    })
+  });
+  const { page, close } = launched;
+  try {
+    // 等待主题按钮出现并切换到浅色
+    await page.waitForSelector('[data-action="theme-toggle"]', { timeout: 10_000 });
+    await page.click('[data-action="theme-toggle"]');
+    await page.waitForTimeout(400); // 等待主题过渡完成
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    const critical = results.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious');
+    if (critical.length > 0) {
+      const summary = critical.map((v) => `${v.id}(${v.impact}): ${v.description}`).join('; ');
+      throw new Error(`axe violations in light theme: ${summary}`);
+    }
+    expect(critical).toEqual([]);
+  } finally {
+    await close();
+  }
+});
 
 // ===== 键盘旅程：Tab 焦点循环 =====
 test.skip(!canRunA11y, SKIP_REASON);

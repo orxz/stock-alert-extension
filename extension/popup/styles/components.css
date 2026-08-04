@@ -75,14 +75,14 @@
 }
 
 .header-btn--primary {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
-  border-color: var(--brand);
+  border-color: var(--brand-strong);
 }
 
 .header-btn--primary:hover:not(:disabled) {
   opacity: 0.9;
-  background: var(--brand);
+  background: var(--brand-strong);
 }
 
 /* aria-pressed 可见状态：加粗边框 + 背景色变化（不仅靠颜色区分） */
@@ -169,7 +169,7 @@ stock-header {
 }
 
 .header-btn--labeled.header-btn--primary:hover:not(:disabled) {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
 }
 
@@ -286,6 +286,7 @@ stock-header {
   border-radius: 8px;
   font-size: 13px;
   background: var(--surface);
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -307,7 +308,7 @@ stock-header {
 
 /* aria-pressed 可见状态：背景 + 加粗（不仅靠颜色区分） */
 .toolbar-view-btn.is-active {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
   font-weight: 600;
 }
@@ -333,7 +334,7 @@ stock-header {
   padding: 0 20px;
   border: none;
   border-radius: 8px;
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #ffffff;
   font-size: 15px;
   cursor: pointer;
@@ -737,6 +738,8 @@ app-dialog-host {
   padding: 0;
   max-width: 400px;
   max-height: 80vh;
+  background: var(--surface);
+  color: var(--text);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
 }
 
@@ -865,15 +868,16 @@ app-dialog-host {
 }
 
 .app-dialog-btn--submit {
-  background: var(--brand);
+  background: var(--brand-strong);
   color: #fff;
-  border-color: var(--brand);
+  border-color: var(--brand-strong);
 }
 
 .app-dialog-btn--submit:hover:not(:disabled) {
   opacity: 0.9;
-  background: var(--brand);
+  background: var(--brand-strong);
 }
+
 
 .app-dialog-btn--danger {
   border-color: var(--up);
