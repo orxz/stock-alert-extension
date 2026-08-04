@@ -55,6 +55,7 @@ export interface HeaderViewModel {
   readonly selectionMode: boolean;
   readonly priceHidden: boolean;
   readonly canAddStock: boolean;
+  readonly theme: 'dark' | 'light';
 }
 
 /** 批量工具栏视图模型（选中态）。 */

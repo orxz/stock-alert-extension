@@ -13,6 +13,7 @@ const ALL_EVENT_TYPES = [
   'view-mode-change',
   'preferences-change',
   'selection-mode-change',
+  'theme-change',
   'search-keyword-change',
   'dialog-open-request',
   'column-panel-open-request',

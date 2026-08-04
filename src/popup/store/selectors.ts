@@ -108,7 +108,8 @@ export function selectHeader(state: AppState): HeaderViewModel {
     stockCount,
     selectionMode: state.view.selectionMode,
     priceHidden: config.priceHidden,
-    canAddStock: true
+    canAddStock: true,
+    theme: state.view.theme
   };
 }
 

@@ -10,7 +10,7 @@ import { definePopupElements } from '../../src/popup/components/define-elements.
 import type { HeaderViewModel } from '../../src/popup/view-models.js';
 
 function makeHeaderVm(): HeaderViewModel {
-  return { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true };
+  return { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' };
 }
 
 test('reconnecting a component does not duplicate listeners', () => {

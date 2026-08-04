@@ -16,6 +16,7 @@ function mkHeader(overrides: Partial<HeaderViewModel> = {}): HeaderViewModel {
     selectionMode: false,
     priceHidden: false,
     canAddStock: true,
+    theme: 'dark',
     ...overrides
   };
 }
@@ -136,10 +137,36 @@ test('reconnecting the header does not duplicate listeners', () => {
 });
 
 test('all header buttons have accessible labels (aria-label or text)', () => {
-  setup(mkHeader());
-  for (const action of ['add-stock', 'multiselect', 'price-visibility']) {
+  for (const action of ['theme-toggle', 'add-stock', 'multiselect', 'price-visibility']) {
     const btn = document.querySelector(`button[data-action="${action}"]`) as HTMLElement;
     const label = btn.getAttribute('aria-label') ?? btn.textContent ?? '';
     assert.ok(label.trim().length > 0, `button[${action}] must have accessible text`);
   }
+});
+
+test('theme toggle button emits theme-change event (dark→light)', () => {
+  const { spy } = setup(mkHeader({ theme: 'dark' }));
+  spy.reset();
+  clickAction('theme-toggle');
+  assert.deepEqual(spy.lastEvent('theme-change')?.detail, { theme: 'light' });
+});
+
+test('theme toggle button emits theme-change event (light→dark)', () => {
+  const { spy } = setup(mkHeader({ theme: 'light' }));
+  spy.reset();
+  clickAction('theme-toggle');
+  assert.deepEqual(spy.lastEvent('theme-change')?.detail, { theme: 'dark' });
+});
+
+test('theme button label reflects the switchable target theme', () => {
+  setup(mkHeader({ theme: 'dark' }));
+  const darkBtn = document.querySelector('button[data-action="theme-toggle"]') as HTMLElement;
+  const darkLabel = darkBtn.querySelector('.header-btn-label')?.textContent ?? '';
+  assert.equal(darkLabel, '浅色');
+
+  const { el } = setup(mkHeader({ theme: 'light' }));
+  el.viewModel = mkHeader({ theme: 'light' });
+  const lightBtn = document.querySelector('button[data-action="theme-toggle"]') as HTMLElement;
+  const lightLabel = lightBtn.querySelector('.header-btn-label')?.textContent ?? '';
+  assert.equal(lightLabel, '深色');
 });

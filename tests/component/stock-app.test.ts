@@ -15,7 +15,7 @@ function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
   return {
     currentGroupId: 'g_all' as GroupId,
     searchKeyword: '',
-    header: { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true },
+    header: { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' },
     groupTabs: [],
     board: {
       viewMode: 'list',
@@ -70,7 +70,7 @@ test('setting viewModel distributes to header sub-component', () => {
   const el = document.createElement('stock-app') as HTMLElement & { viewModel: AppViewModel };
   document.body.append(el);
 
-  el.viewModel = mkViewModel({ header: { groupName: '科技股', stockCount: 5, selectionMode: false, priceHidden: false, canAddStock: true } });
+  el.viewModel = mkViewModel({ header: { groupName: '科技股', stockCount: 5, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' } });
   const header = el.querySelector('[data-region="header"]');
   const text = header?.textContent ?? '';
   assert.ok(text.includes('科技股'), 'header 应显示分组名');
@@ -82,8 +82,8 @@ test('reassigning viewModel keeps the skeleton stable (no duplicate regions)', (
   definePopupElements();
   const el = document.createElement('stock-app') as HTMLElement & { viewModel: AppViewModel };
   document.body.append(el);
-  el.viewModel = mkViewModel({ header: { groupName: '第一', stockCount: 1, selectionMode: false, priceHidden: false, canAddStock: true } });
-  el.viewModel = mkViewModel({ header: { groupName: '第二', stockCount: 2, selectionMode: false, priceHidden: false, canAddStock: true } });
+  el.viewModel = mkViewModel({ header: { groupName: '第一', stockCount: 1, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' } });
+  el.viewModel = mkViewModel({ header: { groupName: '第二', stockCount: 2, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' } });
 
   assert.equal(el.querySelectorAll('[data-region="header"]').length, 1);
   assert.equal(el.querySelectorAll('[data-region="board"]').length, 1);
