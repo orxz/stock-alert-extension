@@ -52,9 +52,8 @@ let destroyed = false;
 /** 判断当前是否处于 A 股交易时段（简化：工作日 9:25-11:30 / 13:00-15:00 北京时间）。 */
 function isMarketSession(): boolean {
   const now = new Date();
-  // 转换为北京时间（UTC+8），不依赖浏览器本地时区
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const bj = new Date(utcMs + 8 * 3600000);
+  // 北京时间（UTC+8）：now.getTime() 是时区无关的 UTC 毫秒，直接加 8h 后用 UTC getter 取值。
+  const bj = new Date(now.getTime() + 8 * 3600_000);
   const day = bj.getUTCDay();
   if (day === 0 || day === 6) return false; // 周末
   const hours = bj.getUTCHours();

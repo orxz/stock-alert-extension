@@ -303,6 +303,50 @@ test('view/clearSelection empties selectedCodes', () => {
   assert.equal(next.view.selectedCodes.length, 0);
 });
 
+test('view/selectionMode enables and clears selection', () => {
+  // 先选中一些
+  let state = reducer(createInitialState(), { type: 'view/selection', codes: ['sh600519' as StockCode] });
+  // 启用选择模式 → 保留已有选择
+  state = reducer(state, { type: 'view/selectionMode', enabled: true });
+  assert.equal(state.view.selectionMode, true);
+  assert.equal(state.view.selectedCodes.length, 1);
+  // 关闭选择模式 → 清空选择
+  state = reducer(state, { type: 'view/selectionMode', enabled: false });
+  assert.equal(state.view.selectionMode, false);
+  assert.equal(state.view.selectedCodes.length, 0);
+});
+
+// ===== mutation 无 key → DEFAULT_MUTATION_KEY =====
+
+test('mutation/pending without key uses default key', () => {
+  const next = reducer(createInitialState(), { type: 'mutation/pending' });
+  assert.equal(next.async.mutations['__default__']?.status, 'pending');
+});
+
+test('mutation/uncertain without key uses default key', () => {
+  let state = reducer(createInitialState(), { type: 'mutation/pending' });
+  state = reducer(state, { type: 'mutation/uncertain' });
+  assert.equal(state.async.mutations['__default__']?.status, 'uncertain');
+});
+
+test('mutation/confirmed without key uses default key', () => {
+  let state = reducer(createInitialState(), { type: 'mutation/pending' });
+  const result = mkMutationResult(REV2);
+  state = reducer(state, { type: 'mutation/confirmed', result });
+  assert.equal(state.async.mutations['__default__'], undefined);
+});
+
+test('mutation/reconciled without key uses default key', () => {
+  let state = reducer(createInitialState(), { type: 'mutation/pending' });
+  state = reducer(state, { type: 'mutation/reconciled' });
+  assert.equal(state.async.mutations['__default__'], undefined);
+});
+
+test('mutation/failed without key uses default key', () => {
+  const next = reducer(createInitialState(), { type: 'mutation/failed', error: ERR });
+  assert.equal(next.async.mutations['__default__']?.status, 'failed');
+});
+
 // ===== overlay =====
 
 test('overlay/dialog sets and clears dialog', () => {

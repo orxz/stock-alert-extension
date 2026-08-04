@@ -219,3 +219,59 @@ test('sanitizeV2 output is losslessly readable by readWithV13Rules', () => {
   assert.deepEqual(v13.groups, v2.groups);
   assert.deepEqual(v13.boardConfig, v2.boardConfig);
 });
+
+// ===== sanitize-v2 边界分支补测 =====
+
+test('sanitizeV2 handles null/non-object raw input', () => {
+  const result = sanitizeV2(null, NOW);
+  assert.equal(result.schemaVersion, 2);
+  assert.equal(result.groups.length, 1); // 仅 g_all
+  assert.equal(result.watchlist.length, 0);
+});
+
+test('sanitizeV2 handles string raw input', () => {
+  const result = sanitizeV2('not-an-object', NOW);
+  assert.equal(result.schemaVersion, 2);
+});
+
+test('sanitizeV2 uses DEFAULT_GROUP_NAME when g_all has no name', () => {
+  const result = sanitizeV2({ groups: [{ groupId: 'g_all' }], watchlist: [], boardConfig: {} }, NOW);
+  assert.equal(result.groups[0].name, '全部');
+});
+
+test('sanitizeV2 skips non-object items in watchlist', () => {
+  const result = sanitizeV2({
+    groups: [{ groupId: 'g_all', name: '全部' }],
+    watchlist: [null, 'string', 42, { code: 'sh600519', name: '茅台', addedAt: 1 }],
+    boardConfig: {}
+  }, NOW);
+  assert.equal(result.watchlist.length, 1);
+  assert.equal(result.watchlist[0].code, 'sh600519');
+});
+
+test('sanitizeV2 handles non-array groupIds as empty', () => {
+  const result = sanitizeV2({
+    groups: [{ groupId: 'g_all', name: '全部' }, { groupId: 'g_tech', name: '科技' }],
+    watchlist: [{ code: 'sh600519', name: '茅台', groupIds: 'not-array', addedAt: 1 }],
+    boardConfig: {}
+  }, NOW);
+  assert.deepEqual([...result.watchlist[0].groupIds], []);
+});
+
+test('sanitizeV2 handles non-string name as empty', () => {
+  const result = sanitizeV2({
+    groups: [{ groupId: 'g_all', name: '全部' }],
+    watchlist: [{ code: 'sh600519', name: 12345, addedAt: 1 }],
+    boardConfig: {}
+  }, NOW);
+  assert.equal(result.watchlist[0].name, '');
+});
+
+test('sanitizeV2 handles non-finite addedAt as NOW', () => {
+  const result = sanitizeV2({
+    groups: [{ groupId: 'g_all', name: '全部' }],
+    watchlist: [{ code: 'sh600519', name: '茅台', addedAt: Infinity }],
+    boardConfig: {}
+  }, NOW);
+  assert.equal(result.watchlist[0].addedAt, NOW);
+});

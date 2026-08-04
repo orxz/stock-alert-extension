@@ -63,6 +63,24 @@ test('sortStocks name respects direction via localeCompare', () => {
   assert.deepEqual(sorted.map((s) => s.code), ['sh600519', 'sz000001', 'sz300750']);
 });
 
+test('sortStocks addedAt handles falsy (0) values via || 0 fallback', () => {
+  const stocks = [
+    mkStock('sh600519', '茅台', { addedAt: 0 }),  // falsy → 0
+    mkStock('sz000001', '平安', { addedAt: 100 })
+  ];
+  const sorted = sortStocks(stocks, snapshot(), 'g1', { sortField: 'addedAt', sortDirection: 'asc' });
+  assert.deepEqual(sorted.map((s) => s.code), ['sh600519', 'sz000001']); // 0 < 100
+});
+
+test('sortStocks name handles falsy (empty) values via || fallback', () => {
+  const stocks = [
+    mkStock('sh600519', '', {}),       // falsy name → ''
+    mkStock('sz000001', '平安', {})
+  ];
+  const sorted = sortStocks(stocks, snapshot(), 'g1', { sortField: 'name', sortDirection: 'asc' });
+  assert.deepEqual(sorted.map((s) => s.code), ['sh600519', 'sz000001']); // '' < '平安'
+});
+
 test('sortStocks price/change/changePercent/amount read from quotes.results[code].quote[field]', () => {
   const stocks = [
     mkStock('sh600519', '茅台'),
@@ -131,4 +149,41 @@ test('sortStocks respects pinned for the specific groupId only', () => {
   ];
   const sorted = sortStocks(stocks, snapshot(), 'g1', { sortField: 'name', sortDirection: 'asc' });
   assert.deepEqual(sorted.map((s) => s.code), ['sh600519', 'sz000001']); // 茅台 pinned 在 g1 先
+});
+
+// ===== stocksForGroup =====
+
+import { stocksForGroup } from '../../../src/domain/portfolio.js';
+
+test('stocksForGroup returns all stocks for g_all without filtering', () => {
+  const stocks = [
+    mkStock('sh600519', '茅台', { groupIds: ['g1'] }),
+    mkStock('sz000001', '平安', { groupIds: ['g2'] }),
+    mkStock('bj920001', '诺思兰德', { groupIds: [] })
+  ];
+  // g_all 返回全部，不管 groupIds
+  const result = stocksForGroup(stocks, 'g_all');
+  assert.equal(result.length, 3);
+});
+
+test('stocksForGroup filters by groupId for custom groups', () => {
+  const stocks = [
+    mkStock('sh600519', '茅台', { groupIds: ['g1', 'g2'] }),
+    mkStock('sz000001', '平安', { groupIds: ['g2'] }),
+    mkStock('bj920001', '诺思兰德', { groupIds: [] })
+  ];
+  // g1 只有茅台
+  assert.deepEqual(stocksForGroup(stocks, 'g1').map((s) => s.code), ['sh600519']);
+  // g2 有茅台和平安
+  assert.deepEqual(stocksForGroup(stocks, 'g2').map((s) => s.code), ['sh600519', 'sz000001']);
+  // 空分组返回空数组
+  assert.deepEqual(stocksForGroup(stocks, 'g3'), []);
+});
+
+test('stocksForGroup returns a copy, not the original array', () => {
+  const stocks = [mkStock('sh600519', '茅台', { groupIds: ['g1'] })];
+  const result = stocksForGroup(stocks, 'g_all');
+  assert.notEqual(result, stocks);
+  result.push(mkStock('sz000001', '平安', {}));
+  assert.equal(stocks.length, 1); // 原数组不受影响
 });
