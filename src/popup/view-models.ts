@@ -113,6 +113,22 @@ export function toStockCardViewModels(
   });
 }
 
+/**
+ * 根 AppViewModel：聚合所有子 ViewModel，供 stock-app 根组件单次渲染（Task 14）。
+ * 纯数据快照——由 selectAppViewModel 从 AppState 派生；组件只读不缓存可变状态。
+ */
+export interface AppViewModel {
+  readonly currentGroupId: GroupId;
+  readonly searchKeyword: string;
+  readonly header: HeaderViewModel;
+  readonly groupTabs: readonly GroupTabViewModel[];
+  readonly stocks: readonly StockCardViewModel[];
+  readonly toolbar: ToolbarViewModel;
+  readonly batchToolbar: BatchToolbarViewModel;
+  readonly quoteStatus: QuoteStatusViewModel;
+  readonly liveRegion: LiveRegionViewModel;
+}
+
 /** 将 Group 列表投影为 GroupTabViewModel 列表（按 order 升序）。 */
 export function toGroupTabs(groups: readonly Group[], currentGroupId: GroupId): GroupTabViewModel[] {
   return [...groups]

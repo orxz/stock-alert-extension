@@ -10,6 +10,7 @@ import {
   toGroupTabs
 } from '../view-models.js';
 import type {
+  AppViewModel,
   StockCardViewModel,
   GroupTabViewModel,
   ToolbarViewModel,
@@ -99,4 +100,22 @@ export function selectLiveRegion(state: AppState): LiveRegionViewModel {
   const toast = state.overlay.toast;
   if (!toast) return { message: '', kind: 'none' };
   return { message: toast.message, kind: toast.kind };
+}
+
+/**
+ * 根 AppViewModel：聚合所有子 ViewModel，供 stock-app 根组件单次渲染（Task 14）。
+ * 各子 selector 独立派生、只读；任一分支异常会向上传播（被 AppShell.renderAppSafely 捕获）。
+ */
+export function selectAppViewModel(state: AppState): AppViewModel {
+  return {
+    currentGroupId: state.view.currentGroupId,
+    searchKeyword: state.view.searchKeyword,
+    header: selectHeader(state),
+    groupTabs: selectGroupTabs(state),
+    stocks: selectVisibleStocks(state),
+    toolbar: selectToolbar(state),
+    batchToolbar: selectBatchToolbar(state),
+    quoteStatus: selectQuoteStatus(state),
+    liveRegion: selectLiveRegion(state)
+  };
 }
