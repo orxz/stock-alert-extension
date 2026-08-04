@@ -11,6 +11,11 @@ import { CommandController } from './commands/command-controller.js';
 import { createAppShell } from './app-shell.js';
 
 definePopupElements();
+// 主题初始化：读 localStorage，设 data-theme（在 Store 创建前执行，避免闪烁）。
+const savedTheme = localStorage.getItem('uiTheme');
+const initialTheme = savedTheme === 'light' ? 'light' : 'dark';
+document.documentElement.dataset.theme = initialTheme;
+
 
 const sink = {
   emit(e: { readonly timestamp: number; readonly scope: string; readonly type: string; readonly outcome?: string; readonly errorCode?: string }): void {
@@ -22,8 +27,7 @@ const clock = { now: () => Date.now() };
 const rpc = new CallbackRpcClient((message: unknown, cb: (r: unknown) => void) => {
   chrome.runtime.sendMessage(message, cb);
 });
-
-const store = createStore(reducer, createInitialState());
+const store = createStore(reducer, createInitialState(initialTheme));
 const controller = new CommandController(rpc, store);
 
 const stockApp = document.querySelector<HTMLElement>('#stock-app');

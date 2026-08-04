@@ -61,6 +61,7 @@ export interface AppState {
     searchKeyword: string;
     selectionMode: boolean;
     selectedCodes: readonly StockCode[];
+    searchResults: readonly StockSearchResult[];
     theme: 'dark' | 'light';
   }>;
   readonly async: Readonly<{
@@ -89,7 +90,7 @@ const EMPTY_SNAPSHOT: QuoteSnapshot = {
 };
 
 /** 安全的空初始态：g_all 计算视图打头，空 watchlist，所有 async idle，无 overlay。 */
-export function createInitialState(): AppState {
+export function createInitialState(theme: 'dark' | 'light' = 'dark'): AppState {
   return {
     domain: {
       userData: {
@@ -108,7 +109,8 @@ export function createInitialState(): AppState {
       searchKeyword: '',
       selectionMode: false,
       selectedCodes: [],
-      theme: 'dark' as const,
+      searchResults: [],
+      theme,
     },
     async: {
       bootstrap: { status: 'idle' },

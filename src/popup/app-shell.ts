@@ -104,6 +104,11 @@ export function createAppShell(deps: AppShellDeps): AppShell {
   on('selection-mode-change', (d) => {
     store.dispatch({ type: 'view/selectionMode', enabled: d.enabled });
   });
+  on('theme-change', (d) => {
+    store.dispatch({ type: 'view/theme', theme: d.theme });
+    try { localStorage.setItem('uiTheme', d.theme); } catch { /* 隐私模式 */ }
+    document.documentElement.dataset.theme = d.theme;
+  });
 
   on('stock-toggle-select', (d) => {
     const state = store.getState();

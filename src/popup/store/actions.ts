@@ -36,6 +36,7 @@ export type AppAction =
   | { readonly type: 'view/searchKeyword'; readonly keyword: string }
   | { readonly type: 'view/selection'; readonly codes: readonly StockCode[] }
   | { readonly type: 'view/selectionMode'; readonly enabled: boolean }
+  | { readonly type: 'view/clearSelection' }
   | { readonly type: 'view/theme'; readonly theme: 'dark' | 'light' }
   // overlay
   | { readonly type: 'overlay/dialog'; readonly dialog: DialogState | null }
