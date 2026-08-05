@@ -114,8 +114,10 @@ export class StorageCoordinator {
     const revision = await computeUserDataRevision(userData);
     const codes = userData.watchlist.map((stock) => stock.code);
     const quoteCache = await this.readCacheInternal(codes);
-    // 清理孤儿缓存（在 readBootstrap 中执行确保每次冷启动都清理）。
-    await this.doReconcile().catch(() => {});
+    // 清理孤儿缓存（每次冷启动都清理）。
+    // 复用刚加载的 userData——此前这里会再走一遍 loadUserData + sanitizeV2，
+    // 使冷启动路径上的用户数据读取与清洗各发生两次。
+    await this.doReconcile(userData).catch(() => {});
     return { userData, revision, quoteCache };
   }
 
@@ -228,12 +230,15 @@ export class StorageCoordinator {
     return this.enqueue(() => this.doReconcile());
   }
 
-  private async doReconcile(): Promise<number> {
-    const data = await this.loadUserData();
+  /**
+   * @param preloaded 调用方已在同一临界区内加载过的 userData（避免重复读取 + 清洗）。
+   */
+  private async doReconcile(preloaded?: UserData): Promise<number> {
+    const data = preloaded ?? (await this.loadUserData());
     const memberCodes = new Set(data.watchlist.map((stock) => stock.code));
-    const all = await this.area.get(null);
+    const allKeys = await this.listKeys();
     const orphanKeys: string[] = [];
-    for (const key of Object.keys(all)) {
+    for (const key of allKeys) {
       if (key.startsWith(QUOTE_CACHE_PREFIX)) {
         const code = key.slice(QUOTE_CACHE_PREFIX.length);
         if (!memberCodes.has(code as StockCode)) {
@@ -245,6 +250,18 @@ export class StorageCoordinator {
       await this.area.remove(orphanKeys);
     }
     return orphanKeys.length;
+  }
+
+  /**
+   * 列出全部键名。
+   * 优先用 StorageArea.getKeys（Chrome 130+）——只传键名，不反序列化任何
+   * quoteCache 的值；缺省时回退 get(null)，行为一致但更贵。
+   */
+  private async listKeys(): Promise<readonly string[]> {
+    if (typeof this.area.getKeys === 'function') {
+      return this.area.getKeys();
+    }
+    return Object.keys(await this.area.get(null));
   }
 }
 

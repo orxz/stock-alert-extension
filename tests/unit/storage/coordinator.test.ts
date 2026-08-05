@@ -50,6 +50,83 @@ function createEmptyCoordinator(): StorageCoordinator {
   return new StorageCoordinator({ area, clock: () => NOW });
 }
 
+// ===== bootstrap 读放大 =====
+
+/** 记录每次 StorageArea 调用形状的探针。 */
+class RecordingStorageArea extends MemoryStorageArea {
+  readonly reads: string[] = [];
+  readonly keyScans: number[] = [];
+
+  override async get(keys?: readonly string[] | string | null): Promise<Record<string, unknown>> {
+    this.reads.push(keys === null || keys === undefined ? 'ALL' : `${[...(typeof keys === 'string' ? [keys] : keys)].length}keys`);
+    return super.get(keys);
+  }
+
+  async getKeys(): Promise<string[]> {
+    this.keyScans.push(1);
+    return Object.keys(this.peek());
+  }
+}
+
+/** 构造含 N 只股票 + N 条缓存的探针 area。 */
+function seedWithCaches(count: number): RecordingStorageArea {
+  const codes = Array.from({ length: count }, (_, i) => `sh${600000 + i}`);
+  const seed: Record<string, unknown> = {
+    schemaVersion: 2,
+    groups: [{ groupId: 'g_all', name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 }],
+    watchlist: codes.map((code) => ({ code, name: code, groupIds: [], manualOrder: {}, pinned: {}, addedAt: 0 })),
+    boardConfig: {}
+  };
+  for (const code of codes) seed[`quoteCache:${code}`] = validCacheEntry(code);
+  return new RecordingStorageArea(seed);
+}
+
+test('readBootstrap does not re-read user data for orphan reconciliation', async () => {
+  const area = seedWithCaches(50);
+  const coordinator = new StorageCoordinator({ area, clock: () => NOW });
+  await coordinator.readBootstrap();
+
+  // 期望：一次读 userData 键 + 一次批量读缓存。孤儿清理必须复用已加载的
+  // userData，而不是再走一遍 loadUserData + sanitizeV2。
+  const userDataReads = area.reads.filter((r) => r === '6keys');
+  assert.equal(userDataReads.length, 1, `userData read once, got ${area.reads.join(',')}`);
+});
+
+test('orphan reconciliation lists keys instead of deserializing every cached quote', async () => {
+  const area = seedWithCaches(50);
+  const coordinator = new StorageCoordinator({ area, clock: () => NOW });
+  await coordinator.readBootstrap();
+
+  assert.equal(area.reads.includes('ALL'), false, 'no full-storage value scan');
+  assert.ok(area.keyScans.length >= 1, 'used the keys-only primitive');
+});
+
+test('orphan reconciliation still deletes cache entries outside the watchlist', async () => {
+  const area = seedWithCaches(2);
+  await area.set({ 'quoteCache:sz999999': validCacheEntry('sz999999') });
+  const coordinator = new StorageCoordinator({ area, clock: () => NOW });
+  await coordinator.readBootstrap();
+
+  assert.equal(area.peek()['quoteCache:sz999999'], undefined, 'orphan removed');
+  assert.ok(area.peek()['quoteCache:sh600000'], 'member cache retained');
+});
+
+test('reconcile falls back to a full scan when getKeys is unavailable', async () => {
+  // 老版本 Chrome 没有 storage.getKeys——必须仍能正确清理孤儿。
+  const area = new MemoryStorageArea({
+    schemaVersion: 2,
+    groups: [{ groupId: 'g_all', name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 }],
+    watchlist: [{ code: 'sh600519', name: 'x', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 0 }],
+    boardConfig: {},
+    'quoteCache:sz999999': validCacheEntry('sz999999')
+  });
+  const coordinator = new StorageCoordinator({ area, clock: () => NOW });
+  const removed = await coordinator.reconcileOrphanQuoteCache();
+
+  assert.equal(removed, 1);
+  assert.equal(area.peek()['quoteCache:sz999999'], undefined);
+});
+
 // ===== readBootstrap =====
 
 test('readBootstrap returns sanitized userData, revision, and empty cache for fresh store', async () => {

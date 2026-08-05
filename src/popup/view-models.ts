@@ -14,7 +14,7 @@ import type {
   SortDirection,
   StockSearchResult
 } from '../domain/index.js';
-import { DEFAULT_BOARD_CONFIG } from '../domain/board-config.js';
+import { DEFAULT_BOARD_CONFIG } from '../domain/portfolio.js';
 
 /** 单只股票卡片视图模型。 */
 export interface StockCardViewModel {

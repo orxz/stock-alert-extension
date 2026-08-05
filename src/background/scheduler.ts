@@ -17,7 +17,7 @@ import type { BootstrapResult } from '../protocol/messages.js';
 import type { RefreshOptions } from '../application/quotes/quote-service.js';
 import type { GroupId, StockCode } from '../domain/brands.js';
 import type { QuoteSnapshot } from '../domain/quote.js';
-import { DEFAULT_BOARD_CONFIG } from '../domain/board-config.js';
+import { DEFAULT_BOARD_CONFIG } from '../domain/portfolio.js';
 import { sortStocks, stocksForGroup } from '../domain/portfolio.js';
 import { getRefreshIntervalMs } from '../domain/formatting.js';
 import { startSpan } from '../application/diagnostics/span.js';

@@ -25,20 +25,6 @@ export interface BoardConfig {
 }
 
 /**
- * 默认看板配置：boardConfig 缺失该分组条目时的唯一回退值。
- *
- * 这里是**唯一**定义处。此前 popup / application / background 各存一份副本，
- * 其中 scheduler 的那份已漂移成 `sortDirection: 'desc'`——只因 manual 排序
- * 忽略 direction 才没暴露成真实 bug。任何新的消费方都必须引用此常量。
- */
-export const DEFAULT_BOARD_CONFIG: BoardConfig = Object.freeze({
-  viewMode: 'list',
-  sortField: 'manual',
-  sortDirection: 'asc',
-  priceHidden: false
-});
-
-/**
  * UserData 根聚合：用户数据的完整快照（schema v2）。
  * revision 是规范化内容的 SHA-256 摘要，不作为独立 Storage key 持久化。
  */

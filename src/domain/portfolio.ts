@@ -30,6 +30,20 @@ export function stocksForGroup(stocks: readonly Stock[], groupId: GroupId): read
  *   缺失（非 number）排末尾，两个都缺失时返回 0（保持稳定），受 direction 影响。
  * - Array.prototype.sort 在 V8 下稳定（ES2019+），无需额外 tiebreak。
  */
+/**
+ * 默认看板配置：boardConfig 缺失该分组条目时的唯一回退值。
+ *
+ * 这里是**唯一**定义处。此前 popup / application / background 各存一份副本，
+ * 其中 scheduler 的那份已漂移成 `sortDirection: 'desc'`——只因 manual 排序
+ * 忽略 direction 才没暴露成真实 bug。任何新的消费方都必须引用此常量。
+ */
+export const DEFAULT_BOARD_CONFIG: BoardConfig = Object.freeze({
+  viewMode: 'list',
+  sortField: 'manual',
+  sortDirection: 'asc',
+  priceHidden: false
+});
+
 export function sortStocks(
   stocks: readonly Stock[],
   quotes: QuoteSnapshot,

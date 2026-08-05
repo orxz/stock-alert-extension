@@ -69,3 +69,37 @@ test('createChromeStorageArea returns a ChromeStorageAdapter instance', async ()
   const result = await area.get(['x']);
   assert.equal(result['x'], 1);
 });
+
+// ===== getKeys：Chrome 130+ 原生接口 + 低版本回退 =====
+
+test('getKeys uses the native chrome.storage.local.getKeys when present', async () => {
+  const store = mockChromeStorage();
+  store['a'] = 1;
+  store['quoteCache:sh600519'] = { big: 'payload' };
+  let nativeCalls = 0;
+  let getCalls = 0;
+  const local = (globalThis as unknown as {
+    chrome: { storage: { local: Record<string, unknown> } };
+  }).chrome.storage.local;
+  const originalGet = local.get as (...args: unknown[]) => Promise<unknown>;
+  local.get = async (...args: unknown[]) => { getCalls += 1; return originalGet(...args); };
+  local.getKeys = async () => { nativeCalls += 1; return Object.keys(store); };
+
+  const adapter = new ChromeStorageAdapter();
+  const keys = await adapter.getKeys();
+
+  assert.equal(nativeCalls, 1, 'native getKeys called');
+  assert.equal(getCalls, 0, 'values are never fetched');
+  assert.deepEqual([...keys].sort(), ['a', 'quoteCache:sh600519']);
+});
+
+test('getKeys falls back to a full get on Chrome versions without it', async () => {
+  const store = mockChromeStorage();
+  store['a'] = 1;
+  store['quoteCache:sh600519'] = { big: 'payload' };
+  // 不定义 local.getKeys —— 模拟 Chrome < 130。
+  const adapter = new ChromeStorageAdapter();
+  const keys = await adapter.getKeys();
+
+  assert.deepEqual([...keys].sort(), ['a', 'quoteCache:sh600519']);
+});

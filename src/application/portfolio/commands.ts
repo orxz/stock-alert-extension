@@ -8,7 +8,7 @@ import type { Clock } from '../ports/clock.js';
 import { normalizeStockCode } from '../../domain/stock.js';
 import type { Stock } from '../../domain/stock.js';
 import type { Group } from '../../domain/group.js';
-import { DEFAULT_BOARD_CONFIG } from '../../domain/board-config.js';
+import { DEFAULT_BOARD_CONFIG } from '../../domain/portfolio.js';
 import type { BoardConfig } from '../../domain/board-config.js';
 import type { GroupId } from '../../domain/brands.js';
 import type { AppError } from '../../domain/errors.js';

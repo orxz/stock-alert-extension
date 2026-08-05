@@ -23,6 +23,21 @@ export class ChromeStorageAdapter implements StorageArea {
   async remove(keys: readonly string[] | string): Promise<void> {
     await chrome.storage.local.remove(keys as string | string[]);
   }
+
+  /**
+   * 只列键名，不读值。
+   * `chrome.storage.local.getKeys()` 自 Chrome 130 起可用；每次调用做特性检测，
+   * 低版本回退到 get(null) 取键名（语义一致，只是更贵）。
+   */
+  async getKeys(): Promise<readonly string[]> {
+    const local = chrome.storage.local as unknown as {
+      getKeys?: () => Promise<string[]>;
+    };
+    if (typeof local.getKeys === 'function') {
+      return local.getKeys();
+    }
+    return Object.keys(await this.get(null));
+  }
 }
 
 /** 创建 ChromeStorageArea 实例的工厂函数。 */

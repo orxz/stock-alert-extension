@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { sortStocks } from '../../../src/domain/portfolio.js';
+import { sortStocks, DEFAULT_BOARD_CONFIG } from '../../../src/domain/portfolio.js';
 
 // 构造一个空 QuoteSnapshot，results 可按需补充。
 function snapshot(results) {
@@ -186,4 +186,26 @@ test('stocksForGroup returns a copy, not the original array', () => {
   assert.notEqual(result, stocks);
   result.push(mkStock('sz000001', '平安', {}));
   assert.equal(stocks.length, 1); // 原数组不受影响
+});
+
+// ===== DEFAULT_BOARD_CONFIG：跨层唯一默认值 =====
+
+test('DEFAULT_BOARD_CONFIG is the single shared fallback and is immutable', () => {
+  assert.deepEqual(DEFAULT_BOARD_CONFIG, {
+    viewMode: 'list',
+    sortField: 'manual',
+    sortDirection: 'asc',
+    priceHidden: false
+  });
+  // 冻结：任何消费方都无法就地改写这份共享默认值。
+  assert.ok(Object.isFrozen(DEFAULT_BOARD_CONFIG));
+});
+
+test('sorting with DEFAULT_BOARD_CONFIG falls back to manual order', () => {
+  const stocks = [
+    { code: 'sh600002', name: 'B', groupIds: [], manualOrder: { g_all: 1 }, pinned: {}, addedAt: 0 },
+    { code: 'sh600001', name: 'A', groupIds: [], manualOrder: { g_all: 0 }, pinned: {}, addedAt: 0 }
+  ];
+  const sorted = sortStocks(stocks, snapshot(), 'g_all', DEFAULT_BOARD_CONFIG);
+  assert.deepEqual(sorted.map((s) => s.code), ['sh600001', 'sh600002']);
 });
