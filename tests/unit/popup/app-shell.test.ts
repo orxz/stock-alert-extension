@@ -23,6 +23,12 @@ function setup() {
   const store = createStore(reducer, createInitialState());
   const controller = mkController();
   const stockApp = document.createElement('stock-app') as HTMLElement & { viewModel: AppViewModel };
+  const listeners = new Map<string, EventListener>();
+  const addEventListener = stockApp.addEventListener.bind(stockApp);
+  stockApp.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void => {
+    if (typeof listener === 'function') listeners.set(type, listener);
+    addEventListener(type, listener, options);
+  }) as typeof stockApp.addEventListener;
   document.body.append(stockApp);
   const fallback = document.createElement('div');
   document.body.append(fallback);
@@ -31,7 +37,7 @@ function setup() {
   const sink = { emit: mock.fn(() => {}) };
   const clock = { now: () => 0 };
   const shell = createAppShell({ store, controller, stockApp, fallback, liveRegion, sink, clock });
-  return { store, controller, stockApp, fallback, shell, sink };
+  return { store, controller, stockApp, fallback, shell, sink, listeners };
 }
 
 test('column-settings-change updates presentation state and localStorage without RPC', () => {
@@ -54,6 +60,36 @@ test('column-settings-change updates presentation state and localStorage without
   assert.deepEqual(JSON.parse(window.localStorage.getItem(UI_COLUMNS_STORAGE_KEY) ?? ''), store.getState().view.columns);
   assert.equal((controller.patchPreferences as unknown as { mock: { callCount: () => number } }).mock.callCount(), 0);
   assert.notDeepEqual(store.getState().view.columns, DEFAULT_UI_COLUMNS);
+});
+
+test('column-settings-change still updates Store when the localStorage getter throws', () => {
+  const { stockApp, store, listeners } = setup();
+  const listener = listeners.get('column-settings-change');
+  assert.ok(listener);
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get(): never {
+      throw new DOMException('blocked', 'SecurityError');
+    }
+  });
+
+  try {
+    assert.doesNotThrow(() => {
+      listener.call(stockApp, new CustomEvent('column-settings-change', {
+        detail: {
+          columns: { version: 1, enabled: ['code'], order: ['code'] }
+        }
+      }));
+    });
+    assert.deepEqual(store.getState().view.columns, {
+      version: 1,
+      enabled: ['name', 'price', 'changePercent', 'code'],
+      order: ['name', 'price', 'changePercent', 'code', 'amount', 'status']
+    });
+  } finally {
+    if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+  }
 });
 
 test('renderAppSafely shows stockApp and hides fallback', () => {

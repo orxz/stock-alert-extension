@@ -184,7 +184,11 @@ export function createAppShell(deps: AppShellDeps): AppShell {
   on('column-settings-change', ({ columns }) => {
     const normalized = normalizeUiColumns(columns);
     store.dispatch({ type: 'view/columns', columns: normalized });
-    saveUiColumns(window.localStorage, normalized);
+    try {
+      saveUiColumns(window.localStorage, normalized);
+    } catch {
+      // Accessing localStorage itself can throw a SecurityError in privacy mode.
+    }
   });
 
   on('search-keyword-change', (d) => {
