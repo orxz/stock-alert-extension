@@ -24,3 +24,5 @@ test-results/
 .workbuddy/
 .qoder/
 .worktrees/
+.gstack/
+.superpowers/
