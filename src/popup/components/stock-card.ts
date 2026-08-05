@@ -99,6 +99,7 @@ export class StockCardElement extends HTMLElement {
 
     const article = document.createElement('article');
     article.className = 'stock-card';
+    article.style.height = '100%';
 
     // Name + code row
     const headerDiv = document.createElement('div');

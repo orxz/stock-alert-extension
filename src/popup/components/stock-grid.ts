@@ -13,6 +13,8 @@ import type { StockCardElement } from './stock-card.js';
 
 const GRID_COLUMNS = 2;
 const GRID_ROW_EXTENT = 126;
+const GRID_GAP = 8;
+const GRID_CARD_EXTENT = GRID_ROW_EXTENT - GRID_GAP;
 const OVERSCAN_SCREENS = 1;
 
 interface VisibleStock {
@@ -98,6 +100,7 @@ export class StockGridElement extends HTMLElement {
     container.setAttribute('data-region', 'grid-cards');
     container.setAttribute('role', 'list');
     container.style.gridTemplateColumns = `repeat(${GRID_COLUMNS}, minmax(0, 1fr))`;
+    container.style.gap = `${GRID_GAP}px`;
 
     const beforeSpacer = this.createSpacer('before');
     const afterSpacer = this.createSpacer('after');
@@ -114,6 +117,11 @@ export class StockGridElement extends HTMLElement {
     spacer.className = `stock-grid-spacer stock-grid-spacer--${position}`;
     spacer.setAttribute('aria-hidden', 'true');
     spacer.style.gridColumn = '1 / -1';
+    if (position === 'before') {
+      spacer.style.marginBottom = `-${GRID_GAP}px`;
+    } else {
+      spacer.style.marginTop = `-${GRID_GAP}px`;
+    }
     return spacer;
   }
 
@@ -191,6 +199,7 @@ export class StockGridElement extends HTMLElement {
     card.setAttribute('role', 'listitem');
     card.setAttribute('aria-posinset', String(index + 1));
     card.setAttribute('aria-setsize', String(this._viewModel.length));
+    card.style.height = `${GRID_CARD_EXTENT}px`;
     card.groupId = this._groupId;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
