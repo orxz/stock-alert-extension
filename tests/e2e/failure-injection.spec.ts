@@ -59,7 +59,7 @@ test('malformed cache entry renders missing without page error', async () => {
     })
   });
   try {
-    await expect(launched.page.locator('.stock-card-price')).toContainText('--');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('--');
     expect(launched.errors).toEqual([]);
   } finally {
     await launched.close();
@@ -83,7 +83,7 @@ test('cache with NaN price does not fabricate quote', async () => {
     })
   });
   try {
-    await expect(launched.page.locator('.stock-card-price')).toContainText('--');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('--');
     expect(launched.errors).toEqual([]);
   } finally {
     await launched.close();
@@ -101,11 +101,11 @@ test('both providers fail but cached quote is retained', async () => {
     })
   });
   try {
-    await expect(launched.page.locator('.stock-card-price')).toContainText('10.00');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('10.00');
     // 手动刷新 → 两个 provider 都失败（离线）。
     await launched.page.click('[data-action="refresh"]');
     // 缓存值应保留。
-    await expect(launched.page.locator('.stock-card-price')).toContainText('10.00');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('10.00');
     await expect(launched.page.locator('#app-live-region')).toContainText('已保留缓存');
     expect(launched.errors).toEqual([]);
   } finally {
@@ -286,7 +286,7 @@ test('total quote failure does not fabricate any price', async () => {
   });
   try {
     // 不应显示任何具体价格。
-    const priceText = await launched.page.locator('.stock-card-price').textContent();
+    const priceText = await launched.page.locator('[data-field="price"]').textContent();
     expect(priceText).toContain('--');
     expect(launched.errors).toEqual([]);
   } finally {

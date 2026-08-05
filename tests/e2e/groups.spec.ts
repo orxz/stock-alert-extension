@@ -2,7 +2,7 @@
 // Task 18 Step 4 — 分组生命周期完整测试。
 // 每个流程后重开 Popup 检查 chrome.storage.local 确保持久化。
 import { expect, test } from '@playwright/test';
-import { launchBuiltExtension, GROUPS, stock, baseSeed, getStorage } from './extension-fixture';
+import { launchBuiltExtension, GROUPS, stock, baseSeed, getStorage , gridBoardConfig} from './extension-fixture';
 
 test('create a new custom group', async () => {
   const launched = await launchBuiltExtension({
@@ -100,7 +100,7 @@ test('delete a custom group', async () => {
 test('move stock to another group', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')] , boardConfig: gridBoardConfig() })
   });
   try {
     // 选中股票 → 批量移动。

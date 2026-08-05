@@ -60,7 +60,7 @@ test('price hidden preference persists', async () => {
       return cfg?.g_all?.priceHidden;
     }).toBe(true);
     // 价格掩码显示。
-    await expect(launched.page.locator('.stock-card-price')).toContainText('****');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('****');
     // 再切回可见。
     await launched.page.click('[data-action="price-visibility"]');
     await expect.poll(async () => {

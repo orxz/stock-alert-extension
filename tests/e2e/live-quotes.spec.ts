@@ -34,7 +34,7 @@ test('online: manual refresh fetches real quotes over the network', async () => 
 
     // 行情价格应为真实数字而非 '--'。
     const price = await launched.page
-      .locator('.stock-table-cell--price, .stock-card-price')
+      .locator('[data-field="price"]')
       .first()
       .innerText();
     expect(price).not.toBe('--');

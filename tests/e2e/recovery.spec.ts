@@ -2,12 +2,12 @@
 // Task 18 Step 5 — 并发与对账恢复测试。
 // 覆盖快速重复操作、stale revision、timeout 后恢复、SW 重启后状态一致。
 import { expect, test } from '@playwright/test';
-import { launchBuiltExtension, stock, baseSeed, getStorage } from './extension-fixture';
+import { launchBuiltExtension, stock, baseSeed, getStorage , gridBoardConfig} from './extension-fixture';
 
 test('rapid duplicate pin does not create conflicting state', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')] , boardConfig: gridBoardConfig() })
   });
   try {
     // 快速点击 pin 按钮两次。

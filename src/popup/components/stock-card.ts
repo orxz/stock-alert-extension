@@ -105,6 +105,7 @@ export class StockCardElement extends HTMLElement {
     headerDiv.className = 'stock-card-header';
     const nameEl = document.createElement('span');
     nameEl.className = 'stock-card-name';
+    nameEl.setAttribute('data-field', 'name');
     this.nameEl = nameEl;
     headerDiv.append(nameEl);
 
@@ -113,6 +114,7 @@ export class StockCardElement extends HTMLElement {
     priceDiv.className = 'stock-card-price-area';
     const priceEl = document.createElement('span');
     priceEl.className = 'stock-card-price';
+    priceEl.setAttribute('data-field', 'price');
     this.priceEl = priceEl;
     const changeEl = document.createElement('span');
     changeEl.className = 'stock-card-change';
@@ -252,6 +254,7 @@ export class StockCardElement extends HTMLElement {
     if (this.staleEl) {
       this.staleEl.textContent = vm.staleLabel;
       this.staleEl.classList.toggle('stock-card-stale', Boolean(vm.staleLabel));
+      this.staleEl.toggleAttribute('data-stale', Boolean(vm.staleLabel));
     }
     if (this.pinBtn) {
       this.pinBtn.setAttribute('aria-pressed', String(vm.pinned));

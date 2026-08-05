@@ -2,7 +2,7 @@
 // Task 18 Step 3 — 键盘导航等价性测试。
 // 验证键盘可完成所有主要操作，焦点恢复，roving tabindex。
 import { expect, test } from '@playwright/test';
-import { launchBuiltExtension, stock, baseSeed, getStorage } from './extension-fixture';
+import { launchBuiltExtension, stock, baseSeed, getStorage , gridBoardConfig} from './extension-fixture';
 
 test('Tab cycles through interactive elements', async () => {
   const launched = await launchBuiltExtension({
@@ -54,7 +54,7 @@ test('Enter on focused stock card toggles pin via keyboard', async () => {
   const code = 'sh600519';
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock(code)] })
+    seed: baseSeed({ watchlist: [stock(code)] , boardConfig: gridBoardConfig() })
   });
   try {
     // 使用 evaluate 直接触发 keydown（Playwright focus 在自定义元素上可能不稳定）。

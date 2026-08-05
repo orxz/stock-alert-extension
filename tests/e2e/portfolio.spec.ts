@@ -2,7 +2,7 @@
 // Task 18 Step 3 — 移植 16 个 v1.3 冻结用户流程场景，使用 v2 组件选择器。
 // 选择器映射：stock-header [data-action] → 按钮；stock-card → 卡片；#stock-board → 看板。
 import { expect, test } from '@playwright/test';
-import { launchBuiltExtension, GROUPS, CODES, stock, cache, baseSeed, getStorage } from './extension-fixture';
+import { launchBuiltExtension, GROUPS, CODES, stock, cache, baseSeed, getStorage , gridBoardConfig} from './extension-fixture';
 
 test('stock added in a custom group remains visible in All', async () => {
   const launched = await launchBuiltExtension({
@@ -43,7 +43,7 @@ test('mixed cache state is explicit per summary and stock', async () => {
     // 行情请求被挂起，初始缓存渲染保持稳定。
     await expect(launched.page.locator('#quote-status-summary')).toContainText('实时 8');
     await expect(launched.page.locator('#quote-status-summary')).toContainText('缓存 2');
-    await expect(launched.page.locator('.stock-card-stale')).toHaveCount(2);
+    await expect(launched.page.locator('[data-stale]')).toHaveCount(2);
   } finally {
     launched.releaseHold?.();
     await launched.close();
@@ -145,7 +145,7 @@ test('corrupted cache renders missing without a page error', async () => {
     })
   });
   try {
-    await expect(launched.page.locator('.stock-card-price')).toContainText('--');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('--');
     expect(launched.errors).toEqual([]);
   } finally {
     await launched.close();
@@ -162,9 +162,9 @@ test('failed manual refresh keeps cached value', async () => {
     })
   });
   try {
-    await expect(launched.page.locator('.stock-card-price')).toContainText('10.00');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('10.00');
     await launched.page.click('[data-action="refresh"]');
-    await expect(launched.page.locator('.stock-card-price')).toContainText('10.00');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('10.00');
     await expect(launched.page.locator('#app-live-region')).toContainText('已保留缓存');
   } finally {
     await launched.close();
@@ -181,9 +181,9 @@ test('failed manual refresh on a recent cache does not claim success', async () 
     })
   });
   try {
-    await expect(launched.page.locator('.stock-card-price')).toContainText('10.00');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('10.00');
     await launched.page.click('[data-action="refresh"]');
-    await expect(launched.page.locator('.stock-card-price')).toContainText('10.00');
+    await expect(launched.page.locator('[data-field="price"]')).toContainText('10.00');
     await expect(launched.page.locator('#app-live-region')).toContainText('已保留缓存');
   } finally {
     await launched.close();
@@ -241,7 +241,7 @@ test('keyboard Enter toggles pin on the focused stock card', async () => {
   const code = 'sh600519';
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock(code)] })
+    seed: baseSeed({ watchlist: [stock(code)] , boardConfig: gridBoardConfig() })
   });
   try {
     // 使用 evaluate 直接触发 keydown（Playwright focus 在自定义元素上可能不稳定）。

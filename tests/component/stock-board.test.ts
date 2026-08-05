@@ -95,31 +95,27 @@ test('board has aria-label and no aria-live on stock list container', () => {
   }
 });
 
-test('list view shows stock-table and hides stock-grid', () => {
+test('list view mounts stock-table and leaves stock-grid unmounted', () => {
+  // 契约变更（计划 Task 4）：非激活视图不再靠 hidden 隐藏，而是根本不挂载——
+  // 挂载即意味着每次行情刷新都要为看不见的视图做一遍完整渲染。
   setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
-  assert.ok(grid.hasAttribute('hidden'));
-  assert.ok(!table.hasAttribute('hidden'));
+  assert.ok(document.querySelector('stock-table'));
+  assert.equal(document.querySelector('stock-grid'), null);
 });
 
-test('grid view shows stock-grid and hides stock-table', () => {
+test('grid view mounts stock-grid and leaves stock-table unmounted', () => {
   setupBoard(board({ stocks: [card('sh600519')], viewMode: 'grid' }));
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
-  assert.ok(!grid.hasAttribute('hidden'));
-  assert.ok(table.hasAttribute('hidden'));
+  assert.ok(document.querySelector('stock-grid'));
+  assert.equal(document.querySelector('stock-table'), null);
 });
 
-test('loading state shows loading container and hides grid/table', () => {
+test('loading state shows the skeleton and mounts no data view', () => {
   setupBoard(board({ loading: true, stocks: [] }));
   const loading = document.querySelector('[data-region="loading"]') as HTMLElement;
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
   assert.ok(loading);
   assert.ok(!loading.hasAttribute('hidden'));
-  assert.ok(grid.hasAttribute('hidden'));
-  assert.ok(table.hasAttribute('hidden'));
+  assert.equal(document.querySelector('stock-grid'), null);
+  assert.equal(document.querySelector('stock-table'), null);
 });
 
 // Task 8: 骨架屏 loading——5 个灰色占位条（无假数字）+ aria-busy 无障碍状态。
@@ -153,13 +149,11 @@ test('empty state shows empty container with message', () => {
   assert.ok(empty.textContent?.includes('暂无股票'));
 });
 
-test('switching viewMode toggles hidden on grid and table', () => {
+test('switching viewMode swaps which view is mounted', () => {
   const { el } = setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
   el.viewModel = board({ stocks: [card('sh600519')], viewMode: 'grid' });
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
-  assert.ok(!grid.hasAttribute('hidden'));
-  assert.ok(table.hasAttribute('hidden'));
+  assert.ok(document.querySelector('stock-grid'));
+  assert.equal(document.querySelector('stock-table'), null);
 });
 
 // ===== Grid: keyed node identity + focus preservation =====
@@ -249,4 +243,86 @@ test('hidden state placeholders are not rendered (display none, not flex)', () =
   // 表格（当前视图）不应 hidden。
   const table = el.querySelector('stock-table') as HTMLElement | null;
   assert.equal(table?.hasAttribute('hidden'), false, 'active table must not be hidden');
+});
+
+// ===== 网格虚拟化（两列 → 按「行」计算窗口）=====
+
+function manyStocks(n: number): StockCardViewModel[] {
+  return Array.from({ length: n }, (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`));
+}
+
+test('500-stock grid keeps card nodes bounded', () => {
+  const { el } = setupGrid(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  const cards = document.querySelectorAll('stock-card[data-key]');
+  assert.ok(cards.length <= 24, `expected <=24 cards, got ${cards.length}`);
+});
+
+test('grid exposes full list size to assistive technology', () => {
+  const { el } = setupGrid(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  const first = document.querySelector('stock-card[data-key]');
+  assert.equal(first?.getAttribute('aria-setsize'), '500');
+  assert.equal(first?.getAttribute('aria-posinset'), '1');
+});
+
+test('grid scroll offset renders cards around the target row', () => {
+  const { el } = setupGrid(manyStocks(100));
+  // 每行 2 张卡、行高 126px；滚到第 20 行附近 → 索引 40 一带。
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 126 * 20, viewportExtent: 390 };
+  assert.ok(document.querySelector('[data-key="sh600040"]'), 'target card mounted');
+});
+
+test('grid spacers preserve total scroll height', () => {
+  const { el } = setupGrid(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 126 * 30, viewportExtent: 390 };
+  const spacers = document.querySelectorAll('[data-spacer]');
+  assert.equal(spacers.length, 2);
+  const heights = [...spacers].map((s) => Number.parseFloat((s as HTMLElement).style.height) || 0);
+  const renderedRows = Math.ceil(document.querySelectorAll('stock-card[data-key]').length / 2);
+  assert.equal(heights[0] + renderedRows * 126 + heights[1], Math.ceil(500 / 2) * 126);
+});
+
+test('grid focusCode requests a scroll using row extent, not card extent', () => {
+  const { el, spy } = setupGrid(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  const found = (el as unknown as { focusCode(code: string): boolean }).focusCode('sh600401');
+  assert.equal(found, true);
+  const event = spy.lastEvent('virtual-focus-request');
+  // 索引 401 位于第 200 行（两列）。
+  assert.equal(event?.detail.index, 200);
+  assert.equal(event?.detail.itemExtent, 126);
+});
+
+// ===== 只挂载激活视图 =====
+
+test('board connects only the active stock view', () => {
+  setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
+  assert.ok(document.querySelector('stock-table'), 'list view mounted');
+  assert.equal(document.querySelector('stock-grid'), null, 'inactive grid is not in the DOM');
+});
+
+test('switching view mode detaches the previous view', () => {
+  const { el } = setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
+  el.viewModel = board({ stocks: [card('sh600519')], viewMode: 'grid' });
+  assert.ok(document.querySelector('stock-grid'), 'grid mounted');
+  assert.equal(document.querySelector('stock-table'), null, 'table detached');
+});
+
+test('the inactive view stops receiving quote updates', () => {
+  const { el } = setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
+  const detachedTable = document.querySelector('stock-table') as HTMLElement;
+  const before = detachedTable.querySelector('[data-key="sh600519"]')?.textContent;
+
+  el.viewModel = board({ stocks: [card('sh600519')], viewMode: 'grid' });
+  el.viewModel = board({
+    stocks: [card('sh600519', { displayPrice: '999.00' })],
+    viewMode: 'grid'
+  });
+
+  assert.equal(
+    detachedTable.querySelector('[data-key="sh600519"]')?.textContent,
+    before,
+    'detached view did no work for an update it will never show'
+  );
 });

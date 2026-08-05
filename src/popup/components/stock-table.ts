@@ -323,6 +323,7 @@ export class StockTableElement extends HTMLElement {
     nameTd.className = 'stock-table-cell stock-table-cell--name';
     const nameSpan = document.createElement('span');
     nameSpan.className = 'stock-table-name';
+    nameSpan.setAttribute('data-field', 'name');
     nameTd.append(nameSpan);
 
     // Code
@@ -332,6 +333,7 @@ export class StockTableElement extends HTMLElement {
     // Price
     const priceTd = document.createElement('td');
     priceTd.className = 'stock-table-cell stock-table-cell--price';
+    priceTd.setAttribute('data-field', 'price');
 
     // Change
     const changeTd = document.createElement('td');
@@ -412,10 +414,11 @@ export class StockTableElement extends HTMLElement {
     if (cells[5]) {
       cells[5].textContent = vm.displayAmount;
     }
-    // Status
+    // Status（data-stale 只在确实过期时出现——它表达状态，不是字段锚点）
     if (cells[6]) {
       const label = vm.staleLabel || STATUS_LABELS[vm.status] || '';
-      cells[6].textContent = label;
+      setText(cells[6], label);
+      cells[6].toggleAttribute('data-stale', Boolean(vm.staleLabel));
     }
     // Actions
     const pinBtn = cells[7]?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;

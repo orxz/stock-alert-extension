@@ -252,3 +252,16 @@ export function baseSeed(overrides: Record<string, unknown> = {}): Record<string
     ...overrides
   };
 }
+
+/**
+ * 以网格视图打开看板的 boardConfig。
+ *
+ * 用于断言 `stock-card` 行为的用例：看板现在**只挂载激活视图**，
+ * 非激活视图根本不在 DOM 里。此前两个视图都常驻（靠 hidden 隐藏），
+ * 这类用例其实一直在对着不可见的节点做断言。
+ */
+export function gridBoardConfig(): Record<string, unknown> {
+  return {
+    g_all: { viewMode: 'grid', sortField: 'manual', sortDirection: 'asc', priceHidden: false }
+  };
+}

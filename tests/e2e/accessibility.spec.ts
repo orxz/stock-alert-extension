@@ -53,9 +53,11 @@ async function enterState(launched: LaunchedExtension, state: string): Promise<v
         );
       });
       await page.waitForTimeout(200);
-      // 选中一张卡片。
+      // 选中一条自选股。看板只挂载激活视图，因此不能假定是卡片还是表格行。
       await page.evaluate(() => {
-        document.querySelector('stock-card')?.querySelector('article')?.click();
+        const card = document.querySelector('stock-card')?.querySelector('article');
+        const row = document.querySelector('tbody tr[data-key]');
+        (card ?? row as HTMLElement | null)?.click();
       });
       await page.waitForTimeout(200);
       // 打开移动对话框。
@@ -259,7 +261,7 @@ test('text and UI boundaries meet WCAG contrast ratios', async () => {
       };
       const results: Array<{ selector: string; ratio: number; fontSize: number }> = [];
       const sampleSelectors = [
-        'body', '#stock-app', '.group-tab', '.stock-card-name', '#quote-status-summary',
+        'body', '#stock-app', '.group-tab', '[data-field="name"]', '#quote-status-summary',
         'stock-header button', '#fatal-fallback p'
       ];
       for (const sel of sampleSelectors) {
