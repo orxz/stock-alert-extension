@@ -218,6 +218,7 @@ export class StockBoardElement extends HTMLElement {
     if (!view) return;
     if (this.activeMode === 'list' && this.tableEl) {
       this.tableEl.groupId = vm.groupId;
+      this.tableEl.columns = vm.columns;
       this.tableEl.viewModel = vm.stocks;
     } else if (this.activeMode === 'grid' && this.gridEl) {
       this.gridEl.groupId = vm.groupId;

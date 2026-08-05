@@ -9,6 +9,17 @@ import { createInitialState } from './store/state.js';
 import { CallbackRpcClient } from './rpc-client.js';
 import { CommandController } from './commands/command-controller.js';
 import { createAppShell } from './app-shell.js';
+import { loadUiColumns } from './ui-preferences.js';
+import type { WebStorageLike } from './ui-preferences.js';
+
+/** 隐私模式下访问 localStorage 会抛错。 */
+function safeStorage(): WebStorageLike | undefined {
+  try {
+    return localStorage;
+  } catch {
+    return undefined;
+  }
+}
 
 definePopupElements();
 // 主题初始化：读 localStorage，设 data-theme（在 Store 创建前执行，避免闪烁）。
@@ -29,13 +40,15 @@ const clock = { now: () => Date.now() };
 const rpc = new CallbackRpcClient((message: unknown, cb: (r: unknown) => void) => {
   chrome.runtime.sendMessage(message, cb);
 });
-const store = createStore(reducer, createInitialState(initialTheme));
+const initialColumns = loadUiColumns(safeStorage());
+const store = createStore(reducer, createInitialState(initialTheme, initialColumns));
 const controller = new CommandController(rpc, store);
 
 const stockApp = document.querySelector<HTMLElement>('#stock-app');
 const fallback = document.getElementById('fatal-fallback');
 const liveRegion = document.querySelector<HTMLElement>('#app-live-region');
 const dialogHost = document.querySelector<HTMLElement>('#dialog-host');
+const popoverHost = document.querySelector<HTMLElement>('#popover-host');
 
 if (!stockApp || !fallback) throw new Error('Popup bootstrap: missing #stock-app or #fatal-fallback');
 
@@ -46,6 +59,7 @@ const shell = createAppShell({
   fallback,
   liveRegion: liveRegion ?? stockApp,
   dialogHost: dialogHost ?? undefined,
+  popoverHost: popoverHost ?? undefined,
   sink,
   clock
 });

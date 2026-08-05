@@ -32,6 +32,9 @@ const SORT_OPTIONS: readonly SortOption[] = [
   { value: 'amount:asc', label: '成交额（低→高）', field: 'amount', direction: 'asc' }
 ];
 
+/** 列设置触发按钮的稳定 id——popover 用它定位并归还焦点。 */
+export const COLUMN_TRIGGER_ID = 'toolbar-column-settings';
+
 export class StockToolbarElement extends HTMLElement {
   private connection: AbortController | undefined;
   private skeletonBuilt = false;
@@ -127,7 +130,10 @@ export class StockToolbarElement extends HTMLElement {
     columnBtn.type = 'button';
     columnBtn.className = 'toolbar-btn';
     columnBtn.setAttribute('data-action', 'column-settings');
+    columnBtn.id = COLUMN_TRIGGER_ID;
     columnBtn.setAttribute('aria-label', '列设置');
+    columnBtn.setAttribute('aria-haspopup', 'dialog');
+    columnBtn.setAttribute('aria-expanded', 'false');
     columnBtn.textContent = '列设置';
     this.columnBtn = columnBtn;
 
@@ -163,9 +169,11 @@ export class StockToolbarElement extends HTMLElement {
       emitPopupEvent(this, 'view-mode-change', { viewMode: 'grid' as ViewMode });
     }, { signal });
 
-    // 列设置 → 打开列设置面板。
+    // 列设置 → 打开列设置面板。带上触发按钮的 id，供 popover 定位与焦点归还。
     this.columnBtn?.addEventListener('click', () => {
-      emitPopupEvent(this, 'column-panel-open-request', {});
+      emitPopupEvent(this, 'column-panel-open-request', {
+        anchorId: this.columnBtn?.id ?? COLUMN_TRIGGER_ID
+      });
     }, { signal });
   }
 

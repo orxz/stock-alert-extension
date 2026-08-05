@@ -1,10 +1,14 @@
 // src/popup/components/column-panel.ts
 // Task 16 Step 6 — 列设置面板。
 // checkboxes + up/down 控件；至少一列保持启用。
-// 每次变更发出一次 preferences-change，含完整无重复的 columns 和 columnOrder。
-// 架构约束：仅 import domain + view-models + events；per-connection AbortController。
+// 每次变更发出一次 column-settings-change，携带**完整最终态**（非增量 patch）。
+// 列显隐是展示偏好，不复用 preferences-change（那是 BoardConfig 业务偏好）。
+// 架构约束：仅 import domain + view-models + events + ui-preferences；
+// per-connection AbortController。
 import type { ColumnPanelViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
+import { REQUIRED_COLUMNS, normalizeUiColumns } from '../ui-preferences.js';
+import type { ColumnKey } from '../ui-preferences.js';
 
 export class ColumnPanelElement extends HTMLElement {
   private connection: AbortController | undefined;
@@ -73,23 +77,26 @@ export class ColumnPanelElement extends HTMLElement {
 
   private handleToggle(colKey: string, checked: boolean): void {
     if (!this._viewModel) return;
-    // Enforce: at least one column must stay enabled
-    if (!checked) {
-      const enabledCount = this._viewModel.columns.filter((c) => c.enabled).length;
-      if (enabledCount <= 1) {
-        // Prevent unchecking the last enabled column
-        const cb = this.querySelector(`input[data-column="${colKey}"]`) as HTMLInputElement;
-        if (cb) cb.checked = true;
-        return;
-      }
+    // 必需列不可关闭——关掉名称/现价/涨跌幅，列表就不再是股票列表了。
+    if (!checked && (REQUIRED_COLUMNS as readonly string[]).includes(colKey)) {
+      const cb = this.querySelector(`input[data-column="${colKey}"]`) as HTMLInputElement | null;
+      if (cb) cb.checked = true;
+      return;
     }
-    const columns = this._viewModel.columns
+    const enabled = this._viewModel.columns
       .filter((c) => (c.key === colKey ? checked : c.enabled))
       .map((c) => c.key);
-    emitPopupEvent(this, 'preferences-change', {
-      patch: {},
-      columns,
-      columnOrder: [...this._viewModel.columnOrder]
+    this.emitColumns(enabled, this._viewModel.columnOrder);
+  }
+
+  /** 发出规范化后的完整列偏好。 */
+  private emitColumns(enabled: readonly string[], order: readonly string[]): void {
+    emitPopupEvent(this, 'column-settings-change', {
+      columns: normalizeUiColumns({
+        version: 1,
+        enabled: enabled as readonly ColumnKey[],
+        order: order as readonly ColumnKey[]
+      })
     });
   }
 
@@ -102,12 +109,8 @@ export class ColumnPanelElement extends HTMLElement {
     const j = i + delta;
     if (j < 0 || j >= order.length) return;
     [order[i], order[j]] = [order[j], order[i]];
-    const columns = this._viewModel.columns.filter((c) => c.enabled).map((c) => c.key);
-    emitPopupEvent(this, 'preferences-change', {
-      patch: {},
-      columns,
-      columnOrder: order
-    });
+    const enabled = this._viewModel.columns.filter((c) => c.enabled).map((c) => c.key);
+    this.emitColumns(enabled, order);
   }
 
   private applyViewModel(vm: ColumnPanelViewModel): void {

@@ -8,7 +8,8 @@ import {
   defaultBoardConfig,
   toStockCardViewModels,
   toGroupTabs,
-  closedDialog
+  closedDialog,
+  closedPopover
 } from '../view-models.js';
 import type {
   AppViewModel,
@@ -21,8 +22,20 @@ import type {
   QuoteStatusViewModel,
   LiveRegionViewModel,
   DialogViewModel,
-  DialogGroupOption
+  DialogGroupOption,
+  ColumnPanelViewModel,
+  PopoverViewModel
 } from '../view-models.js';
+
+/** 列的中文标签（展示层文案，不进 domain）。 */
+const COLUMN_LABELS: Readonly<Record<string, string>> = {
+  name: '名称',
+  code: '代码',
+  status: '状态',
+  price: '现价',
+  changePercent: '涨跌幅',
+  amount: '成交额'
+};
 
 /** 固定计算视图分组 ID。 */
 const ALL_GROUP_ID = 'g_all' as GroupId;
@@ -70,6 +83,7 @@ export function selectBoard(state: AppState): BoardViewModel {
     viewMode: config.viewMode,
     groupId: state.view.currentGroupId,
     stocks,
+    columns: state.view.columns.enabled,
     loading,
     error,
     empty: !loading && !error && stocks.length === 0,
@@ -228,6 +242,35 @@ export function selectDialog(state: AppState): DialogViewModel {
  * 根 AppViewModel：聚合所有子 ViewModel，供 stock-app 根组件单次渲染（Task 14）。
  * 各子 selector 独立派生、只读；任一分支异常会向上传播（被 AppShell.renderAppSafely 捕获）。
  */
+/** 列设置面板视图模型：从 view.columns 投影为可勾选/可排序的列表。 */
+export function selectColumnPanel(state: AppState): ColumnPanelViewModel {
+  const { enabled, order } = state.view.columns;
+  const enabledSet = new Set<string>(enabled);
+  return {
+    columns: order.map((key) => ({
+      key,
+      label: COLUMN_LABELS[key] ?? key,
+      enabled: enabledSet.has(key)
+    })),
+    columnOrder: [...order]
+  };
+}
+
+/** 弹出层视图模型：overlay.menu 为空时返回关闭态。 */
+export function selectPopover(state: AppState): PopoverViewModel {
+  const menu = state.overlay.menu;
+  if (!menu) return closedPopover();
+  if (menu.kind === 'column-settings') {
+    return {
+      open: true,
+      kind: 'column-settings',
+      anchorId: menu.anchorId,
+      columnPanel: selectColumnPanel(state)
+    };
+  }
+  return { open: true, kind: 'stock-actions', anchorId: menu.anchorId, columnPanel: null };
+}
+
 export function selectAppViewModel(state: AppState): AppViewModel {
   return {
     currentGroupId: state.view.currentGroupId,
@@ -239,6 +282,7 @@ export function selectAppViewModel(state: AppState): AppViewModel {
     batchToolbar: selectBatchToolbar(state),
     quoteStatus: selectQuoteStatus(state),
     liveRegion: selectLiveRegion(state),
-    dialog: selectDialog(state)
+    dialog: selectDialog(state),
+    popover: selectPopover(state)
   };
 }

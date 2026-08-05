@@ -1,7 +1,7 @@
 // tests/component/column-panel.test.ts
 // Task 16 Step 1 — column-panel 组件测试。
-// 断言：checkboxes + up/down 控件、至少一列启用、
-//       emit preferences-change {columns, columnOrder}、数组完整无重复。
+// 断言：checkboxes + up/down 控件、必需列不可关闭、
+//       emit column-settings-change（完整最终态）、集合完整无重复。
 import '../helpers/dom-environment.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -10,12 +10,13 @@ import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { ColumnPanelViewModel, ColumnConfig } from '../../src/popup/view-models.js';
 
+// 必须是真实的可配置列键——normalizeUiColumns 会丢弃未知列。
 const DEFAULT_COLUMNS: ColumnConfig[] = [
   { key: 'code', label: '代码', enabled: true },
   { key: 'name', label: '名称', enabled: true },
   { key: 'price', label: '现价', enabled: true },
-  { key: 'change', label: '涨跌额', enabled: true },
-  { key: 'changePercent', label: '涨跌幅', enabled: false },
+  { key: 'amount', label: '成交额', enabled: true },
+  { key: 'changePercent', label: '涨跌幅', enabled: true },
   { key: 'status', label: '状态', enabled: true }
 ];
 
@@ -68,54 +69,50 @@ test('checkbox checked state reflects enabled', () => {
   const priceCb = document.querySelector('input[data-column="price"]') as HTMLInputElement;
   assert.equal(priceCb.checked, true);
   const changePercentCb = document.querySelector('input[data-column="changePercent"]') as HTMLInputElement;
-  assert.equal(changePercentCb.checked, false);
+  assert.equal(changePercentCb.checked, true);
 });
 
-test('unchecking a column emits preferences-change with columns array', () => {
+test('unchecking an optional column emits the full new column state', () => {
   const { spy } = setup(panel());
   spy.reset();
-  toggleCheckbox('price');
-  const detail = spy.lastEvent('preferences-change')?.detail;
+  toggleCheckbox('code');
+  const detail = spy.lastEvent('column-settings-change')?.detail;
   assert.ok(detail);
-  assert.ok(detail!.columns);
-  assert.ok(!detail!.columns!.includes('price'));
-  // Other enabled columns should still be present
-  assert.ok(detail!.columns!.includes('code'));
-  assert.ok(detail!.columns!.includes('name'));
+  assert.ok(!detail!.columns.enabled.includes('code'));
+  // 必需列必须仍在
+  assert.ok(detail!.columns.enabled.includes('name'));
+  assert.ok(detail!.columns.enabled.includes('price'));
 });
 
-test('checking a column adds it to columns array', () => {
+test('re-checking a column adds it back', () => {
+  const { spy } = setup(panel({
+    columns: DEFAULT_COLUMNS.map((c) => (c.key === 'amount' ? { ...c, enabled: false } : c))
+  }));
+  spy.reset();
+  toggleCheckbox('amount');
+  const detail = spy.lastEvent('column-settings-change')?.detail;
+  assert.ok(detail!.columns.enabled.includes('amount'));
+});
+
+test('required columns cannot be unchecked', () => {
+  // 规则从「至少留一列」收紧为「名称/现价/涨跌幅必留」——
+  // 只剩「状态」一列的列表不再是股票列表。
+  for (const required of ['name', 'price', 'changePercent']) {
+    const { spy } = setup(panel());
+    spy.reset();
+    toggleCheckbox(required);
+    assert.equal(spy.eventCount('column-settings-change'), 0, `${required} must not emit`);
+    const cb = document.querySelector(`input[data-column="${required}"]`) as HTMLInputElement;
+    assert.equal(cb.checked, true, `${required} stays checked`);
+  }
+});
+
+test('emitted column set is complete and duplicate-free', () => {
   const { spy } = setup(panel());
   spy.reset();
-  toggleCheckbox('changePercent');
-  const detail = spy.lastEvent('preferences-change')?.detail;
-  assert.ok(detail);
-  assert.ok(detail!.columns!.includes('changePercent'));
-});
-
-test('cannot uncheck the last enabled column', () => {
-  const onlyOne: ColumnConfig[] = [
-    { key: 'name', label: '名称', enabled: true },
-    { key: 'code', label: '代码', enabled: false },
-    { key: 'price', label: '现价', enabled: false }
-  ];
-  const { spy } = setup(panel({ columns: onlyOne, columnOrder: ['name', 'code', 'price'] }));
-  spy.reset();
-  toggleCheckbox('name');
-  // Should NOT emit because at least one must stay enabled
-  assert.equal(spy.eventCount('preferences-change'), 0);
-  // Checkbox should remain checked
-  const cb = document.querySelector('input[data-column="name"]') as HTMLInputElement;
-  assert.equal(cb.checked, true);
-});
-
-test('columns array is complete and duplicate-free', () => {
-  const { spy } = setup(panel());
-  spy.reset();
-  toggleCheckbox('change');
-  const detail = spy.lastEvent('preferences-change')?.detail;
-  assert.ok(detail!.columns);
-  const cols = detail!.columns!;
+  toggleCheckbox('status');
+  const detail = spy.lastEvent('column-settings-change')?.detail;
+  const cols = detail!.columns.enabled;
   // No duplicates
   assert.equal(new Set(cols).size, cols.length);
   // All are valid column keys
@@ -132,10 +129,9 @@ test('move up button emits columnOrder with the column moved up', () => {
   const upBtn = item?.querySelector('button[data-action="col-up"]') as HTMLButtonElement | null;
   if (upBtn) {
     upBtn.click();
-    const detail = spy.lastEvent('preferences-change')?.detail;
+    const detail = spy.lastEvent('column-settings-change')?.detail;
     assert.ok(detail);
-    assert.ok(detail!.columnOrder);
-    const order = detail!.columnOrder!;
+    const order = detail!.columns.order;
     const idx = order.indexOf('price');
     // After moving up, price should be at idx 1, and name at idx 2
     assert.equal(order[idx + 1], 'name'); // name should now be after price
@@ -150,10 +146,9 @@ test('move down button emits columnOrder with the column moved down', () => {
   const downBtn = item?.querySelector('button[data-action="col-down"]') as HTMLButtonElement | null;
   if (downBtn) {
     downBtn.click();
-    const detail = spy.lastEvent('preferences-change')?.detail;
+    const detail = spy.lastEvent('column-settings-change')?.detail;
     assert.ok(detail);
-    assert.ok(detail!.columnOrder);
-    const order = detail!.columnOrder!;
+    const order = detail!.columns.order;
     const idx = order.indexOf('name');
     // After moving down, name should be at idx 2, and price at idx 1
     assert.equal(order[idx - 1], 'price'); // price should now be before name
@@ -167,10 +162,10 @@ test('columnOrder is complete and duplicate-free', () => {
   const upBtn = item?.querySelector('button[data-action="col-up"]') as HTMLButtonElement | null;
   if (upBtn) {
     upBtn.click();
-    const detail = spy.lastEvent('preferences-change')?.detail;
-    const order = detail!.columnOrder!;
-    assert.equal(new Set(order).size, order.length);
-    assert.equal(order.length, DEFAULT_COLUMNS.length);
+    const order = spy.lastEvent('column-settings-change')?.detail.columns.order;
+    assert.ok(order);
+    assert.equal(new Set(order!).size, order!.length);
+    assert.equal(order!.length, DEFAULT_COLUMNS.length);
   }
 });
 
@@ -231,6 +226,6 @@ test('reconnecting does not duplicate listeners', () => {
   el.remove();
   document.body.querySelector('div')?.append(el);
   spy.reset();
-  toggleCheckbox('price');
-  assert.equal(spy.eventCount('preferences-change'), 1);
+  toggleCheckbox('code');
+  assert.equal(spy.eventCount('column-settings-change'), 1);
 });

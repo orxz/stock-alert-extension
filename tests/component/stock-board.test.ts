@@ -36,6 +36,7 @@ function board(overrides: Partial<BoardViewModel> = {}): BoardViewModel {
     viewMode: 'list',
     groupId: GROUP_ID,
     stocks: [],
+    columns: ['name', 'code', 'status', 'price', 'changePercent', 'amount'],
     loading: false,
     error: null,
     empty: false,

@@ -1,6 +1,7 @@
 // src/popup/components/events.ts
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { BoardConfig } from '../../domain/board-config.js';
+import type { UiColumnPreferences } from '../ui-preferences.js';
 
 export type ViewMode = 'grid' | 'list';
 
@@ -20,17 +21,19 @@ export interface PopupEventMap {
   'stock-order-request': { readonly groupId: GroupId; readonly orderedCodes: readonly StockCode[] };
   'batch-move-request': { readonly codes: readonly StockCode[]; readonly fromGroupId: GroupId; readonly targetGroupIds: readonly GroupId[] };
   'view-mode-change': { readonly viewMode: ViewMode };
-  'preferences-change': {
-    readonly patch: Readonly<Partial<BoardConfig>>;
-    readonly columns?: readonly string[];
-    readonly columnOrder?: readonly string[];
-  };
+  /** BoardConfig 业务偏好（走 RPC 持久化）。列显隐见 column-settings-change。 */
+  'preferences-change': { readonly patch: Readonly<Partial<BoardConfig>> };
   'selection-mode-change': { readonly enabled: boolean };
   'theme-change': { readonly theme: 'dark' | 'light' };
   'stock-toggle-select': { readonly code: StockCode };
   'search-keyword-change': { readonly keyword: string };
   'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove' };
-  'column-panel-open-request': Record<never, never>;
+  /** 工具栏「列设置」触发；detail 带触发元素 id 以便定位与焦点归还。 */
+  'column-panel-open-request': { readonly anchorId: string };
+  /** 列设置面板提交完整的最终态（非增量 patch）。 */
+  'column-settings-change': { readonly columns: UiColumnPreferences };
+  /** 请求关闭当前 popover。 */
+  'popover-close-request': Record<never, never>;
   'dialog-submit': DialogSubmitDetail;
   'dialog-close-request': { readonly reason: 'cancel' | 'escape' | 'backdrop' };
   'stock-search-select': { readonly code: StockCode; readonly name: string };

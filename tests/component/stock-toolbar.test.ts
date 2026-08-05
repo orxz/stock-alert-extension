@@ -128,11 +128,14 @@ test('current view mode button reflects aria-pressed true', () => {
   assert.equal(gridBtn.getAttribute('aria-pressed'), 'false');
 });
 
-test('column settings button emits column-panel-open-request with empty detail', () => {
+test('column settings button emits column-panel-open-request with its anchor id', () => {
   const { spy } = setup(mkToolbar());
   spy.reset();
   clickAction('column-settings');
-  assert.deepEqual(spy.lastEvent('column-panel-open-request')?.detail, {});
+  // detail 带触发按钮 id——popover 用它定位并在关闭时归还焦点。
+  assert.deepEqual(spy.lastEvent('column-panel-open-request')?.detail, {
+    anchorId: 'toolbar-column-settings'
+  });
 });
 
 test('column settings button has accessible label', () => {

@@ -76,6 +76,8 @@ export class StockTableElement extends HTMLElement {
   private bottomSpacer: HTMLElement | null = null;
   /** 视口由 stock-board（唯一滚动拥有者）推送；默认值覆盖未挂载时的渲染。 */
   private _viewport: VirtualViewport = { scrollOffset: 0, viewportExtent: 390 };
+  /** 启用的列（展示偏好）。空数组表示「未配置」，按全部列渲染。 */
+  private _columns: readonly string[] = [];
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -109,6 +111,33 @@ export class StockTableElement extends HTMLElement {
 
   set groupId(value: GroupId) {
     this._groupId = value;
+  }
+
+  get columns(): readonly string[] {
+    return this._columns;
+  }
+
+  set columns(value: readonly string[] | undefined) {
+    this._columns = Array.isArray(value) ? value : [];
+    if (this.isConnected) this.applyColumnVisibility();
+  }
+
+  /**
+   * 按启用集合显隐列。用 hidden 属性而非移除节点——列切换是高频轻量操作，
+   * 重建整张表会丢焦点、丢滚动位置。操作列始终可见。
+   */
+  private applyColumnVisibility(): void {
+    if (!this.table) return;
+    const enabled = this._columns.length > 0 ? new Set(this._columns) : null;
+    for (let i = 0; i < COLUMNS.length; i += 1) {
+      const visible = enabled === null || enabled.has(COLUMNS[i].key);
+      const th = this.table.querySelector(`thead th[data-column="${COLUMNS[i].key}"]`);
+      if (th) (th as HTMLElement).hidden = !visible;
+      for (const row of this.tbody?.querySelectorAll('tr[data-key]') ?? []) {
+        const cell = row.children[i] as HTMLElement | undefined;
+        if (cell) cell.hidden = !visible;
+      }
+    }
   }
 
   get viewport(): VirtualViewport {
@@ -312,6 +341,9 @@ export class StockTableElement extends HTMLElement {
       setAttr(row, 'aria-rowindex', String(index + 2));
       index += 1;
     }
+
+    // 新进入窗口的行也要套用当前列显隐。
+    this.applyColumnVisibility();
   }
 
   private createRow(vm: StockCardViewModel): HTMLElement {

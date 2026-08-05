@@ -22,7 +22,9 @@ const ALL_EVENT_TYPES = [
   'stock-search-select',
   'quote-refresh-request',
   'stock-toggle-select',
-  'virtual-focus-request'
+  'virtual-focus-request',
+  'column-settings-change',
+  'popover-close-request'
 ] as const;
 
 export interface PopupEventSpy {

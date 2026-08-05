@@ -9,6 +9,7 @@ import { StockCardElement } from './stock-card.js';
 import { StockTableElement } from './stock-table.js';
 import { BatchToolbarElement } from './batch-toolbar.js';
 import { ColumnPanelElement } from './column-panel.js';
+import { AppPopoverHostElement } from './app-popover-host.js';
 import { QuoteStatusElement } from './quote-status.js';
 import { AppDialogHostElement } from './app-dialog-host.js';
 import { StockSearchComboboxElement } from './stock-search-combobox.js';
@@ -43,6 +44,9 @@ export function definePopupElements(): void {
   }
   if (!customElements.get('batch-toolbar')) {
     customElements.define('batch-toolbar', BatchToolbarElement);
+  }
+  if (!customElements.get('app-popover-host')) {
+    customElements.define('app-popover-host', AppPopoverHostElement);
   }
   if (!customElements.get('column-panel')) {
     customElements.define('column-panel', ColumnPanelElement);

@@ -6,7 +6,9 @@
 import type { Store } from './store/store.js';
 import type { CommandController } from './commands/command-controller.js';
 import { selectAppViewModel } from './store/selectors.js';
-import type { AppViewModel, DialogViewModel, LiveRegionViewModel } from './view-models.js';
+import type { AppViewModel, DialogViewModel, LiveRegionViewModel, PopoverViewModel } from './view-models.js';
+import { normalizeUiColumns, saveUiColumns } from './ui-preferences.js';
+import type { WebStorageLike } from './ui-preferences.js';
 import type { PopupEventMap, DialogSubmitDetail } from './components/events.js';
 import type { DialogState } from './store/state.js';
 import type { GroupId, StockCode } from '../domain/index.js';
@@ -22,6 +24,7 @@ export interface AppShellDeps {
   readonly fallback: HTMLElement;
   readonly liveRegion: HTMLElement;
   readonly dialogHost?: HTMLElement;
+  readonly popoverHost?: HTMLElement;
   readonly sink: DiagnosticSink;
   readonly clock: { now(): number };
 }
@@ -31,10 +34,20 @@ export interface AppShell {
   destroy(): void;
 }
 
+/** 隐私模式下访问 localStorage 本身就会抛错，取一次并吞掉异常。 */
+function safeLocalStorage(): WebStorageLike | undefined {
+  try {
+    return localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createAppShell(deps: AppShellDeps): AppShell {
   const { store, controller, stockApp, fallback, sink, clock } = deps;
   const root = stockApp;
   const dialogHost = deps.dialogHost ?? null;
+  const popoverHost = deps.popoverHost ?? null;
   const liveRegion = deps.liveRegion;
   let destroyed = false;
   const ac = new AbortController();
@@ -55,6 +68,10 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       // 渲染对话框 VM 到 dialog-host（如果在 DOM 中）。
       if (dialogHost) {
         (dialogHost as HTMLElement & { viewModel: DialogViewModel }).viewModel = vm.dialog;
+      }
+      // 渲染 popover VM（列设置等轻量弹层）。
+      if (popoverHost) {
+        (popoverHost as HTMLElement & { viewModel: PopoverViewModel }).viewModel = vm.popover;
       }
       // 渲染 live-region VM。
       if (liveRegion) {
@@ -82,6 +99,7 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     // dialog-host 是 stock-app 的兄弟元素，其内部事件（dialog-submit 等）
     // 需要在此元素上也注册监听器。
     if (dialogHost) dialogHost.addEventListener(type, listener, { signal: ac.signal });
+    if (popoverHost) popoverHost.addEventListener(type, listener, { signal: ac.signal });
   }
 
   // ===== 导航/视图事件 =====
@@ -120,8 +138,25 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     store.dispatch({ type: 'view/selection', codes: newCodes });
   });
 
-  // column-panel-open-request: 列设置功能尚未完整接线（ColumnPanelElement 已注册但未接入 AppViewModel）。
-  // 暂不处理此事件，避免打开错误的对话框。待列设置功能完成后在此接入 overlay 路径。
+  // ===== 列设置弹层 =====
+
+  on('column-panel-open-request', (d) => {
+    store.dispatch({
+      type: 'overlay/menu',
+      menu: { kind: 'column-settings', anchorId: d.anchorId }
+    });
+  });
+
+  on('popover-close-request', () => {
+    store.dispatch({ type: 'overlay/menu', menu: null });
+  });
+
+  on('column-settings-change', (d) => {
+    // 组件发的是完整最终态，这里再规范化一次（防御第三方注入/旧版本残留）。
+    const normalized = normalizeUiColumns(d.columns);
+    store.dispatch({ type: 'view/columns', columns: normalized });
+    saveUiColumns(safeLocalStorage(), normalized);
+  });
 
   // ===== 行情事件 =====
 

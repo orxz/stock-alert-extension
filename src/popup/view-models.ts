@@ -76,6 +76,8 @@ export interface BoardViewModel {
   readonly viewMode: ViewMode;
   readonly groupId: GroupId;
   readonly stocks: readonly StockCardViewModel[];
+  /** 启用的列（已按显示顺序排列）——列表视图据此显隐列。 */
+  readonly columns: readonly string[];
   readonly loading: boolean;
   readonly error: string | null;
   readonly empty: boolean;
@@ -93,6 +95,19 @@ export interface ColumnConfig {
 export interface ColumnPanelViewModel {
   readonly columns: readonly ColumnConfig[];
   readonly columnOrder: readonly string[];
+}
+
+/** 弹出层视图模型（列设置等轻量非模态面板）。 */
+export interface PopoverViewModel {
+  readonly open: boolean;
+  readonly kind: 'column-settings' | 'stock-actions' | null;
+  readonly anchorId: string | null;
+  readonly columnPanel: ColumnPanelViewModel | null;
+}
+
+/** 关闭态 PopoverViewModel。 */
+export function closedPopover(): PopoverViewModel {
+  return { open: false, kind: null, anchorId: null, columnPanel: null };
 }
 
 /** 行情刷新状态视图模型。 */
@@ -251,6 +266,7 @@ export interface AppViewModel {
   readonly quoteStatus: QuoteStatusViewModel;
   readonly liveRegion: LiveRegionViewModel;
   readonly dialog: DialogViewModel;
+  readonly popover: PopoverViewModel;
 }
 
 /** 将 Group 列表投影为 GroupTabViewModel 列表（按 order 升序）。 */
