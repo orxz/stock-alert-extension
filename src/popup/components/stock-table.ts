@@ -157,7 +157,7 @@ export class StockTableElement extends HTMLElement {
   focusCode(code: StockCode): boolean {
     const index = this._viewModel.findIndex((vm) => vm.code === code);
     if (index < 0) return false;
-    emitPopupEvent(this, 'virtual-focus-request', { index, itemExtent: TABLE_ROW_EXTENT });
+    emitPopupEvent(this, 'virtual-focus-request', { index, itemExtent: TABLE_ROW_EXTENT, code });
     return true;
   }
 

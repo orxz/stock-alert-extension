@@ -59,7 +59,9 @@ export class StockBoardElement extends HTMLElement {
     );
     this.addEventListener('scroll', () => this.scheduler?.schedule(), { signal, passive: true });
     this.addEventListener('virtual-focus-request', ((event: Event) => {
-      this.handleVirtualFocus(event as CustomEvent<{ index: number; itemExtent: number }>);
+      this.handleVirtualFocus(
+        event as CustomEvent<{ index: number; itemExtent: number; code: string }>
+      );
     }) as EventListener, { signal });
 
     if (this._viewModel) this.applyViewModel(this._viewModel);
@@ -154,13 +156,20 @@ export class StockBoardElement extends HTMLElement {
     return null;
   }
 
-  /** 把当前视口推给激活视图。表格要扣掉粘性表头占用的高度。 */
-  private flushViewport(): void {
+  /**
+   * 把当前视口推给激活视图。表格要扣掉粘性表头占用的高度。
+   *
+   * @param explicitScrollTop 已知的目标滚动位置。程序化滚动时必须传入——
+   *   不能依赖读回 `this.scrollTop`：赋值后浏览器可能尚未反映，
+   *   而在无布局环境（组件测试）里它根本不会变化。
+   */
+  private flushViewport(explicitScrollTop?: number): void {
     const view = this.activeView();
     if (!view) return;
     const headerOffset = this.activeMode === 'list' ? TABLE_HEADER_EXTENT : 0;
+    const top = explicitScrollTop ?? this.scrollTop;
     view.viewport = {
-      scrollOffset: Math.max(0, this.scrollTop - headerOffset),
+      scrollOffset: Math.max(0, top - headerOffset),
       viewportExtent: this.clientHeight || FALLBACK_VIEWPORT_EXTENT
     };
   }
@@ -169,14 +178,31 @@ export class StockBoardElement extends HTMLElement {
    * 处理子视图的「把索引 N 滚进视口」请求。
    * 目标行可能尚未挂载，因此必须先滚动 + 同步刷新视口，下一帧再聚焦。
    */
-  private handleVirtualFocus(event: CustomEvent<{ index: number; itemExtent: number }>): void {
-    const { index, itemExtent } = event.detail;
-    this.scrollTop = index * itemExtent;
-    this.flushViewport();
-    requestAnimationFrame(() => {
-      const target = this.querySelector<HTMLElement>('[data-key]:not([data-spacer])');
-      target?.focus?.();
-    });
+  private handleVirtualFocus(
+    event: CustomEvent<{ index: number; itemExtent: number; code: string }>
+  ): void {
+    const { index, itemExtent, code } = event.detail;
+    const targetTop = index * itemExtent;
+    this.scrollTop = targetTop;
+    // 用计算出的目标位置刷新窗口，而不是读回 scrollTop。
+    this.flushViewport(targetTop);
+    // 必须按 code 定位：过扫描会让窗口从目标**之前**若干行开始渲染，
+    // 「聚焦第一个 data-key」会落到错误的股票上。
+    const focusTarget = (): void => {
+      // 不用 CSS.escape：它在部分测试 DOM 环境下不存在，抛错会静默吞掉焦点。
+      // 股票代码经 normalizeStockCode 规范化为 `sh|sz|bj` + 6 位数字，属性选择器安全。
+      if (!/^[a-z]{2}\d{6}$/.test(code)) return;
+      const node = this.querySelector<HTMLElement>(`[data-key="${code}"]:not([data-spacer])`);
+      if (!node) return;
+      // <tr> 本身不可聚焦，退到行内第一个可聚焦控件；卡片自带 tabindex=0。
+      const focusable = node.matches('[tabindex], a[href], button, input, select, textarea')
+        ? node
+        : node.querySelector<HTMLElement>('[tabindex], a[href], button, input, select, textarea');
+      focusable?.focus?.();
+    };
+    // 同步尝试一次（窗口刷新已同步完成），再在下一帧兜底一次以覆盖布局延迟。
+    focusTarget();
+    requestAnimationFrame(focusTarget);
   }
 
   private applyViewModel(vm: BoardViewModel): void {

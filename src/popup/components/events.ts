@@ -43,7 +43,11 @@ export interface PopupEventMap {
    * 由 list/grid 发出、stock-board（唯一滚动拥有者）处理——目标行可能
    * 尚未挂载，必须先滚动再聚焦。
    */
-  'virtual-focus-request': { readonly index: number; readonly itemExtent: number };
+  'virtual-focus-request': {
+    readonly index: number;
+    readonly itemExtent: number;
+    readonly code: StockCode;
+  };
 }
 
 export function emitPopupEvent<K extends keyof PopupEventMap>(

@@ -97,7 +97,8 @@ export class StockGridElement extends HTMLElement {
     if (index < 0) return false;
     emitPopupEvent(this, 'virtual-focus-request', {
       index: Math.floor(index / GRID_COLUMNS),
-      itemExtent: GRID_ROW_EXTENT
+      itemExtent: GRID_ROW_EXTENT,
+      code
     });
     return true;
   }

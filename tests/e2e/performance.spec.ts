@@ -44,6 +44,10 @@ async function measureOnce(seed: Record<string, unknown>): Promise<{
   interactiveMs: number;
   selectorMs: number;
   domUpdateMs: number;
+  /** 列表视图实际挂载的行数（虚拟化的节点上限证据）。 */
+  listRows: number;
+  /** 网格视图实际挂载的卡片数。 */
+  gridCards: number;
 }> {
   const launched = await launchBuiltExtension({ offline: true, seed, rebuild: false });
   try {
@@ -56,6 +60,11 @@ async function measureOnce(seed: Record<string, unknown>): Promise<{
       }
       return (performance.now() - start) / 100;
     });
+
+    // 切换到网格前，先记录列表视图实际挂载的行数。
+    const listRows = await launched.page
+      .locator('stock-table tbody tr[data-key]')
+      .count();
 
     // 测量一次 DOM 更新（切换视图模式触发 rerender）的耗时。
     const domUpdateMs = await launched.page.evaluate(() => {
@@ -91,7 +100,12 @@ async function measureOnce(seed: Record<string, unknown>): Promise<{
       return ready ? nav.domContentLoadedEventEnd - nav.startTime : 0;
     });
 
-    return { bootstrapMs, interactiveMs, selectorMs, domUpdateMs };
+    // 网格渲染完成后（与 domUpdateMs 同一双 rAF 之后）记录卡片数。
+    const gridCards = await launched.page
+      .locator('stock-grid stock-card[data-key]')
+      .count();
+
+    return { bootstrapMs, interactiveMs, selectorMs, domUpdateMs, listRows, gridCards };
   } finally {
     await launched.close();
   }
@@ -101,9 +115,12 @@ test.describe.configure({ mode: 'serial' });
 
 test.skip(!canRunPerf, SKIP_REASON);
 
-test('p95 bootstrap ≤250ms / interactive ≤500ms / selector ≤100ms / domUpdate ≤100ms (20 groups / 500 stocks)', async () => {
+test('p95 bootstrap ≤200ms / interactive ≤500ms / selector ≤100ms / domUpdate ≤80ms + bounded nodes (20 groups / 500 stocks)', async () => {
+  test.setTimeout(60_000);
   const seed = loadCapacitySeed();
   const samples: PerfSamples = { bootstrapMs: [], interactiveMs: [], selectorMs: [], domUpdateMs: [] };
+  let lastListRows = 0;
+  let lastGridCards = 0;
 
   // 预热 2 次（JIT / 首次构建缓存）。
   for (let i = 0; i < 2; i++) {
@@ -117,6 +134,8 @@ test('p95 bootstrap ≤250ms / interactive ≤500ms / selector ≤100ms / domUpd
     samples.interactiveMs.push(s.interactiveMs);
     samples.selectorMs.push(s.selectorMs);
     samples.domUpdateMs.push(s.domUpdateMs);
+    lastListRows = s.listRows;
+    lastGridCards = s.gridCards;
   }
 
   const bootstrapP95 = p95(samples.bootstrapMs);
@@ -128,10 +147,23 @@ test('p95 bootstrap ≤250ms / interactive ≤500ms / selector ≤100ms / domUpd
   console.log('perf samples:', JSON.stringify(samples, null, 2));
   console.log(`p95: bootstrap=${bootstrapP95.toFixed(1)}ms interactive=${interactiveP95.toFixed(1)}ms selector=${selectorP95.toFixed(2)}ms domUpdate=${domUpdateP95.toFixed(2)}ms`);
 
-  expect(bootstrapP95, `p95 bootstrap ${bootstrapP95}ms > 250ms`).toBeLessThanOrEqual(250);
+  console.log(`nodes: listRows=${lastListRows} gridCards=${lastGridCards} (500 stocks)`);
+
+  expect(bootstrapP95, `p95 bootstrap ${bootstrapP95}ms > 200ms`).toBeLessThanOrEqual(200);
   expect(interactiveP95, `p95 interactive ${interactiveP95}ms > 500ms`).toBeLessThanOrEqual(500);
   expect(selectorP95, `p95 selector ${selectorP95}ms > 100ms`).toBeLessThanOrEqual(100);
-  expect(domUpdateP95, `p95 domUpdate ${domUpdateP95}ms > 100ms`).toBeLessThanOrEqual(100);
+  // 目标 80ms；对外发布上限仍是 100ms，失败信息里同时给出两者。
+  expect(
+    domUpdateP95,
+    `p95 domUpdate ${domUpdateP95}ms > 80ms target (release ceiling 100ms)`
+  ).toBeLessThanOrEqual(80);
+
+  // 节点上限：虚拟化的核心保证。500 只股票下真实节点必须有界——
+  // 光看耗时不够，机器够快时全量渲染也可能压线通过。
+  expect(lastListRows, `list mounted ${lastListRows} rows for 500 stocks`).toBeLessThanOrEqual(27);
+  expect(lastListRows, 'list rendered nothing').toBeGreaterThan(0);
+  expect(lastGridCards, `grid mounted ${lastGridCards} cards for 500 stocks`).toBeLessThanOrEqual(24);
+  expect(lastGridCards, 'grid rendered nothing').toBeGreaterThan(0);
 });
 
 test('quote refresh respects 8-second overall deadline', async () => {

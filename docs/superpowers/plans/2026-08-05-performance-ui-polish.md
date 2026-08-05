@@ -2,6 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+
+> **执行状态（2026-08-05）**
+>
+> - Task 1–5：已完成并验证（见分支 `feature/v2.0.1-quote-reliability-and-perf`）。
+> - Task 6：**部分完成**——列设置 popover 宿主已落地并接线；
+>   `stock-action-menu`（用单一 ••• 触发器替换行内 pin/上移/下移）尚未实施。
+> - Task 7–8：**未实施**——「精密终端」视觉重构与对话框/无障碍收尾待做。
+> - Task 9：性能门禁已硬化（p95 目标 80ms + 节点上限断言）并跑通。
+>
+> 另：本计划编写时未覆盖的三个生产缺陷已在同分支修复——
+> 失效的新浪备源、失败刷新的伪成功播报、single-flight 忽略 code 集合。
+
 **Goal:** Replace full-DOM list/grid rendering with bounded virtual windows and deliver the approved “精密终端” UI across the entire 420×560 Popup while preserving every v2 architecture and release invariant.
 
 **Architecture:** Add a pure virtual-window calculator shared by list and grid, let `stock-board` own the scroll viewport and mount only the active view, and keep row/card rendering keyed and diff-aware. Presentation-only column preferences live in the Popup Store and versioned `localStorage`; business preferences, RPC, storage schema, quote semantics, and rollback compatibility remain unchanged.
@@ -69,7 +81,7 @@
   - `createRafScheduler(requestFrame, cancelFrame, task): RafScheduler`
 - Consumed by Tasks 2–4.
 
-- [ ] **Step 1: Write failing range tests**
+- [x] **Step 1: Write failing range tests**
 
 ```ts
 // tests/unit/popup/virtual-window.test.ts
@@ -107,13 +119,13 @@ test('scroll offset is clamped after data shrinks', () => {
 });
 ```
 
-- [ ] **Step 2: Run range tests and verify RED**
+- [x] **Step 2: Run range tests and verify RED**
 
 Run: `node --import tsx --test tests/unit/popup/virtual-window.test.ts`
 
 Expected: FAIL with `ERR_MODULE_NOT_FOUND` for `virtual-window.js`.
 
-- [ ] **Step 3: Implement the pure calculator**
+- [x] **Step 3: Implement the pure calculator**
 
 ```ts
 // src/popup/virtualization/virtual-window.ts
@@ -162,7 +174,7 @@ export function calculateVirtualWindow(input: VirtualWindowInput): VirtualWindow
 }
 ```
 
-- [ ] **Step 4: Write failing scheduler tests**
+- [x] **Step 4: Write failing scheduler tests**
 
 ```ts
 // tests/unit/popup/raf-scheduler.test.ts
@@ -185,7 +197,7 @@ test('coalesces repeated schedule calls into one task', () => {
 });
 ```
 
-- [ ] **Step 5: Implement and verify the scheduler**
+- [x] **Step 5: Implement and verify the scheduler**
 
 ```ts
 // src/popup/virtualization/raf-scheduler.ts
@@ -215,7 +227,7 @@ Run: `node --import tsx --test tests/unit/popup/virtual-window.test.ts tests/uni
 
 Expected: PASS, including safe invalid inputs and scheduler cancellation.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add src/popup/virtualization tests/unit/popup/virtual-window.test.ts tests/unit/popup/raf-scheduler.test.ts
@@ -237,7 +249,7 @@ git commit -m "feat(popup): add virtual window primitives"
 - Produces: `StockTableElement.viewport: VirtualViewport`, `StockTableElement.focusCode(code)` and a bounded real-row DOM.
 - Task 4 supplies the viewport and calls `focusCode`.
 
-- [ ] **Step 1: Replace full-row expectations with failing bounded-window tests**
+- [x] **Step 1: Replace full-row expectations with failing bounded-window tests**
 
 ```ts
 test('500-stock table keeps real stock rows bounded', () => {
@@ -258,13 +270,13 @@ test('scrolling changes the rendered key range and exposes aria-rowindex', () =>
 });
 ```
 
-- [ ] **Step 2: Run focused component tests and verify RED**
+- [x] **Step 2: Run focused component tests and verify RED**
 
 Run: `node --import tsx --test tests/component/stock-table.test.ts`
 
 Expected: FAIL because `viewport` is not implemented and 500 rows are mounted.
 
-- [ ] **Step 3: Add viewport state, spacer rows, and visible slicing**
+- [x] **Step 3: Add viewport state, spacer rows, and visible slicing**
 
 Implement these exact constants and property:
 
@@ -283,7 +295,7 @@ set viewport(value: VirtualViewport) {
 
 In `render()`, call `calculateVirtualWindow`, slice `this._viewModel`, and pass only the slice to `updateKeyedChildren`. Create top/bottom spacer `<tr aria-hidden="true">` elements with one `td.colSpan = visibleColumnCount + 1` and explicit pixel height. Set `table[aria-rowcount]` to `stockCount + 1` because the header occupies row 1; each real data row uses `aria-rowindex = stockIndex + 2`.
 
-- [ ] **Step 4: Make visible-row updates field-diffed**
+- [x] **Step 4: Make visible-row updates field-diffed**
 
 Add a small helper and use it for text mutations:
 
@@ -295,7 +307,7 @@ function setText(node: Element | undefined, value: string): void {
 
 Keep keyed identity for rows that remain inside the virtual window; remove only keys outside it. Change `updateKeyedChildren` only if required to accept stable sentinel spacer nodes without treating them as keyed children.
 
-- [ ] **Step 5: Implement focus-to-code behavior**
+- [x] **Step 5: Implement focus-to-code behavior**
 
 ```ts
 focusCode(code: StockCode): boolean {
@@ -310,13 +322,13 @@ focusCode(code: StockCode): boolean {
 
 Task 4 will scroll and focus after rendering; the table must not retain detached focused-node references.
 
-- [ ] **Step 6: Run table and keyed-update tests**
+- [x] **Step 6: Run table and keyed-update tests**
 
 Run: `node --import tsx --test tests/component/stock-table.test.ts tests/component/keyed-update.test.ts`
 
 Expected: PASS; 500-stock real row count ≤27, semantic row count 501 including the header, existing sorting and node identity tests remain green.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```bash
 git add src/popup/components/stock-table.ts src/popup/components/keyed-update.ts tests/component/stock-table.test.ts tests/component/keyed-update.test.ts
@@ -338,7 +350,7 @@ git commit -m "perf(popup): virtualize stock table rows"
 - Produces: `StockGridElement.viewport: VirtualViewport`, `StockGridElement.focusCode(code)` and ≤24 real cards at 390px viewport.
 - Emits the same business events as before; Task 6 later replaces inline action buttons with a menu trigger.
 
-- [ ] **Step 1: Write failing bounded grid tests**
+- [x] **Step 1: Write failing bounded grid tests**
 
 ```ts
 test('500-stock grid keeps card nodes bounded', () => {
@@ -357,13 +369,13 @@ test('grid scroll offset renders cards around the target row', () => {
 });
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `node --import tsx --test tests/component/stock-board.test.ts tests/component/stock-card.test.ts`
 
 Expected: FAIL because all cards are mounted.
 
-- [ ] **Step 3: Implement row-based grid virtualization**
+- [x] **Step 3: Implement row-based grid virtualization**
 
 Use exact layout constants:
 
@@ -375,17 +387,17 @@ const OVERSCAN_SCREENS = 1;
 
 Calculate the virtual item count as `Math.ceil(stocks.length / GRID_COLUMNS)`, slice stock indexes from `startIndex * 2` through `endIndex * 2`, and set top/bottom spacer block heights from the virtual row result. Give the container `role="list"`; set every real card to `role="listitem"` with its own `aria-posinset` and `aria-setsize`.
 
-- [ ] **Step 4: Preserve visible card identity and focus**
+- [x] **Step 4: Preserve visible card identity and focus**
 
 Continue using `updateKeyedChildren`; when a target is outside the window, emit the same `virtual-focus-request` shape with `index: Math.floor(stockIndex / 2)` and `itemExtent: GRID_ROW_EXTENT`.
 
-- [ ] **Step 5: Run grid/card regression tests**
+- [x] **Step 5: Run grid/card regression tests**
 
 Run: `node --import tsx --test tests/component/stock-board.test.ts tests/component/stock-card.test.ts tests/component/keyed-update.test.ts`
 
 Expected: PASS, including existing pin/reorder semantics and bounded card count.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add src/popup/components/stock-grid.ts src/popup/components/stock-card.ts tests/component/stock-board.test.ts tests/component/stock-card.test.ts
@@ -407,7 +419,7 @@ git commit -m "perf(popup): virtualize stock card grid"
 - Consumes virtual table/grid viewport properties and `createRafScheduler`.
 - Produces one connected active view, independent `{ list, grid }` scroll offsets, a 390px fallback viewport, and virtual focus routing.
 
-- [ ] **Step 1: Write failing lifecycle tests**
+- [x] **Step 1: Write failing lifecycle tests**
 
 ```ts
 test('board connects only the active stock view', () => {
@@ -428,13 +440,13 @@ test('inactive view does not receive later quote updates', () => {
 
 Do not keep `debugViews()` in production. Tests may instead capture the table before switching and assert on the detached reference.
 
-- [ ] **Step 2: Run board tests and verify RED**
+- [x] **Step 2: Run board tests and verify RED**
 
 Run: `node --import tsx --test tests/component/stock-board.test.ts tests/component/component-lifecycle.test.ts`
 
 Expected: FAIL because both views are created and updated.
 
-- [ ] **Step 3: Make `stock-board` the sole viewport owner**
+- [x] **Step 3: Make `stock-board` the sole viewport owner**
 
 Implement:
 
@@ -452,27 +464,27 @@ private scheduler = createRafScheduler(
 
 On mode change: save current `scrollTop`, detach the old view without updating its ViewModel, lazily create/append the new view, restore its normalized scroll offset, assign its ViewModel, and flush the viewport. On disconnect: cancel scheduler, disconnect observer, and remove listeners through the per-connection AbortController.
 
-- [ ] **Step 4: Route viewport and virtual focus requests**
+- [x] **Step 4: Route viewport and virtual focus requests**
 
 `flushViewport()` sends `{ scrollOffset: Math.max(0, this.scrollTop - 28), viewportExtent: this.clientHeight || 390 }` to the active child. Handle `virtual-focus-request` by setting `scrollTop = index * itemExtent`, flushing synchronously, then focusing the requested keyed control in the next animation frame.
 
-- [ ] **Step 5: Keep loading/error/empty mutually exclusive**
+- [x] **Step 5: Keep loading/error/empty mutually exclusive**
 
 Build six skeleton rows once. When loading/error/empty is active, detach the active data view; when data becomes available, reattach only the selected mode. Empty CTA emits `dialog-open-request { kind: 'add-stock' }`.
 
-- [ ] **Step 6: Run component lifecycle suite**
+- [x] **Step 6: Run component lifecycle suite**
 
 Run: `node --import tsx --test tests/component/stock-board.test.ts tests/component/stock-app.test.ts tests/component/component-lifecycle.test.ts`
 
 Expected: PASS; one active view, scroll offsets restored, exactly six skeleton rows, no duplicate listeners after reconnect.
 
-- [ ] **Step 7: Run the performance test once for directional evidence**
+- [x] **Step 7: Run the performance test once for directional evidence**
 
 Run: `npm run build && npm run test:performance`
 
 Expected: the 500-stock view-switch test is materially below the 136–142ms baseline. Do not adjust thresholds in this task.
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 ```bash
 git add src/popup/components/stock-board.ts src/popup/components/stock-app.ts tests/component/stock-board.test.ts tests/component/stock-app.test.ts tests/component/component-lifecycle.test.ts
@@ -508,7 +520,7 @@ git commit -m "perf(popup): mount only the active stock view"
   - action `view/columns` and event `column-settings-change`
 - Consumed by Tasks 6–8 and table/grid rendering.
 
-- [ ] **Step 1: Write failing normalization tests**
+- [x] **Step 1: Write failing normalization tests**
 
 ```ts
 test('normalizes corrupt, duplicate, and unknown columns', () => {
@@ -528,13 +540,13 @@ test('unknown versions fall back to defaults', () => {
 });
 ```
 
-- [ ] **Step 2: Run test and verify RED**
+- [x] **Step 2: Run test and verify RED**
 
 Run: `node --import tsx --test tests/unit/popup/ui-preferences.test.ts`
 
 Expected: FAIL with missing module.
 
-- [ ] **Step 3: Implement validated persistence helpers**
+- [x] **Step 3: Implement validated persistence helpers**
 
 Use exact storage key and defaults:
 
@@ -550,7 +562,7 @@ export const DEFAULT_UI_COLUMNS: UiColumnPreferences = {
 
 `loadUiColumns` catches storage/JSON errors. `saveUiColumns` writes only normalized JSON and catches quota/privacy errors.
 
-- [ ] **Step 4: Add Store state/action/reducer tests**
+- [x] **Step 4: Add Store state/action/reducer tests**
 
 ```ts
 test('view/columns replaces only the view column branch', () => {
@@ -564,7 +576,7 @@ test('view/columns replaces only the view column branch', () => {
 
 Extend `createInitialState(theme, columns)` and keep `domain.userData.boardConfig` unchanged.
 
-- [ ] **Step 5: Replace overloaded preference event fields**
+- [x] **Step 5: Replace overloaded preference event fields**
 
 Remove `columns` and `columnOrder` from `preferences-change`. Add:
 
@@ -574,7 +586,7 @@ Remove `columns` and `columnOrder` from `preferences-change`. Add:
 
 Update `column-panel` to emit the complete normalized final state and enforce all three required columns.
 
-- [ ] **Step 6: Wire bootstrap and AppShell persistence**
+- [x] **Step 6: Wire bootstrap and AppShell persistence**
 
 In `main.ts`, call `loadUiColumns(window.localStorage)` beside theme loading and pass it to `createInitialState`. In `AppShell`:
 
@@ -588,17 +600,17 @@ on('column-settings-change', ({ columns }) => {
 
 Components never call `localStorage`.
 
-- [ ] **Step 7: Project columns into ViewModels**
+- [x] **Step 7: Project columns into ViewModels**
 
 Add `columns` to `BoardViewModel` and `ColumnPanelViewModel`, and add a top-level `columnPanel` ViewModel to `AppViewModel`. Table/grid use the enabled/order values; code/status remain secondary content controlled by their flags.
 
-- [ ] **Step 8: Run unit and component tests**
+- [x] **Step 8: Run unit and component tests**
 
 Run: `node --import tsx --test tests/unit/popup/ui-preferences.test.ts tests/unit/popup/reducer.test.ts tests/unit/popup/selectors.test.ts tests/unit/popup/app-shell.test.ts tests/component/column-panel.test.ts`
 
 Expected: PASS; unknown/corrupt values safely normalize, no `BoardConfig` or RPC change.
 
-- [ ] **Step 9: Commit Task 5**
+- [x] **Step 9: Commit Task 5**
 
 ```bash
 git add src/popup/ui-preferences.ts src/popup/store src/popup/view-models.ts src/popup/components/events.ts src/popup/components/column-panel.ts src/popup/main.ts src/popup/app-shell.ts tests/unit/popup tests/component/column-panel.test.ts

@@ -327,3 +327,24 @@ test('the inactive view stops receiving quote updates', () => {
     'detached view did no work for an update it will never show'
   );
 });
+
+// ===== 虚拟焦点：必须落在被请求的那一只股票上 =====
+
+test('virtual focus lands on the requested stock, not the first rendered one', () => {
+  const { el } = setupBoard(board({ stocks: manyStocks(500), viewMode: 'grid' }));
+  const grid = document.querySelector('stock-grid') as HTMLElement & {
+    focusCode(code: string): boolean;
+  };
+
+  // 目标远在初始窗口之外。
+  grid.focusCode('sh600300');
+
+  // 看板滚动后，焦点必须在目标卡片上。过扫描会让窗口从目标**之前**若干行
+  // 开始渲染，所以「聚焦第一个 data-key」会落到错误的股票上。
+  const mounted = [...document.querySelectorAll('[data-key]')].map((n) => n.getAttribute('data-key'));
+  assert.ok(mounted.includes('sh600300'), 'target scrolled into the virtual window');
+  const active = document.activeElement as HTMLElement | null;
+  const focusedKey = active?.closest?.('[data-key]')?.getAttribute('data-key');
+  assert.equal(focusedKey, 'sh600300', `focus landed on ${focusedKey ?? active?.tagName}`);
+  void el;
+});
