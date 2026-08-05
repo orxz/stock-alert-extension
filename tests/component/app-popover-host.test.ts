@@ -71,6 +71,20 @@ function setup(vm: PopoverViewModel, withAnchor = true): {
   return { host, anchor, spy };
 }
 
+function rect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+    x: left,
+    y: top,
+    toJSON() {}
+  } as DOMRect;
+}
+
 test('renders the focused component selected by the menu discriminator', () => {
   const { host } = setup(openStock());
   assert.ok(host.querySelector('stock-action-menu'));
@@ -122,13 +136,17 @@ test('Escape emits close and restores focus to the trigger', () => {
   assert.equal(document.activeElement, anchor);
 });
 
-test('outside pointerdown emits close and restores focus to the trigger', () => {
+test('outside click restores trigger focus after native pointer focus has settled', () => {
   const { anchor, spy } = setup(openStock());
   const outside = document.createElement('button');
   document.body.append(outside);
   spy.reset();
 
   outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  outside.focus();
+  assert.equal(spy.eventCount('popover-close-request'), 0);
+
+  outside.dispatchEvent(new Event('click', { bubbles: true }));
 
   assert.deepEqual(spy.lastEvent('popover-close-request')?.detail, { reason: 'outside' });
   assert.equal(document.activeElement, anchor);
@@ -140,4 +158,106 @@ test('missing anchor closes safely without throwing', () => {
     assert.equal(host.hidden, true);
     assert.deepEqual(spy.lastEvent('popover-close-request')?.detail, { reason: 'missing-anchor' });
   });
+});
+
+test('capture-phase scroll repositions an open popover from the current anchor rect', () => {
+  const { host, anchor } = setup(openStock());
+  const scroller = document.createElement('div');
+  document.body.append(scroller);
+  let anchorTop = 10;
+  anchor.getBoundingClientRect = () => rect(20, anchorTop, 8, 10);
+  host.getBoundingClientRect = () => rect(0, 0, 40, 40);
+
+  scroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+  assert.equal(host.style.top, '24px');
+
+  anchorTop = 50;
+  scroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+  assert.equal(host.style.top, '64px');
+});
+
+test('window resize repositions an open popover against the new viewport', () => {
+  const previousWidth = window.innerWidth;
+  const { host, anchor } = setup(openStock());
+  anchor.getBoundingClientRect = () => rect(90, 10, 8, 10);
+  host.getBoundingClientRect = () => rect(0, 0, 40, 40);
+
+  try {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 100 });
+    window.dispatchEvent(new Event('resize'));
+    assert.equal(host.style.left, '52px');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 200 });
+    window.dispatchEvent(new Event('resize'));
+    assert.equal(host.style.left, '90px');
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: previousWidth });
+  }
+});
+
+test('scroll closes an open popover when its anchor was detached', () => {
+  const { host, anchor, spy } = setup(openStock());
+  const scroller = document.createElement('div');
+  document.body.append(scroller);
+  anchor.remove();
+  spy.reset();
+
+  scroller.dispatchEvent(new Event('scroll', { bubbles: false }));
+
+  assert.equal(host.hidden, true);
+  assert.deepEqual(spy.lastEvent('popover-close-request')?.detail, { reason: 'missing-anchor' });
+});
+
+test('stock quote updates reuse the open menu and retain the focused action', () => {
+  const { host } = setup(openStock());
+  const menu = host.querySelector('stock-action-menu');
+  const remove = menu?.querySelector<HTMLButtonElement>('button[data-action="remove"]');
+  remove?.focus();
+
+  host.viewModel = {
+    ...openStock(),
+    stock: { ...stock(), price: 101, displayPrice: '101.00', pinned: true }
+  };
+
+  assert.equal(host.querySelector('stock-action-menu') === menu, true);
+  assert.equal((document.activeElement as HTMLElement | null)?.dataset.action, 'remove');
+});
+
+test('column updates reuse the open panel and retain the focused column control', () => {
+  const { host } = setup(openColumns());
+  const panel = host.querySelector('column-panel');
+  const amountUp = panel?.querySelector<HTMLButtonElement>(
+    '[data-column-item="amount"] button[data-action="col-up"]'
+  );
+  amountUp?.focus();
+
+  host.viewModel = {
+    ...openColumns(),
+    columnPanel: {
+      columns: {
+        ...DEFAULT_UI_COLUMNS,
+        enabled: DEFAULT_UI_COLUMNS.enabled.filter((key) => key !== 'amount')
+      }
+    }
+  };
+
+  assert.equal(host.querySelector('column-panel') === panel, true);
+  const focused = document.activeElement as HTMLElement | null;
+  assert.equal(focused?.dataset.action, 'col-up');
+  assert.equal(focused?.closest('[data-column-item]')?.getAttribute('data-column-item'), 'amount');
+});
+
+test('changing the anchor identity replaces the menu and initially focuses it', () => {
+  const { host } = setup(openStock());
+  const firstMenu = host.querySelector('stock-action-menu');
+  firstMenu?.querySelector<HTMLButtonElement>('button[data-action="remove"]')?.focus();
+  const nextAnchor = document.createElement('button');
+  nextAnchor.id = 'stock-actions-sh600519-table';
+  host.parentElement?.prepend(nextAnchor);
+
+  host.viewModel = openStock(nextAnchor.id);
+
+  const nextMenu = host.querySelector('stock-action-menu');
+  assert.equal(nextMenu === firstMenu, false);
+  assert.equal((document.activeElement as HTMLElement | null)?.dataset.action, 'pin');
 });
