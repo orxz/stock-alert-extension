@@ -1,7 +1,7 @@
 // tests/component/stock-card.test.ts
 // Task 16 Step 1 — stock-card 组件测试。
 // 断言：article 结构、价格掩码、fresh/cached/missing 标签、
-//       pin/order 事件（含完整 orderedCodes）、无 innerHTML、44px 触控目标。
+//       单一确定性菜单触发器、无 innerHTML、44px 触控目标。
 import '../helpers/dom-environment.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -126,62 +126,28 @@ test('missing status has a text label', () => {
   assert.ok(article.textContent?.includes('缺失') || article.textContent?.includes('无数据'));
 });
 
-test('pin button emits stock-pin-request with toggled pinned and full orderedCodes', () => {
-  const { spy } = setup(card('sh600519', { pinned: false }));
-  spy.reset();
-  clickAction('pin');
-  const detail = spy.lastEvent('stock-pin-request')?.detail;
-  assert.ok(detail);
-  assert.equal(detail!.code, 'sh600519');
-  assert.equal(detail!.pinned, true);
-  assert.deepEqual(detail!.orderedCodes, ['sh600519', 'sz000001']);
+test('card renders exactly one deterministic stock menu trigger', () => {
+  setup(card('sh600519', { name: '贵州茅台' }));
+  const buttons = document.querySelectorAll('stock-card article button');
+  assert.equal(buttons.length, 1);
+  const trigger = buttons[0] as HTMLButtonElement;
+  assert.equal(trigger.id, 'stock-actions-sh600519');
+  assert.equal(trigger.dataset.action, 'stock-menu');
+  assert.equal(trigger.getAttribute('aria-label'), '打开 贵州茅台 操作菜单');
+  assert.equal(trigger.textContent, '•••');
 });
 
-test('pin button on pinned card emits pinned=false', () => {
-  const { spy } = setup(card('sh600519', { pinned: true }));
-  spy.reset();
-  clickAction('pin');
-  const detail = spy.lastEvent('stock-pin-request')?.detail;
-  assert.equal(detail!.pinned, false);
-});
-
-test('up button emits stock-order-request moving the card up', () => {
-  // sh600519 is at index 0 → up should be no-op (or emit same order)
-  // sz000001 is at index 1 → up should swap to index 0
-  const { spy } = setup(card('sz000001'));
-  spy.reset();
-  clickAction('move-up');
-  const detail = spy.lastEvent('stock-order-request')?.detail;
-  assert.ok(detail);
-  assert.equal(detail!.groupId, 'g_all');
-  assert.deepEqual(detail!.orderedCodes, ['sz000001', 'sh600519']);
-});
-
-test('down button emits stock-order-request moving the card down', () => {
+test('card menu trigger emits the exact stock-menu-open-request payload', () => {
   const { spy } = setup(card('sh600519'));
   spy.reset();
-  clickAction('move-down');
-  const detail = spy.lastEvent('stock-order-request')?.detail;
-  assert.ok(detail);
-  assert.deepEqual(detail!.orderedCodes, ['sz000001', 'sh600519']);
+  clickAction('stock-menu');
+  assert.deepEqual(spy.lastEvent('stock-menu-open-request')?.detail, {
+    anchorId: 'stock-actions-sh600519',
+    code: 'sh600519'
+  });
 });
 
-test('pin button has accessible label', () => {
-  setup(card('sh600519', { name: '贵州茅台' }));
-  const btn = document.querySelector('button[data-action="pin"]') as HTMLElement;
-  const label = btn.getAttribute('aria-label') ?? '';
-  assert.ok(label.length > 0);
-});
-
-test('up and down buttons have accessible labels', () => {
-  setup(card('sh600519', { name: '贵州茅台' }));
-  const up = document.querySelector('button[data-action="move-up"]') as HTMLElement;
-  const down = document.querySelector('button[data-action="move-down"]') as HTMLElement;
-  assert.ok((up.getAttribute('aria-label') ?? '').length > 0);
-  assert.ok((down.getAttribute('aria-label') ?? '').length > 0);
-});
-
-test('all buttons meet 44px minimum touch target via CSS class', () => {
+test('menu trigger keeps the 44px touch target class', () => {
   setup(card('sh600519'));
   const buttons = document.querySelectorAll('article button');
   for (const btn of buttons) {
@@ -202,6 +168,6 @@ test('reconnecting the card does not duplicate listeners', () => {
   el.remove();
   document.body.querySelector('div')?.append(el);
   spy.reset();
-  clickAction('pin');
-  assert.equal(spy.eventCount('stock-pin-request'), 1);
+  clickAction('stock-menu');
+  assert.equal(spy.eventCount('stock-menu-open-request'), 1);
 });

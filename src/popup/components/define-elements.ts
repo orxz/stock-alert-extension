@@ -12,6 +12,8 @@ import { ColumnPanelElement } from './column-panel.js';
 import { QuoteStatusElement } from './quote-status.js';
 import { AppDialogHostElement } from './app-dialog-host.js';
 import { StockSearchComboboxElement } from './stock-search-combobox.js';
+import { StockActionMenuElement } from './stock-action-menu.js';
+import { AppPopoverHostElement } from './app-popover-host.js';
 
 export function definePopupElements(): void {
   if (!customElements.get('stock-app')) {
@@ -55,5 +57,11 @@ export function definePopupElements(): void {
   }
   if (!customElements.get('stock-search-combobox')) {
     customElements.define('stock-search-combobox', StockSearchComboboxElement);
+  }
+  if (!customElements.get('stock-action-menu')) {
+    customElements.define('stock-action-menu', StockActionMenuElement);
+  }
+  if (!customElements.get('app-popover-host')) {
+    customElements.define('app-popover-host', AppPopoverHostElement);
   }
 }

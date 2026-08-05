@@ -34,10 +34,14 @@ function setup() {
   document.body.append(fallback);
   const liveRegion = document.createElement('app-live-region');
   document.body.append(liveRegion);
+  const dialogHost = document.createElement('app-dialog-host');
+  document.body.append(dialogHost);
+  const popoverHost = document.createElement('app-popover-host');
+  document.body.append(popoverHost);
   const sink = { emit: mock.fn(() => {}) };
   const clock = { now: () => 0 };
-  const shell = createAppShell({ store, controller, stockApp, fallback, liveRegion, sink, clock });
-  return { store, controller, stockApp, fallback, shell, sink, listeners };
+  const shell = createAppShell({ store, controller, stockApp, fallback, liveRegion, dialogHost, popoverHost, sink, clock });
+  return { store, controller, stockApp, fallback, liveRegion, dialogHost, popoverHost, shell, sink, listeners };
 }
 
 test('column-settings-change updates presentation state and localStorage without RPC', () => {
@@ -108,6 +112,106 @@ test('stock-pin-request triggers setPinned', () => {
   const { stockApp, controller } = setup();
   stockApp.dispatchEvent(new CustomEvent('stock-pin-request', { bubbles: true, detail: { code: 'sh600519', pinned: true, orderedCodes: ['sh600519'] } }));
   assert.ok((controller.setPinned as unknown as { mock: { callCount: () => number } }).mock.callCount() >= 1);
+});
+
+test('stock menu open request stores the target while a missing stock renders closed safely', () => {
+  const { stockApp, popoverHost, store } = setup();
+  stockApp.dispatchEvent(new CustomEvent('stock-menu-open-request', {
+    bubbles: true,
+    detail: { anchorId: 'stock-actions-sh600519', code: 'sh600519' }
+  }));
+
+  assert.deepEqual(store.getState().overlay.menu, {
+    kind: 'stock-actions',
+    anchorId: 'stock-actions-sh600519',
+    code: 'sh600519'
+  });
+  assert.equal((popoverHost as HTMLElement & { viewModel: { kind: string | null } }).viewModel.kind, null);
+});
+
+test('column settings button has an anchor and opens the shared popover', () => {
+  const { stockApp, store } = setup();
+  const button = stockApp.querySelector('button[data-action="column-settings"]') as HTMLButtonElement;
+  assert.equal(button.id, 'column-settings-trigger');
+  button.focus();
+  button.click();
+
+  assert.deepEqual(store.getState().overlay.menu, {
+    kind: 'column-settings',
+    anchorId: 'column-settings-trigger'
+  });
+});
+
+test('popover close request clears only the menu overlay', () => {
+  const { stockApp, popoverHost, store } = setup();
+  stockApp.dispatchEvent(new CustomEvent('column-panel-open-request', { bubbles: true, detail: {} }));
+  assert.ok(store.getState().overlay.menu);
+
+  popoverHost.dispatchEvent(new CustomEvent('popover-close-request', {
+    bubbles: true,
+    detail: { reason: 'escape' }
+  }));
+
+  assert.equal(store.getState().overlay.menu, null);
+  assert.equal(store.getState().overlay.dialog, null);
+});
+
+test('events from the popover host reuse existing pin and column commands', () => {
+  const { popoverHost, controller, store } = setup();
+  popoverHost.dispatchEvent(new CustomEvent('stock-pin-request', {
+    bubbles: true,
+    detail: { code: 'sh600519', pinned: true, orderedCodes: ['sh600519'] }
+  }));
+  assert.equal((controller.setPinned as unknown as { mock: { callCount(): number } }).mock.callCount(), 1);
+
+  popoverHost.dispatchEvent(new CustomEvent('column-settings-change', {
+    bubbles: true,
+    detail: { columns: { version: 1, enabled: ['status'], order: ['status'] } }
+  }));
+  assert.ok(store.getState().view.columns.enabled.includes('status'));
+});
+
+test('stock remove asks for a one-stock confirmation and never deletes immediately', () => {
+  const { stockApp, popoverHost, dialogHost, store, controller } = setup();
+  stockApp.dispatchEvent(new CustomEvent('stock-menu-open-request', {
+    bubbles: true,
+    detail: { anchorId: 'stock-actions-sh600519', code: 'sh600519' }
+  }));
+
+  popoverHost.dispatchEvent(new CustomEvent('stock-remove-confirm-request', {
+    bubbles: true,
+    detail: { code: 'sh600519' }
+  }));
+
+  assert.deepEqual(store.getState().overlay.dialog, {
+    kind: 'confirm-remove',
+    codes: ['sh600519'],
+    groupId: 'g_all'
+  });
+  assert.equal(store.getState().overlay.menu, null);
+  assert.equal((controller.removeStocks as unknown as { mock: { callCount(): number } }).mock.callCount(), 0);
+
+  dialogHost.dispatchEvent(new CustomEvent('dialog-submit', {
+    bubbles: true,
+    detail: { kind: 'remove-stocks', codes: ['sh600519'], groupId: 'g_all' }
+  }));
+  assert.equal((controller.removeStocks as unknown as { mock: { callCount(): number } }).mock.callCount(), 1);
+});
+
+test('legacy stock-remove-request is also confirm-only', () => {
+  const { stockApp, store, controller } = setup();
+
+  stockApp.dispatchEvent(new CustomEvent('stock-remove-request', {
+    bubbles: true,
+    detail: { codes: ['sh600519'], groupId: 'g_all' }
+  }));
+
+  assert.deepEqual(store.getState().overlay.dialog, {
+    kind: 'confirm-remove',
+    codes: ['sh600519'],
+    groupId: 'g_all'
+  });
+  assert.equal((controller.removeStocks as unknown as { mock: { callCount(): number } }).mock.callCount(), 0);
 });
 
 test('destroy is idempotent', () => {

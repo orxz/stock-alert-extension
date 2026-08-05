@@ -95,6 +95,19 @@ export interface ColumnPanelViewModel {
   readonly columns: UiColumnPreferences;
 }
 
+export type PopoverKind = 'stock-actions' | 'column-settings';
+
+/** 股票操作与列设置共用的弹层纯数据快照。 */
+export interface PopoverViewModel {
+  readonly open: boolean;
+  readonly kind: PopoverKind | null;
+  readonly anchorId: string | null;
+  readonly groupId: GroupId;
+  readonly stock: StockCardViewModel | null;
+  readonly orderedCodes: readonly StockCode[];
+  readonly columnPanel: ColumnPanelViewModel;
+}
+
 /** 行情刷新状态视图模型。 */
 export interface QuoteStatusViewModel {
   readonly status: 'idle' | 'loading' | 'success' | 'error';
@@ -178,6 +191,22 @@ export function closedDialog(): DialogViewModel {
   };
 }
 
+/** 关闭态 PopoverViewModel；保留当前分组和列偏好供 host 安全重渲染。 */
+export function closedPopover(
+  groupId: GroupId,
+  columnPanel: ColumnPanelViewModel
+): PopoverViewModel {
+  return {
+    open: false,
+    kind: null,
+    anchorId: null,
+    groupId,
+    stock: null,
+    orderedCodes: [],
+    columnPanel
+  };
+}
+
 /** 默认看板配置：list + manual + asc + 价格可见。 */
 export function defaultBoardConfig(): BoardConfig {
   return { viewMode: 'list', sortField: 'manual', sortDirection: 'asc', priceHidden: false };
@@ -252,6 +281,7 @@ export interface AppViewModel {
   readonly quoteStatus: QuoteStatusViewModel;
   readonly liveRegion: LiveRegionViewModel;
   readonly dialog: DialogViewModel;
+  readonly popover: PopoverViewModel;
 }
 
 /** 将 Group 列表投影为 GroupTabViewModel 列表（按 order 升序）。 */

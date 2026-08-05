@@ -125,6 +125,7 @@ export class StockToolbarElement extends HTMLElement {
     // 列设置按钮
     const columnBtn = document.createElement('button');
     columnBtn.type = 'button';
+    columnBtn.id = 'column-settings-trigger';
     columnBtn.className = 'toolbar-btn';
     columnBtn.setAttribute('data-action', 'column-settings');
     columnBtn.setAttribute('aria-label', '列设置');

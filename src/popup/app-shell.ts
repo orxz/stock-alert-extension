@@ -6,7 +6,7 @@
 import type { Store } from './store/store.js';
 import type { CommandController } from './commands/command-controller.js';
 import { selectAppViewModel } from './store/selectors.js';
-import type { AppViewModel, DialogViewModel, LiveRegionViewModel } from './view-models.js';
+import type { AppViewModel, DialogViewModel, LiveRegionViewModel, PopoverViewModel } from './view-models.js';
 import type { PopupEventMap, DialogSubmitDetail } from './components/events.js';
 import type { DialogState } from './store/state.js';
 import type { GroupId, StockCode } from '../domain/index.js';
@@ -23,6 +23,7 @@ export interface AppShellDeps {
   readonly fallback: HTMLElement;
   readonly liveRegion: HTMLElement;
   readonly dialogHost?: HTMLElement;
+  readonly popoverHost?: HTMLElement;
   readonly sink: DiagnosticSink;
   readonly clock: { now(): number };
 }
@@ -36,6 +37,7 @@ export function createAppShell(deps: AppShellDeps): AppShell {
   const { store, controller, stockApp, fallback, sink, clock } = deps;
   const root = stockApp;
   const dialogHost = deps.dialogHost ?? null;
+  const popoverHost = deps.popoverHost ?? null;
   const liveRegion = deps.liveRegion;
   let destroyed = false;
   const ac = new AbortController();
@@ -56,6 +58,9 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       // 渲染对话框 VM 到 dialog-host（如果在 DOM 中）。
       if (dialogHost) {
         (dialogHost as HTMLElement & { viewModel: DialogViewModel }).viewModel = vm.dialog;
+      }
+      if (popoverHost) {
+        (popoverHost as HTMLElement & { viewModel: PopoverViewModel }).viewModel = vm.popover;
       }
       // 渲染 live-region VM。
       if (liveRegion) {
@@ -79,10 +84,12 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       const ce = event as CustomEvent<PopupEventMap[K]>;
       if (ce.detail !== undefined) handler(ce.detail);
     }) as EventListener;
-    root.addEventListener(type, listener, { signal: ac.signal });
-    // dialog-host 是 stock-app 的兄弟元素，其内部事件（dialog-submit 等）
-    // 需要在此元素上也注册监听器。
-    if (dialogHost) dialogHost.addEventListener(type, listener, { signal: ac.signal });
+    const eventRoots = new Set<HTMLElement>([root]);
+    if (dialogHost) eventRoots.add(dialogHost);
+    if (popoverHost) eventRoots.add(popoverHost);
+    for (const eventRoot of eventRoots) {
+      eventRoot.addEventListener(type, listener, { signal: ac.signal });
+    }
   }
 
   // ===== 导航/视图事件 =====
@@ -121,8 +128,13 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     store.dispatch({ type: 'view/selection', codes: newCodes });
   });
 
-  // column-panel-open-request: 列设置功能尚未完整接线（ColumnPanelElement 已注册但未接入 AppViewModel）。
-  // 暂不处理此事件，避免打开错误的对话框。待列设置功能完成后在此接入 overlay 路径。
+  on('column-panel-open-request', () => {
+    const anchorId = document.activeElement?.id || 'column-settings-trigger';
+    store.dispatch({
+      type: 'overlay/menu',
+      menu: { kind: 'column-settings', anchorId }
+    });
+  });
 
   // ===== 行情事件 =====
 
@@ -154,14 +166,45 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       pinned: d.pinned,
       orderedCodes: d.orderedCodes
     });
+    store.dispatch({ type: 'overlay/menu', menu: null });
   });
 
   on('stock-order-request', (d) => {
     void controller.setOrder({ groupId: d.groupId, orderedCodes: d.orderedCodes });
+    store.dispatch({ type: 'overlay/menu', menu: null });
+  });
+
+  on('stock-menu-open-request', (d) => {
+    store.dispatch({
+      type: 'overlay/menu',
+      menu: { kind: 'stock-actions', anchorId: d.anchorId, code: d.code }
+    });
+  });
+
+  on('popover-close-request', () => {
+    store.dispatch({ type: 'overlay/menu', menu: null });
+  });
+
+  on('stock-remove-confirm-request', (d) => {
+    const state = store.getState();
+    const anchorId = state.overlay.menu?.anchorId ?? null;
+    store.dispatch({ type: 'overlay/menu', menu: null });
+    store.dispatch({ type: 'overlay/focusReturn', id: anchorId });
+    store.dispatch({
+      type: 'overlay/dialog',
+      dialog: { kind: 'confirm-remove', codes: [d.code], groupId: state.view.currentGroupId }
+    });
   });
 
   on('stock-remove-request', (d) => {
-    void controller.removeStocks({ codes: d.codes, groupId: d.groupId });
+    if (d.codes.length === 0) return;
+    const anchorId = store.getState().overlay.menu?.anchorId ?? null;
+    store.dispatch({ type: 'overlay/menu', menu: null });
+    store.dispatch({ type: 'overlay/focusReturn', id: anchorId });
+    store.dispatch({
+      type: 'overlay/dialog',
+      dialog: { kind: 'confirm-remove', codes: d.codes, groupId: d.groupId }
+    });
   });
 
   on('batch-move-request', (d) => {
@@ -205,6 +248,7 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     // 根据 kind 从当前 state 构造完整 DialogState 上下文。
     const state = store.getState();
     const dialog = buildDialogState(d.kind, state);
+    store.dispatch({ type: 'overlay/menu', menu: null });
     store.dispatch({ type: 'overlay/dialog', dialog });
   });
 

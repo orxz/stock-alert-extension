@@ -35,10 +35,10 @@ export type DialogState =
   | { readonly kind: 'move-stocks'; readonly codes: readonly StockCode[]; readonly fromGroupId: GroupId }
   | { readonly kind: 'confirm-remove'; readonly codes: readonly StockCode[]; readonly groupId: GroupId };
 
-/** 右键菜单/弹出菜单锚点。 */
-export interface MenuState {
-  readonly anchor: string;
-}
+/** 弹出菜单状态：股票操作与列设置共享一个 overlay 槽位。 */
+export type MenuState =
+  | { readonly kind: 'stock-actions'; readonly anchorId: string; readonly code: StockCode }
+  | { readonly kind: 'column-settings'; readonly anchorId: string };
 
 /** Toast 通知。 */
 export interface ToastState {

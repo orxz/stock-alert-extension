@@ -1,7 +1,7 @@
 // src/popup/components/stock-table.ts
 // Task 16 Step 4 — 列表视图组件。
 // Real table/thead/tbody + header 按钮 + aria-sort。行 keyed by stock code。
-// 行内 pin/up/down 按钮复用 moveKey helper，与 stock-card 行为一致。
+// 每行仅保留一个确定性菜单触发器；具体操作由统一 popover 承载。
 // 架构约束：仅 import domain + view-models + events + keyed-update + 纯虚拟窗口计算；
 // per-connection AbortController。
 import type { StockCode, GroupId, SortField, SortDirection } from '../../domain/index.js';
@@ -11,7 +11,6 @@ import {
   type VirtualViewport
 } from '../virtualization/virtual-window.js';
 import { emitPopupEvent } from './events.js';
-import { moveKey } from './stock-card.js';
 import { updateKeyedChildren } from './keyed-update.js';
 import { DEFAULT_UI_COLUMNS, normalizeUiColumns, type ColumnKey, type UiColumnPreferences } from '../ui-preferences.js';
 
@@ -248,7 +247,7 @@ export class StockTableElement extends HTMLElement {
         return;
       }
 
-      // Row action buttons (pin/up/down)
+      // Row stock menu trigger
       const row = target.closest('tr[data-key]') as HTMLElement | null;
       if (!row) return;
       const code = row.getAttribute('data-key') as StockCode;
@@ -259,30 +258,10 @@ export class StockTableElement extends HTMLElement {
       const action = actionBtn.getAttribute('data-action');
       if (!action) return;
 
-      const orderedCodes = this._viewModel.map((vm) => vm.code);
-
-      if (action === 'pin') {
-        const vm = this._viewModel.find((v) => v.code === code);
-        if (vm) {
-          const newPinned = !vm.pinned;
-          const newOrdered = newPinned
-            ? [code, ...orderedCodes.filter((c) => c !== code)]
-            : [...orderedCodes];
-          emitPopupEvent(this, 'stock-pin-request', {
-            code,
-            pinned: newPinned,
-            orderedCodes: newOrdered
-          });
-        }
-      } else if (action === 'move-up') {
-        emitPopupEvent(this, 'stock-order-request', {
-          groupId: this._groupId,
-          orderedCodes: moveKey(orderedCodes, code, -1)
-        });
-      } else if (action === 'move-down') {
-        emitPopupEvent(this, 'stock-order-request', {
-          groupId: this._groupId,
-          orderedCodes: moveKey(orderedCodes, code, 1)
+      if (action === 'stock-menu') {
+        emitPopupEvent(this, 'stock-menu-open-request', {
+          anchorId: `stock-actions-${code}`,
+          code
         });
       }
     }, { signal });
@@ -368,25 +347,13 @@ export class StockTableElement extends HTMLElement {
     const actionsTd = document.createElement('td');
     actionsTd.className = 'stock-table-cell stock-table-cell--actions';
 
-    const pinBtn = document.createElement('button');
-    pinBtn.type = 'button';
-    pinBtn.className = 'stock-table-btn';
-    pinBtn.setAttribute('data-action', 'pin');
-    actionsTd.append(pinBtn);
-
-    const upBtn = document.createElement('button');
-    upBtn.type = 'button';
-    upBtn.className = 'stock-table-btn';
-    upBtn.setAttribute('data-action', 'move-up');
-    upBtn.textContent = '↑';
-    actionsTd.append(upBtn);
-
-    const downBtn = document.createElement('button');
-    downBtn.type = 'button';
-    downBtn.className = 'stock-table-btn';
-    downBtn.setAttribute('data-action', 'move-down');
-    downBtn.textContent = '↓';
-    actionsTd.append(downBtn);
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'stock-table-btn';
+    menuBtn.dataset.action = 'stock-menu';
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.textContent = '•••';
+    actionsTd.append(menuBtn);
 
     tr.append(actionsTd);
 
@@ -423,15 +390,10 @@ export class StockTableElement extends HTMLElement {
       setText(statusCell, label);
     }
     const actions = tr.querySelector('.stock-table-cell--actions');
-    const pinBtn = actions?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;
-    if (pinBtn) {
-      setAttribute(pinBtn, 'aria-pressed', String(vm.pinned));
-      setAttribute(pinBtn, 'aria-label', vm.pinned ? `取消置顶 ${vm.name}` : `置顶 ${vm.name}`);
-      setText(pinBtn, vm.pinned ? '📌' : '📍');
+    const menuBtn = actions?.querySelector('button[data-action="stock-menu"]') as HTMLButtonElement | null;
+    if (menuBtn) {
+      menuBtn.id = `stock-actions-${vm.code}`;
+      setAttribute(menuBtn, 'aria-label', `打开 ${vm.name} 操作菜单`);
     }
-    const upBtn = actions?.querySelector('button[data-action="move-up"]') as HTMLButtonElement | null;
-    setAttribute(upBtn ?? undefined, 'aria-label', `上移 ${vm.name}`);
-    const downBtn = actions?.querySelector('button[data-action="move-down"]') as HTMLButtonElement | null;
-    setAttribute(downBtn ?? undefined, 'aria-label', `下移 ${vm.name}`);
   }
 }

@@ -369,10 +369,30 @@ test('overlay/dialog sets and clears dialog', () => {
 });
 
 test('overlay/menu sets and clears menu', () => {
-  let state = reducer(createInitialState(), { type: 'overlay/menu', menu: { anchor: 'btn-1' } });
-  assert.equal(state.overlay.menu?.anchor, 'btn-1');
+  let state = reducer(createInitialState(), {
+    type: 'overlay/menu',
+    menu: {
+      kind: 'stock-actions',
+      anchorId: 'stock-actions-sh600519',
+      code: 'sh600519' as StockCode
+    }
+  });
+  assert.equal(state.overlay.menu?.kind, 'stock-actions');
+  assert.equal(state.overlay.menu.anchorId, 'stock-actions-sh600519');
   state = reducer(state, { type: 'overlay/menu', menu: null });
   assert.equal(state.overlay.menu, null);
+});
+
+test('overlay/menu preserves the column settings discriminator', () => {
+  const state = reducer(createInitialState(), {
+    type: 'overlay/menu',
+    menu: { kind: 'column-settings', anchorId: 'column-settings-trigger' }
+  });
+
+  assert.deepEqual(state.overlay.menu, {
+    kind: 'column-settings',
+    anchorId: 'column-settings-trigger'
+  });
 });
 
 test('overlay/toast sets and clears toast', () => {

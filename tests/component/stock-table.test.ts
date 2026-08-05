@@ -126,6 +126,28 @@ test('row displays stock name and price', () => {
   assert.ok(row.textContent?.includes('1688.00'));
 });
 
+test('each table row renders exactly one deterministic stock menu trigger', () => {
+  setupTable([card('sh600519', { name: '贵州茅台' }), card('sz000001', { name: '平安银行' })]);
+  const rows = document.querySelectorAll('tbody tr[data-key]');
+  for (const row of rows) {
+    assert.equal(row.querySelectorAll('button[data-action="stock-menu"]').length, 1);
+    assert.equal(row.querySelectorAll('button[data-action="pin"], button[data-action^="move-"]').length, 0);
+  }
+  const trigger = document.querySelector('#stock-actions-sh600519') as HTMLButtonElement;
+  assert.equal(trigger.getAttribute('aria-label'), '打开 贵州茅台 操作菜单');
+  assert.equal(trigger.textContent, '•••');
+});
+
+test('table menu trigger emits the exact stock-menu-open-request payload', () => {
+  const { spy } = setupTable([card('sh600519')]);
+  spy.reset();
+  (document.querySelector('#stock-actions-sh600519') as HTMLButtonElement).click();
+  assert.deepEqual(spy.lastEvent('stock-menu-open-request')?.detail, {
+    anchorId: 'stock-actions-sh600519',
+    code: 'sh600519'
+  });
+});
+
 test('clicking a header button emits preferences-change with sortField', () => {
   const { spy } = setupTable([card('sh600519')]);
   spy.reset();

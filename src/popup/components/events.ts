@@ -19,6 +19,9 @@ export interface PopupEventMap {
   'stock-pin-request': { readonly code: StockCode; readonly pinned: boolean; readonly orderedCodes: readonly StockCode[] };
   'stock-remove-request': { readonly codes: readonly StockCode[]; readonly groupId: GroupId };
   'stock-order-request': { readonly groupId: GroupId; readonly orderedCodes: readonly StockCode[] };
+  'stock-menu-open-request': { readonly anchorId: string; readonly code: StockCode };
+  'stock-remove-confirm-request': { readonly code: StockCode };
+  'popover-close-request': { readonly reason: 'action' | 'escape' | 'outside' | 'missing-anchor' };
   'batch-move-request': { readonly codes: readonly StockCode[]; readonly fromGroupId: GroupId; readonly targetGroupIds: readonly GroupId[] };
   'view-mode-change': { readonly viewMode: ViewMode };
   'preferences-change': {

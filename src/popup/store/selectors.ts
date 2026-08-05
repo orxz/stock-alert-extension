@@ -8,7 +8,8 @@ import {
   defaultBoardConfig,
   toStockCardViewModels,
   toGroupTabs,
-  closedDialog
+  closedDialog,
+  closedPopover
 } from '../view-models.js';
 import type {
   AppViewModel,
@@ -22,7 +23,8 @@ import type {
   LiveRegionViewModel,
   DialogViewModel,
   DialogGroupOption,
-  ColumnPanelViewModel
+  ColumnPanelViewModel,
+  PopoverViewModel
 } from '../view-models.js';
 
 /** 固定计算视图分组 ID。 */
@@ -82,6 +84,47 @@ export function selectBoard(state: AppState): BoardViewModel {
 /** 纯展示列偏好；不读取或改写 domain.boardConfig。 */
 export function selectColumnPanel(state: AppState): ColumnPanelViewModel {
   return { columns: state.view.columns };
+}
+
+/** 股票操作与列设置的统一弹层投影；无效股票目标安全退化为关闭态。 */
+export function selectPopover(state: AppState): PopoverViewModel {
+  const menu = state.overlay.menu;
+  const groupId = state.view.currentGroupId;
+  const columnPanel = selectColumnPanel(state);
+  if (!menu) return closedPopover(groupId, columnPanel);
+
+  if (menu.kind === 'column-settings') {
+    return {
+      open: true,
+      kind: 'column-settings',
+      anchorId: menu.anchorId,
+      groupId,
+      stock: null,
+      orderedCodes: [],
+      columnPanel
+    };
+  }
+
+  const config = selectCurrentBoardConfig(state);
+  const orderedStocks = sortStocks(
+    stocksForGroup(state.domain.userData.watchlist, groupId),
+    state.domain.quotes,
+    groupId,
+    config
+  );
+  const target = orderedStocks.find((stock) => stock.code === menu.code);
+  if (!target) return closedPopover(groupId, columnPanel);
+  const [stock] = toStockCardViewModels([target], state.domain.quotes, config, groupId);
+
+  return {
+    open: true,
+    kind: 'stock-actions',
+    anchorId: menu.anchorId,
+    groupId,
+    stock,
+    orderedCodes: orderedStocks.map((item) => item.code),
+    columnPanel
+  };
 }
 
 /** 分组标签（按 order 升序，标记当前激活）。 */
@@ -247,6 +290,7 @@ export function selectAppViewModel(state: AppState): AppViewModel {
     batchToolbar: selectBatchToolbar(state),
     quoteStatus: selectQuoteStatus(state),
     liveRegion: selectLiveRegion(state),
-    dialog: selectDialog(state)
+    dialog: selectDialog(state),
+    popover: selectPopover(state)
   };
 }

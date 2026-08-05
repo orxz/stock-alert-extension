@@ -41,6 +41,7 @@ const stockApp = document.querySelector<HTMLElement>('#stock-app');
 const fallback = document.getElementById('fatal-fallback');
 const liveRegion = document.querySelector<HTMLElement>('#app-live-region');
 const dialogHost = document.querySelector<HTMLElement>('#dialog-host');
+const popoverHost = document.querySelector<HTMLElement>('#popover-host');
 
 if (!stockApp || !fallback) throw new Error('Popup bootstrap: missing #stock-app or #fatal-fallback');
 
@@ -51,6 +52,7 @@ const shell = createAppShell({
   fallback,
   liveRegion: liveRegion ?? stockApp,
   dialogHost: dialogHost ?? undefined,
+  popoverHost: popoverHost ?? undefined,
   sink,
   clock
 });

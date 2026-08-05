@@ -2,30 +2,12 @@
 // Task 16 Step 4 — 安全的股票卡片渲染组件。
 // article + text nodes + native buttons；价格掩码改变文本为 **** 但保留 accessible name。
 // fresh/cached/missing 有文本标签；无 innerHTML。
-// Pin 按钮发出 stock-pin-request；up/down 按钮通过 moveKey helper 计算完整 orderedCodes 并发出 stock-order-request。
+// 每张卡片仅保留一个确定性菜单触发器；具体操作由统一 popover 承载。
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { StockCardViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
 import { DEFAULT_UI_COLUMNS, normalizeUiColumns, type ColumnKey, type UiColumnPreferences } from '../ui-preferences.js';
-
-/**
- * 纯函数：在有序代码列表中将 code 移动 delta 位，返回新数组。
- * 指针拖拽和键盘 up/down 按钮共用此 helper。
- */
-export function moveKey(
-  orderedCodes: readonly StockCode[],
-  code: StockCode,
-  delta: number
-): StockCode[] {
-  const result = [...orderedCodes];
-  const i = result.indexOf(code);
-  if (i < 0) return result;
-  const j = i + delta;
-  if (j < 0 || j >= result.length) return result;
-  [result[i], result[j]] = [result[j], result[i]];
-  return result;
-}
 
 const STATUS_LABELS: Readonly<Record<StockCardViewModel['status'], string>> = {
   fresh: '实时',
@@ -51,9 +33,7 @@ export class StockCardElement extends HTMLElement {
   private amountEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private staleEl: HTMLElement | null = null;
-  private pinBtn: HTMLButtonElement | null = null;
-  private upBtn: HTMLButtonElement | null = null;
-  private downBtn: HTMLButtonElement | null = null;
+  private menuBtn: HTMLButtonElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -107,8 +87,8 @@ export class StockCardElement extends HTMLElement {
   }
 
   private buildSkeleton(): void {
-    // 卡片可聚焦（tabindex=0）+ Enter/Space 切换 pin；在 stock-grid 的
-    // role=list 容器中作为 listitem，同时允许内部原生操作按钮。
+    // 卡片可聚焦（tabindex=0）+ Enter/Space 打开菜单；在 stock-grid 的
+    // role=list 容器中作为 listitem，同时允许内部原生菜单触发按钮。
     this.setAttribute('tabindex', '0');
     this.setAttribute('role', 'listitem');
 
@@ -177,63 +157,26 @@ export class StockCardElement extends HTMLElement {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'stock-card-actions';
 
-    const pinBtn = document.createElement('button');
-    pinBtn.type = 'button';
-    pinBtn.className = 'stock-card-btn stock-card-action';
-    pinBtn.setAttribute('data-action', 'pin');
-    pinBtn.setAttribute('aria-pressed', 'false');
-    this.pinBtn = pinBtn;
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'stock-card-btn stock-card-action';
+    menuBtn.dataset.action = 'stock-menu';
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.textContent = '•••';
+    this.menuBtn = menuBtn;
 
-    const upBtn = document.createElement('button');
-    upBtn.type = 'button';
-    upBtn.className = 'stock-card-btn stock-card-action';
-    upBtn.setAttribute('data-action', 'move-up');
-    upBtn.textContent = '↑';
-    this.upBtn = upBtn;
-
-    const downBtn = document.createElement('button');
-    downBtn.type = 'button';
-    downBtn.className = 'stock-card-btn stock-card-action';
-    downBtn.setAttribute('data-action', 'move-down');
-    downBtn.textContent = '↓';
-    this.downBtn = downBtn;
-
-    actionsDiv.append(pinBtn, upBtn, downBtn);
+    actionsDiv.append(menuBtn);
 
     article.append(fields, actionsDiv);
     this.append(article);
   }
 
   private bindEvents(signal: AbortSignal): void {
-    this.pinBtn?.addEventListener('click', () => {
+    this.menuBtn?.addEventListener('click', () => {
       if (!this._viewModel) return;
-      const newPinned = !this._viewModel.pinned;
-      // Pin moves the code to the top of orderedCodes if pinning, or stays in place if unpinning.
-      const orderedCodes = newPinned
-        ? [this._viewModel.code, ...this._orderedCodes.filter((c) => c !== this._viewModel!.code)]
-        : [...this._orderedCodes];
-      emitPopupEvent(this, 'stock-pin-request', {
-        code: this._viewModel.code,
-        pinned: newPinned,
-        orderedCodes
-      });
-    }, { signal });
-
-    this.upBtn?.addEventListener('click', () => {
-      if (!this._viewModel) return;
-      const orderedCodes = moveKey(this._orderedCodes, this._viewModel.code, -1);
-      emitPopupEvent(this, 'stock-order-request', {
-        groupId: this._groupId,
-        orderedCodes
-      });
-    }, { signal });
-
-    this.downBtn?.addEventListener('click', () => {
-      if (!this._viewModel) return;
-      const orderedCodes = moveKey(this._orderedCodes, this._viewModel.code, 1);
-      emitPopupEvent(this, 'stock-order-request', {
-        groupId: this._groupId,
-        orderedCodes
+      emitPopupEvent(this, 'stock-menu-open-request', {
+        anchorId: `stock-actions-${this._viewModel.code}`,
+        code: this._viewModel.code
       });
     }, { signal });
 
@@ -246,12 +189,13 @@ export class StockCardElement extends HTMLElement {
       emitPopupEvent(this, 'stock-toggle-select', { code: this._viewModel.code });
     }, { signal });
 
-    // 键盘快捷键：Enter/Space 切换 pin（卡片可聚焦，role=group 不构成嵌套交互）。
+    // 键盘快捷键：卡片自身聚焦时 Enter/Space 打开操作菜单。
     this.addEventListener('keydown', (e) => {
       if (!this._viewModel) return;
+      if ((e.target as HTMLElement).closest('button')) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        this.pinBtn?.click();
+        this.menuBtn?.click();
       }
     }, { signal });
   }
@@ -295,17 +239,9 @@ export class StockCardElement extends HTMLElement {
       this.staleEl.textContent = vm.staleLabel;
       this.staleEl.classList.toggle('stock-card-stale', Boolean(vm.staleLabel));
     }
-    if (this.pinBtn) {
-      this.pinBtn.setAttribute('aria-pressed', String(vm.pinned));
-      this.pinBtn.setAttribute('aria-label', vm.pinned ? `取消置顶 ${vm.name}` : `置顶 ${vm.name}`);
-      this.pinBtn.textContent = vm.pinned ? '📌' : '📍';
-      this.pinBtn.classList.toggle('is-active', vm.pinned);
-    }
-    if (this.upBtn) {
-      this.upBtn.setAttribute('aria-label', `上移 ${vm.name}`);
-    }
-    if (this.downBtn) {
-      this.downBtn.setAttribute('aria-label', `下移 ${vm.name}`);
+    if (this.menuBtn) {
+      this.menuBtn.id = `stock-actions-${vm.code}`;
+      this.menuBtn.setAttribute('aria-label', `打开 ${vm.name} 操作菜单`);
     }
   }
 

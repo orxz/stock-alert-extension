@@ -6,6 +6,7 @@ import test from 'node:test';
 import type { GroupId, StockCode, QuoteSnapshot, Stock, BoardConfig, UserData } from '../../../src/domain/index.js';
 import { createInitialState } from '../../../src/popup/store/state.js';
 import type { AppState } from '../../../src/popup/store/state.js';
+import { reducer } from '../../../src/popup/store/reducer.js';
 import {
   selectCurrentBoardConfig,
   selectVisibleStocks,
@@ -17,6 +18,7 @@ import {
   selectLiveRegion,
   selectBoard,
   selectColumnPanel,
+  selectPopover,
   selectAppViewModel
 } from '../../../src/popup/store/selectors.js';
 import { normalizeUiColumns } from '../../../src/popup/ui-preferences.js';
@@ -346,4 +348,52 @@ test('column preferences project unchanged into board, panel, and root view mode
   assert.equal(selectBoard(state).columns, columns);
   assert.equal(selectColumnPanel(state).columns, columns);
   assert.equal(selectAppViewModel(state).columnPanel.columns, columns);
+});
+
+test('stock action menu selector exposes only the requested stock', () => {
+  const state = stateWith([
+    mkStock('sh600519', '贵州茅台'),
+    mkStock('sz000001', '平安银行')
+  ]);
+  const opened = reducer(state, {
+    type: 'overlay/menu',
+    menu: {
+      kind: 'stock-actions',
+      anchorId: 'stock-actions-sh600519',
+      code: 'sh600519' as StockCode
+    }
+  });
+
+  const vm = selectPopover(opened);
+  assert.equal(vm.kind, 'stock-actions');
+  assert.equal(vm.stock?.code, 'sh600519');
+});
+
+test('stock action menu selector closes safely when its target was deleted', () => {
+  const state = reducer(stateWith([]), {
+    type: 'overlay/menu',
+    menu: {
+      kind: 'stock-actions',
+      anchorId: 'stock-actions-sh600519',
+      code: 'sh600519' as StockCode
+    }
+  });
+
+  const vm = selectPopover(state);
+  assert.equal(vm.open, false);
+  assert.equal(vm.kind, null);
+  assert.equal(vm.stock, null);
+});
+
+test('column settings menu selector reuses the column panel projection', () => {
+  const state = reducer(createInitialState(), {
+    type: 'overlay/menu',
+    menu: { kind: 'column-settings', anchorId: 'column-settings-trigger' }
+  });
+
+  const vm = selectPopover(state);
+  assert.equal(vm.open, true);
+  assert.equal(vm.kind, 'column-settings');
+  assert.equal(vm.anchorId, 'column-settings-trigger');
+  assert.equal(vm.columnPanel.columns, state.view.columns);
 });
