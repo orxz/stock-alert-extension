@@ -40,3 +40,17 @@ test('invalid inputs produce a finite safe window', () => {
     afterExtent: 0, normalizedScrollOffset: 0
   });
 });
+
+test('non-finite overscan produces a finite bounded viewport window', () => {
+  for (const overscanScreens of [Number.NaN, Number.POSITIVE_INFINITY]) {
+    const result = calculateVirtualWindow({
+      itemCount: 500, itemExtent: 48, viewportExtent: 390,
+      scrollOffset: 4_800, overscanScreens
+    });
+
+    assert.ok(Object.values(result).every(Number.isFinite));
+    assert.ok(result.startIndex >= 0);
+    assert.ok(result.endIndex <= 500);
+    assert.equal(result.endIndex - result.startIndex, 9);
+  }
+});

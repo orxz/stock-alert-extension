@@ -32,7 +32,10 @@ export function calculateVirtualWindow(input: VirtualWindowInput): VirtualWindow
   }
 
   const visibleCount = Math.ceil(viewportExtent / itemExtent);
-  const overscanCount = Math.ceil(visibleCount * Math.max(0, input.overscanScreens));
+  const overscanScreens = Number.isFinite(input.overscanScreens)
+    ? Math.max(0, input.overscanScreens)
+    : 0;
+  const overscanCount = Math.ceil(visibleCount * overscanScreens);
   const firstVisible = Math.floor(normalizedScrollOffset / itemExtent);
   const startIndex = Math.max(0, firstVisible - overscanCount);
   const endIndex = Math.min(itemCount, firstVisible + visibleCount + overscanCount);
