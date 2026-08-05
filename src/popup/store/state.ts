@@ -3,6 +3,7 @@
 // 纯数据——不含 DOM 节点 / Promise / timer / AbortController / class instance / 可变 Set/Map。
 // 唯一状态写入口是 reducer；Selector 只读派生。
 import type { GroupId, StockCode, UserDataRevision, UserData, QuoteSnapshot, StockSearchResult } from '../../domain/index.js';
+import { DEFAULT_UI_COLUMNS, type UiColumnPreferences } from '../ui-preferences.js';
 
 /**
  * Popup 端错误表示：稳定 code（字符串，兼容任意错误码）+ 安全文案 + 可重试标记。
@@ -63,6 +64,7 @@ export interface AppState {
     selectedCodes: readonly StockCode[];
     searchResults: readonly StockSearchResult[];
     theme: 'dark' | 'light';
+    columns: UiColumnPreferences;
   }>;
   readonly async: Readonly<{
     bootstrap: AsyncState;
@@ -90,7 +92,10 @@ const EMPTY_SNAPSHOT: QuoteSnapshot = {
 };
 
 /** 安全的空初始态：g_all 计算视图打头，空 watchlist，所有 async idle，无 overlay。 */
-export function createInitialState(theme: 'dark' | 'light' = 'dark'): AppState {
+export function createInitialState(
+  theme: 'dark' | 'light' = 'dark',
+  columns: UiColumnPreferences = DEFAULT_UI_COLUMNS
+): AppState {
   return {
     domain: {
       userData: {
@@ -111,6 +116,7 @@ export function createInitialState(theme: 'dark' | 'light' = 'dark'): AppState {
       selectedCodes: [],
       searchResults: [],
       theme,
+      columns,
     },
     async: {
       bootstrap: { status: 'idle' },

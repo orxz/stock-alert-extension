@@ -14,8 +14,12 @@ import {
   selectHeader,
   selectBatchToolbar,
   selectQuoteStatus,
-  selectLiveRegion
+  selectLiveRegion,
+  selectBoard,
+  selectColumnPanel,
+  selectAppViewModel
 } from '../../../src/popup/store/selectors.js';
+import { normalizeUiColumns } from '../../../src/popup/ui-preferences.js';
 
 // ===== helpers =====
 
@@ -329,4 +333,17 @@ test('selectLiveRegion surfaces toast message when present', () => {
 test('selectLiveRegion is empty when no toast', () => {
   const region = selectLiveRegion(createInitialState());
   assert.equal(region.message, '');
+});
+
+test('column preferences project unchanged into board, panel, and root view models', () => {
+  const columns = normalizeUiColumns({
+    version: 1,
+    enabled: ['name', 'price', 'changePercent', 'status'],
+    order: ['status', 'changePercent', 'name', 'price']
+  });
+  const state = createInitialState('light', columns);
+
+  assert.equal(selectBoard(state).columns, columns);
+  assert.equal(selectColumnPanel(state).columns, columns);
+  assert.equal(selectAppViewModel(state).columnPanel.columns, columns);
 });

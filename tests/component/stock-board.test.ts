@@ -11,6 +11,8 @@ import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { BoardViewModel, StockCardViewModel } from '../../src/popup/view-models.js';
 import type { StockCode, GroupId } from '../../src/domain/index.js';
+import { DEFAULT_UI_COLUMNS } from '../../src/popup/ui-preferences.js';
+import type { UiColumnPreferences } from '../../src/popup/ui-preferences.js';
 
 function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockCardViewModel {
   return {
@@ -40,6 +42,7 @@ function board(overrides: Partial<BoardViewModel> = {}): BoardViewModel {
     error: null,
     empty: false,
     emptyMessage: '暂无股票',
+    columns: DEFAULT_UI_COLUMNS,
     ...overrides
   };
 }
@@ -65,12 +68,27 @@ function setupBoard(vm?: BoardViewModel): {
   return { el, spy };
 }
 
-function setupGrid(stocks: StockCardViewModel[]): {
+test('grid propagates enabled column order to rendered cards', () => {
+  const columns: UiColumnPreferences = {
+    version: 1,
+    enabled: ['name', 'price', 'changePercent', 'code'],
+    order: ['code', 'name', 'price', 'changePercent', 'amount', 'status']
+  };
+  const { el } = setupGrid([card('sh600519')], columns);
+
+  assert.deepEqual(
+    Array.from(el.querySelectorAll('.stock-card-fields > [data-column]'), (field) => field.getAttribute('data-column')),
+    ['code', 'name', 'price', 'changePercent']
+  );
+});
+
+function setupGrid(stocks: StockCardViewModel[], columns: UiColumnPreferences = DEFAULT_UI_COLUMNS): {
   el: HTMLElement & {
     viewModel: StockCardViewModel[];
     groupId: GroupId;
     viewport: { scrollOffset: number; viewportExtent: number };
     focusCode(code: StockCode): boolean;
+    columns: UiColumnPreferences;
   };
   spy: PopupEventSpy;
 } {
@@ -84,9 +102,11 @@ function setupGrid(stocks: StockCardViewModel[]): {
     groupId: GroupId;
     viewport: { scrollOffset: number; viewportExtent: number };
     focusCode(code: StockCode): boolean;
+    columns: UiColumnPreferences;
   };
   container.append(el);
   el.groupId = GROUP_ID;
+  el.columns = columns;
   el.viewModel = stocks;
   return { el, spy };
 }

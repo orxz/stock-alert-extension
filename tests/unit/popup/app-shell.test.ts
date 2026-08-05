@@ -10,6 +10,7 @@ import { createInitialState } from '../../../src/popup/store/state.js';
 import { createAppShell } from '../../../src/popup/app-shell.js';
 import type { CommandController } from '../../../src/popup/commands/command-controller.js';
 import type { AppViewModel } from '../../../src/popup/view-models.js';
+import { DEFAULT_UI_COLUMNS, UI_COLUMNS_STORAGE_KEY } from '../../../src/popup/ui-preferences.js';
 
 function mkController(): CommandController {
   return { bootstrap: mock.fn(() => Promise.resolve()), refreshQuotes: mock.fn(() => Promise.resolve()), searchStocks: mock.fn(() => Promise.resolve()), addStock: mock.fn(() => Promise.resolve()), removeStocks: mock.fn(() => Promise.resolve()), moveStocks: mock.fn(() => Promise.resolve()), setPinned: mock.fn(() => Promise.resolve()), setOrder: mock.fn(() => Promise.resolve()), createGroup: mock.fn(() => Promise.resolve()), renameGroup: mock.fn(() => Promise.resolve()), deleteGroup: mock.fn(() => Promise.resolve()), setGroupOrder: mock.fn(() => Promise.resolve()), patchPreferences: mock.fn(() => Promise.resolve()) } as unknown as CommandController;
@@ -17,6 +18,7 @@ function mkController(): CommandController {
 
 function setup() {
   resetDom();
+  window.localStorage.clear();
   definePopupElements();
   const store = createStore(reducer, createInitialState());
   const controller = mkController();
@@ -31,6 +33,28 @@ function setup() {
   const shell = createAppShell({ store, controller, stockApp, fallback, liveRegion, sink, clock });
   return { store, controller, stockApp, fallback, shell, sink };
 }
+
+test('column-settings-change updates presentation state and localStorage without RPC', () => {
+  const { stockApp, store, controller } = setup();
+  const domain = store.getState().domain;
+
+  stockApp.dispatchEvent(new CustomEvent('column-settings-change', {
+    bubbles: true,
+    detail: {
+      columns: { version: 1, enabled: ['status'], order: ['status'] }
+    }
+  }));
+
+  assert.deepEqual(store.getState().view.columns, {
+    version: 1,
+    enabled: ['name', 'price', 'changePercent', 'status'],
+    order: ['name', 'price', 'changePercent', 'status', 'amount', 'code']
+  });
+  assert.equal(store.getState().domain, domain);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(UI_COLUMNS_STORAGE_KEY) ?? ''), store.getState().view.columns);
+  assert.equal((controller.patchPreferences as unknown as { mock: { callCount: () => number } }).mock.callCount(), 0);
+  assert.notDeepEqual(store.getState().view.columns, DEFAULT_UI_COLUMNS);
+});
 
 test('renderAppSafely shows stockApp and hides fallback', () => {
   const { stockApp, fallback } = setup();

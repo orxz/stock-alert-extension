@@ -12,6 +12,7 @@ const ALL_EVENT_TYPES = [
   'batch-move-request',
   'view-mode-change',
   'preferences-change',
+  'column-settings-change',
   'selection-mode-change',
   'theme-change',
   'search-keyword-change',

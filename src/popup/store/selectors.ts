@@ -1,6 +1,6 @@
 // src/popup/store/selectors.ts
 // 纯 Selector：从 AppState 派生 ViewModel。只读、无副作用、不缓存可变值。
-// Selectors 是组件渲染的唯一数据来源；偏好只从 domain.boardConfig 派生（单一真相）。
+// Selectors 是组件渲染的唯一数据来源；业务偏好来自 domain.boardConfig，展示列偏好来自 view.columns。
 import type { BoardConfig, Stock, GroupId } from '../../domain/index.js';
 import { stocksForGroup, sortStocks } from '../../domain/index.js';
 import type { AppState } from './state.js';
@@ -21,7 +21,8 @@ import type {
   QuoteStatusViewModel,
   LiveRegionViewModel,
   DialogViewModel,
-  DialogGroupOption
+  DialogGroupOption,
+  ColumnPanelViewModel
 } from '../view-models.js';
 
 /** 固定计算视图分组 ID。 */
@@ -73,8 +74,14 @@ export function selectBoard(state: AppState): BoardViewModel {
     loading,
     error,
     empty: !loading && !error && stocks.length === 0,
-    emptyMessage: '暂无股票，点击添加'
+    emptyMessage: '暂无股票，点击添加',
+    columns: state.view.columns
   };
+}
+
+/** 纯展示列偏好；不读取或改写 domain.boardConfig。 */
+export function selectColumnPanel(state: AppState): ColumnPanelViewModel {
+  return { columns: state.view.columns };
 }
 
 /** 分组标签（按 order 升序，标记当前激活）。 */
@@ -235,6 +242,7 @@ export function selectAppViewModel(state: AppState): AppViewModel {
     header: selectHeader(state),
     groupTabs: selectGroupTabs(state),
     board: selectBoard(state),
+    columnPanel: selectColumnPanel(state),
     toolbar: selectToolbar(state),
     batchToolbar: selectBatchToolbar(state),
     quoteStatus: selectQuoteStatus(state),

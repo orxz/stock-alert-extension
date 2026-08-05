@@ -9,6 +9,7 @@ import { createInitialState } from './store/state.js';
 import { CallbackRpcClient } from './rpc-client.js';
 import { CommandController } from './commands/command-controller.js';
 import { createAppShell } from './app-shell.js';
+import { DEFAULT_UI_COLUMNS, loadUiColumns } from './ui-preferences.js';
 
 definePopupElements();
 // 主题初始化：读 localStorage，设 data-theme（在 Store 创建前执行，避免闪烁）。
@@ -17,6 +18,10 @@ try {
   if (localStorage.getItem('uiTheme') === 'light') initialTheme = 'light';
 } catch { /* 隐私模式：默认深色 */ }
 document.documentElement.dataset.theme = initialTheme;
+let initialColumns = DEFAULT_UI_COLUMNS;
+try {
+  initialColumns = loadUiColumns(window.localStorage);
+} catch { /* localStorage accessor unavailable: use defaults */ }
 
 
 const sink = {
@@ -29,7 +34,7 @@ const clock = { now: () => Date.now() };
 const rpc = new CallbackRpcClient((message: unknown, cb: (r: unknown) => void) => {
   chrome.runtime.sendMessage(message, cb);
 });
-const store = createStore(reducer, createInitialState(initialTheme));
+const store = createStore(reducer, createInitialState(initialTheme, initialColumns));
 const controller = new CommandController(rpc, store);
 
 const stockApp = document.querySelector<HTMLElement>('#stock-app');

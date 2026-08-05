@@ -4,6 +4,7 @@
 import type { GroupId, StockCode, QuoteSnapshot, StockSearchResult } from '../../domain/index.js';
 import type { MutationResult, BootstrapResult } from '../../protocol/index.js';
 import type { ClientError, DialogState, MenuState, ToastState } from './state.js';
+import type { UiColumnPreferences } from '../ui-preferences.js';
 
 /**
  * AppAction 判别联合：覆盖 bootstrap / quote refresh / search / mutation / view / overlay 全部意图。
@@ -38,6 +39,7 @@ export type AppAction =
   | { readonly type: 'view/selectionMode'; readonly enabled: boolean }
   | { readonly type: 'view/clearSelection' }
   | { readonly type: 'view/theme'; readonly theme: 'dark' | 'light' }
+  | { readonly type: 'view/columns'; readonly columns: UiColumnPreferences }
   // overlay
   | { readonly type: 'overlay/dialog'; readonly dialog: DialogState | null }
   | { readonly type: 'overlay/menu'; readonly menu: MenuState | null }

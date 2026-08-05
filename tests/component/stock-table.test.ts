@@ -11,6 +11,7 @@ import { definePopupElements } from '../../src/popup/components/define-elements.
 import type { StockCardViewModel } from '../../src/popup/view-models.js';
 import type { StockCode, GroupId, SortField, SortDirection } from '../../src/domain/index.js';
 import type { VirtualViewport } from '../../src/popup/virtualization/virtual-window.js';
+import { DEFAULT_UI_COLUMNS, type UiColumnPreferences } from '../../src/popup/ui-preferences.js';
 
 function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockCardViewModel {
   return {
@@ -38,9 +39,10 @@ interface TestStockTableElement extends HTMLElement {
   sortDirection: SortDirection;
   viewport: VirtualViewport;
   focusCode(code: StockCode): boolean;
+  columns: UiColumnPreferences;
 }
 
-function setupTable(stocks: StockCardViewModel[], sortField: SortField = 'manual', sortDirection: SortDirection = 'asc'): {
+function setupTable(stocks: StockCardViewModel[], sortField: SortField = 'manual', sortDirection: SortDirection = 'asc', columns: UiColumnPreferences = DEFAULT_UI_COLUMNS): {
   el: TestStockTableElement;
   spy: PopupEventSpy;
 } {
@@ -52,11 +54,30 @@ function setupTable(stocks: StockCardViewModel[], sortField: SortField = 'manual
   const el = document.createElement('stock-table') as TestStockTableElement;
   container.append(el);
   el.groupId = GROUP_ID;
+  el.columns = columns;
   el.sortField = sortField;
   el.sortDirection = sortDirection;
   el.viewModel = stocks;
   return { el, spy };
 }
+
+test('enabled column order controls table headers and row cells', () => {
+  const columns: UiColumnPreferences = {
+    version: 1,
+    enabled: ['name', 'price', 'changePercent', 'status'],
+    order: ['status', 'name', 'changePercent', 'price', 'code', 'amount']
+  };
+  setupTable([card('sh600519')], 'manual', 'asc', columns);
+
+  assert.deepEqual(
+    Array.from(document.querySelectorAll('thead th[data-column]'), (cell) => cell.getAttribute('data-column')),
+    ['status', 'name', 'changePercent', 'price']
+  );
+  assert.deepEqual(
+    Array.from(document.querySelectorAll('tbody tr[data-key] td[data-column]'), (cell) => cell.getAttribute('data-column')),
+    ['status', 'name', 'changePercent', 'price']
+  );
+});
 
 test('renders a real table element', () => {
   setupTable([card('sh600519')]);

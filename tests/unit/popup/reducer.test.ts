@@ -16,6 +16,7 @@ import { createInitialState } from '../../../src/popup/store/state.js';
 import type { AppState, ClientError, DialogState } from '../../../src/popup/store/state.js';
 import { reducer } from '../../../src/popup/store/reducer.js';
 import { selectCurrentBoardConfig } from '../../../src/popup/store/selectors.js';
+import { DEFAULT_UI_COLUMNS, normalizeUiColumns } from '../../../src/popup/ui-preferences.js';
 
 // ===== helpers =====
 
@@ -118,6 +119,16 @@ test('current preferences derive only from domain.boardConfig', () => {
   assert.deepEqual(selectCurrentBoardConfig(state), state.domain.userData.boardConfig.g_all);
   assert.equal('viewMode' in state.view, false);
   assert.equal('priceHidden' in state.view, false);
+});
+
+test('view/columns replaces only the view column branch', () => {
+  const state = createInitialState('dark', DEFAULT_UI_COLUMNS);
+  const columns = normalizeUiColumns({ version: 1, enabled: ['name', 'price', 'changePercent'], order: [] });
+  const next = reducer(state, { type: 'view/columns', columns });
+  assert.equal(next.view.columns, columns);
+  assert.equal(next.domain, state.domain);
+  assert.equal(next.async, state.async);
+  assert.equal(next.overlay, state.overlay);
 });
 
 test('reducer replaces authoritative mutation state without mutating input', () => {

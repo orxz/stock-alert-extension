@@ -7,6 +7,7 @@
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { StockCardViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
+import { DEFAULT_UI_COLUMNS, normalizeUiColumns, type ColumnKey, type UiColumnPreferences } from '../ui-preferences.js';
 
 /**
  * 纯函数：在有序代码列表中将 code 移动 delta 位，返回新数组。
@@ -38,11 +39,16 @@ export class StockCardElement extends HTMLElement {
   private _viewModel: StockCardViewModel | null = null;
   private _orderedCodes: readonly StockCode[] = [];
   private _groupId: GroupId = 'g_all' as GroupId;
+  private _columns: UiColumnPreferences = DEFAULT_UI_COLUMNS;
 
+  private fieldsEl: HTMLElement | null = null;
+  private columnElements = new Map<ColumnKey, HTMLElement>();
   private nameEl: HTMLElement | null = null;
+  private codeEl: HTMLElement | null = null;
   private priceEl: HTMLElement | null = null;
   private changeEl: HTMLElement | null = null;
   private changePercentEl: HTMLElement | null = null;
+  private amountEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private staleEl: HTMLElement | null = null;
   private pinBtn: HTMLButtonElement | null = null;
@@ -91,6 +97,15 @@ export class StockCardElement extends HTMLElement {
     this._groupId = value;
   }
 
+  get columns(): UiColumnPreferences {
+    return this._columns;
+  }
+
+  set columns(value: UiColumnPreferences) {
+    this._columns = normalizeUiColumns(value);
+    if (this.isConnected) this.applyColumnPreferences();
+  }
+
   private buildSkeleton(): void {
     // 卡片可聚焦（tabindex=0）+ Enter/Space 切换 pin；在 stock-grid 的
     // role=list 容器中作为 listitem，同时允许内部原生操作按钮。
@@ -101,17 +116,24 @@ export class StockCardElement extends HTMLElement {
     article.className = 'stock-card';
     article.style.height = '100%';
 
-    // Name + code row
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'stock-card-header';
+    const fields = document.createElement('div');
+    fields.className = 'stock-card-fields';
+    this.fieldsEl = fields;
+
     const nameEl = document.createElement('span');
     nameEl.className = 'stock-card-name';
+    nameEl.setAttribute('data-column', 'name');
     this.nameEl = nameEl;
-    headerDiv.append(nameEl);
+
+    const codeEl = document.createElement('span');
+    codeEl.className = 'stock-card-code stock-card-secondary';
+    codeEl.setAttribute('data-column', 'code');
+    this.codeEl = codeEl;
 
     // Price area
     const priceDiv = document.createElement('div');
     priceDiv.className = 'stock-card-price-area';
+    priceDiv.setAttribute('data-column', 'price');
     const priceEl = document.createElement('span');
     priceEl.className = 'stock-card-price';
     this.priceEl = priceEl;
@@ -120,12 +142,19 @@ export class StockCardElement extends HTMLElement {
     this.changeEl = changeEl;
     const changePercentEl = document.createElement('span');
     changePercentEl.className = 'stock-card-change-percent';
+    changePercentEl.setAttribute('data-column', 'changePercent');
     this.changePercentEl = changePercentEl;
-    priceDiv.append(priceEl, changeEl, changePercentEl);
+    priceDiv.append(priceEl, changeEl);
+
+    const amountEl = document.createElement('span');
+    amountEl.className = 'stock-card-amount';
+    amountEl.setAttribute('data-column', 'amount');
+    this.amountEl = amountEl;
 
     // Status + stale
     const statusDiv = document.createElement('div');
-    statusDiv.className = 'stock-card-status';
+    statusDiv.className = 'stock-card-status stock-card-secondary';
+    statusDiv.setAttribute('data-column', 'status');
     const statusEl = document.createElement('span');
     statusEl.className = 'stock-card-status-label';
     this.statusEl = statusEl;
@@ -133,6 +162,16 @@ export class StockCardElement extends HTMLElement {
     staleEl.className = 'stock-card-stale';
     this.staleEl = staleEl;
     statusDiv.append(statusEl, staleEl);
+
+    this.columnElements = new Map<ColumnKey, HTMLElement>([
+      ['name', nameEl],
+      ['code', codeEl],
+      ['price', priceDiv],
+      ['changePercent', changePercentEl],
+      ['amount', amountEl],
+      ['status', statusDiv]
+    ]);
+    this.applyColumnPreferences();
 
     // Actions
     const actionsDiv = document.createElement('div');
@@ -161,7 +200,7 @@ export class StockCardElement extends HTMLElement {
 
     actionsDiv.append(pinBtn, upBtn, downBtn);
 
-    article.append(headerDiv, priceDiv, statusDiv, actionsDiv);
+    article.append(fields, actionsDiv);
     this.append(article);
   }
 
@@ -227,6 +266,7 @@ export class StockCardElement extends HTMLElement {
     if (this.nameEl) {
       this.nameEl.textContent = vm.name;
     }
+    if (this.codeEl) this.codeEl.textContent = vm.code;
     if (this.priceEl) {
       const old = this.priceEl.textContent;
       this.priceEl.textContent = vm.displayPrice;
@@ -247,6 +287,7 @@ export class StockCardElement extends HTMLElement {
       this.changePercentEl.classList.toggle('is-up', vm.changePercent !== null && vm.changePercent > 0);
       this.changePercentEl.classList.toggle('is-down', vm.changePercent !== null && vm.changePercent < 0);
     }
+    if (this.amountEl) this.amountEl.textContent = vm.displayAmount;
     if (this.statusEl) {
       this.statusEl.textContent = STATUS_LABELS[vm.status] ?? '';
     }
@@ -265,6 +306,17 @@ export class StockCardElement extends HTMLElement {
     }
     if (this.downBtn) {
       this.downBtn.setAttribute('aria-label', `下移 ${vm.name}`);
+    }
+  }
+
+  private applyColumnPreferences(): void {
+    if (!this.fieldsEl) return;
+    const enabled = new Set(this._columns.enabled);
+    for (const key of this._columns.order) {
+      const element = this.columnElements.get(key);
+      if (!element) continue;
+      if (enabled.has(key)) this.fieldsEl.append(element);
+      else element.remove();
     }
   }
 }

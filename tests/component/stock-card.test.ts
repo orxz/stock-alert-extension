@@ -10,6 +10,7 @@ import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { StockCardViewModel } from '../../src/popup/view-models.js';
 import type { StockCode, GroupId } from '../../src/domain/index.js';
+import { DEFAULT_UI_COLUMNS, type UiColumnPreferences } from '../../src/popup/ui-preferences.js';
 
 function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockCardViewModel {
   return {
@@ -31,8 +32,8 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
 const ORDERED_CODES: StockCode[] = ['sh600519' as StockCode, 'sz000001' as StockCode];
 const GROUP_ID = 'g_all' as GroupId;
 
-function setup(vm?: StockCardViewModel): {
-  el: HTMLElement & { viewModel: StockCardViewModel; orderedCodes: StockCode[]; groupId: GroupId };
+function setup(vm?: StockCardViewModel, columns: UiColumnPreferences = DEFAULT_UI_COLUMNS): {
+  el: HTMLElement & { viewModel: StockCardViewModel; orderedCodes: StockCode[]; groupId: GroupId; columns: UiColumnPreferences };
   spy: PopupEventSpy;
 } {
   resetDom();
@@ -44,13 +45,30 @@ function setup(vm?: StockCardViewModel): {
     viewModel: StockCardViewModel;
     orderedCodes: StockCode[];
     groupId: GroupId;
+    columns: UiColumnPreferences;
   };
   container.append(el);
+  el.columns = columns;
   el.orderedCodes = ORDERED_CODES;
   el.groupId = GROUP_ID;
   if (vm) el.viewModel = vm;
   return { el, spy };
 }
+
+test('column order controls grid card fields while code and status obey enabled flags', () => {
+  setup(card('sh600519'), {
+    version: 1,
+    enabled: ['name', 'price', 'changePercent', 'amount'],
+    order: ['amount', 'status', 'name', 'code', 'price', 'changePercent']
+  });
+
+  assert.deepEqual(
+    Array.from(document.querySelectorAll('.stock-card-fields > [data-column]'), (field) => field.getAttribute('data-column')),
+    ['amount', 'name', 'price', 'changePercent']
+  );
+  assert.equal(document.querySelector('.stock-card-fields > [data-column="code"]'), null);
+  assert.equal(document.querySelector('.stock-card-fields > [data-column="status"]'), null);
+});
 
 function clickAction(action: string): void {
   const btn = document.querySelector(`button[data-action="${action}"]`) as HTMLButtonElement | null;

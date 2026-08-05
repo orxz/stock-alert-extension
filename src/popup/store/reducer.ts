@@ -158,6 +158,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'view/theme':
       return { ...state, view: { ...state.view, theme: action.theme } };
 
+    case 'view/columns':
+      return { ...state, view: { ...state.view, columns: action.columns } };
+
     // ===== overlay =====
     case 'overlay/dialog':
       return { ...state, overlay: { ...state.overlay, dialog: action.dialog } };

@@ -1,6 +1,7 @@
 // src/popup/components/events.ts
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { BoardConfig } from '../../domain/board-config.js';
+import type { UiColumnPreferences } from '../ui-preferences.js';
 
 export type ViewMode = 'grid' | 'list';
 
@@ -22,9 +23,8 @@ export interface PopupEventMap {
   'view-mode-change': { readonly viewMode: ViewMode };
   'preferences-change': {
     readonly patch: Readonly<Partial<BoardConfig>>;
-    readonly columns?: readonly string[];
-    readonly columnOrder?: readonly string[];
   };
+  'column-settings-change': { readonly columns: UiColumnPreferences };
   'selection-mode-change': { readonly enabled: boolean };
   'theme-change': { readonly theme: 'dark' | 'light' };
   'stock-toggle-select': { readonly code: StockCode };

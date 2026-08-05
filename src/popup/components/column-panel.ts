@@ -1,10 +1,20 @@
-// src/popup/components/column-panel.ts
-// Task 16 Step 6 — 列设置面板。
-// checkboxes + up/down 控件；至少一列保持启用。
-// 每次变更发出一次 preferences-change，含完整无重复的 columns 和 columnOrder。
-// 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { ColumnPanelViewModel } from '../view-models.js';
+import {
+  REQUIRED_COLUMNS,
+  normalizeUiColumns,
+  type ColumnKey
+} from '../ui-preferences.js';
 import { emitPopupEvent } from './events.js';
+
+const COLUMN_LABELS: Readonly<Record<ColumnKey, string>> = {
+  name: '名称',
+  code: '代码',
+  status: '状态',
+  price: '现价',
+  changePercent: '涨跌幅',
+  amount: '成交额'
+};
+const REQUIRED_SET = new Set<ColumnKey>(REQUIRED_COLUMNS);
 
 export class ColumnPanelElement extends HTMLElement {
   private connection: AbortController | undefined;
@@ -15,12 +25,11 @@ export class ColumnPanelElement extends HTMLElement {
   connectedCallback(): void {
     this.connection?.abort();
     this.connection = new AbortController();
-    const signal = this.connection.signal;
     if (!this.skeletonBuilt) {
       this.buildSkeleton();
       this.skeletonBuilt = true;
     }
-    this.bindEvents(signal);
+    this.bindEvents(this.connection.signal);
     if (this._viewModel) this.applyViewModel(this._viewModel);
   }
 
@@ -42,7 +51,6 @@ export class ColumnPanelElement extends HTMLElement {
     this.className = 'column-panel';
     this.setAttribute('role', 'group');
     this.setAttribute('aria-label', '列设置');
-
     const listEl = document.createElement('ul');
     listEl.className = 'column-panel-list';
     listEl.setAttribute('data-region', 'column-list');
@@ -51,111 +59,91 @@ export class ColumnPanelElement extends HTMLElement {
   }
 
   private bindEvents(signal: AbortSignal): void {
-    this.addEventListener('click', (e: Event) => {
-      const target = e.target as HTMLElement;
-      const btn = target.closest('button[data-action^="col-"]') as HTMLButtonElement | null;
-      if (!btn || btn.disabled) return;
-      const action = btn.getAttribute('data-action')!;
-      const item = btn.closest('[data-column-item]') as HTMLElement | null;
-      if (!item) return;
-      const colKey = item.getAttribute('data-column-item')!;
-      this.handleMove(colKey, action);
+    this.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const button = target.closest('button[data-action^="col-"]') as HTMLButtonElement | null;
+      if (!button || button.disabled) return;
+      const item = button.closest('[data-column-item]');
+      const key = item?.getAttribute('data-column-item') as ColumnKey | null;
+      if (key) this.handleMove(key, button.getAttribute('data-action'));
     }, { signal });
 
-    this.addEventListener('change', (e: Event) => {
-      const target = e.target as HTMLElement;
-      const cb = target.closest('input[type="checkbox"][data-column]') as HTMLInputElement | null;
-      if (!cb) return;
-      const colKey = cb.getAttribute('data-column')!;
-      this.handleToggle(colKey, cb.checked);
+    this.addEventListener('change', (event) => {
+      const target = event.target as HTMLElement;
+      const checkbox = target.closest('input[type="checkbox"][data-column]') as HTMLInputElement | null;
+      const key = checkbox?.getAttribute('data-column') as ColumnKey | null;
+      if (checkbox && key) this.handleToggle(key, checkbox.checked);
     }, { signal });
   }
 
-  private handleToggle(colKey: string, checked: boolean): void {
+  private handleToggle(key: ColumnKey, checked: boolean): void {
     if (!this._viewModel) return;
-    // Enforce: at least one column must stay enabled
-    if (!checked) {
-      const enabledCount = this._viewModel.columns.filter((c) => c.enabled).length;
-      if (enabledCount <= 1) {
-        // Prevent unchecking the last enabled column
-        const cb = this.querySelector(`input[data-column="${colKey}"]`) as HTMLInputElement;
-        if (cb) cb.checked = true;
-        return;
-      }
+    if (REQUIRED_SET.has(key) && !checked) {
+      const checkbox = this.querySelector(`input[data-column="${key}"]`) as HTMLInputElement | null;
+      if (checkbox) checkbox.checked = true;
+      return;
     }
-    const columns = this._viewModel.columns
-      .filter((c) => (c.key === colKey ? checked : c.enabled))
-      .map((c) => c.key);
-    emitPopupEvent(this, 'preferences-change', {
-      patch: {},
-      columns,
-      columnOrder: [...this._viewModel.columnOrder]
-    });
+
+    const previous = this._viewModel.columns;
+    const enabled = checked
+      ? [...previous.enabled, key]
+      : previous.enabled.filter((column) => column !== key);
+    this.emitColumns({ version: 1, enabled, order: previous.order });
   }
 
-  private handleMove(colKey: string, action: string): void {
+  private handleMove(key: ColumnKey, action: string | null): void {
     if (!this._viewModel) return;
-    const order = [...this._viewModel.columnOrder];
-    const i = order.indexOf(colKey);
-    if (i < 0) return;
-    const delta = action === 'col-up' ? -1 : 1;
-    const j = i + delta;
-    if (j < 0 || j >= order.length) return;
-    [order[i], order[j]] = [order[j], order[i]];
-    const columns = this._viewModel.columns.filter((c) => c.enabled).map((c) => c.key);
-    emitPopupEvent(this, 'preferences-change', {
-      patch: {},
-      columns,
-      columnOrder: order
-    });
+    const order = [...this._viewModel.columns.order];
+    const index = order.indexOf(key);
+    const target = index + (action === 'col-up' ? -1 : 1);
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    this.emitColumns({ version: 1, enabled: this._viewModel.columns.enabled, order });
+  }
+
+  private emitColumns(value: unknown): void {
+    emitPopupEvent(this, 'column-settings-change', { columns: normalizeUiColumns(value) });
   }
 
   private applyViewModel(vm: ColumnPanelViewModel): void {
     if (!this.listEl) return;
     this.listEl.textContent = '';
+    const enabled = new Set(vm.columns.enabled);
 
-    for (let i = 0; i < vm.columnOrder.length; i++) {
-      const colKey = vm.columnOrder[i];
-      const col = vm.columns.find((c) => c.key === colKey);
-      if (!col) continue;
-
-      const li = document.createElement('li');
-      li.className = 'column-panel-item';
-      li.setAttribute('data-column-item', colKey);
+    vm.columns.order.forEach((key, index) => {
+      const labelText = COLUMN_LABELS[key];
+      const item = document.createElement('li');
+      item.className = 'column-panel-item';
+      item.setAttribute('data-column-item', key);
 
       const label = document.createElement('label');
       label.className = 'column-panel-label';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'column-panel-checkbox';
+      checkbox.setAttribute('data-column', key);
+      checkbox.setAttribute('aria-label', labelText);
+      checkbox.checked = enabled.has(key);
+      checkbox.disabled = REQUIRED_SET.has(key);
+      const text = document.createElement('span');
+      text.textContent = labelText;
+      label.append(checkbox, text);
 
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.className = 'column-panel-checkbox';
-      cb.setAttribute('data-column', colKey);
-      cb.setAttribute('aria-label', col.label);
-      cb.checked = col.enabled;
+      const up = this.moveButton('col-up', `上移 ${labelText}`, '↑', index === 0);
+      const down = this.moveButton('col-down', `下移 ${labelText}`, '↓', index === vm.columns.order.length - 1);
+      item.append(label, up, down);
+      this.listEl?.append(item);
+    });
+  }
 
-      const labelText = document.createElement('span');
-      labelText.textContent = col.label;
-
-      label.append(cb, labelText);
-
-      const upBtn = document.createElement('button');
-      upBtn.type = 'button';
-      upBtn.className = 'column-panel-btn';
-      upBtn.setAttribute('data-action', 'col-up');
-      upBtn.setAttribute('aria-label', `上移 ${col.label}`);
-      upBtn.textContent = '↑';
-      upBtn.disabled = i === 0;
-
-      const downBtn = document.createElement('button');
-      downBtn.type = 'button';
-      downBtn.className = 'column-panel-btn';
-      downBtn.setAttribute('data-action', 'col-down');
-      downBtn.setAttribute('aria-label', `下移 ${col.label}`);
-      downBtn.textContent = '↓';
-      downBtn.disabled = i === vm.columnOrder.length - 1;
-
-      li.append(label, upBtn, downBtn);
-      this.listEl.append(li);
-    }
+  private moveButton(action: 'col-up' | 'col-down', label: string, text: string, disabled: boolean): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'column-panel-btn';
+    button.setAttribute('data-action', action);
+    button.setAttribute('aria-label', label);
+    button.textContent = text;
+    button.disabled = disabled;
+    return button;
   }
 }

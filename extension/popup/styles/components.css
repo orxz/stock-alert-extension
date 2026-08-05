@@ -437,6 +437,21 @@ stock-table[hidden],
   background: var(--surface);
 }
 
+.stock-card-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.stock-card-secondary,
+.stock-card-amount {
+  color: var(--text2);
+  font-size: 11px;
+}
+
 .stock-card-header {
   display: flex;
   align-items: center;

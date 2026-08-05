@@ -14,6 +14,7 @@ import type {
   SortDirection,
   StockSearchResult
 } from '../domain/index.js';
+import type { ColumnKey, UiColumnPreferences } from './ui-preferences.js';
 
 /** 单只股票卡片视图模型。 */
 export interface StockCardViewModel {
@@ -79,19 +80,19 @@ export interface BoardViewModel {
   readonly error: string | null;
   readonly empty: boolean;
   readonly emptyMessage: string;
+  readonly columns: UiColumnPreferences;
 }
 
 /** 单列配置项。 */
 export interface ColumnConfig {
-  readonly key: string;
+  readonly key: ColumnKey;
   readonly label: string;
   readonly enabled: boolean;
 }
 
 /** 列设置面板视图模型。 */
 export interface ColumnPanelViewModel {
-  readonly columns: readonly ColumnConfig[];
-  readonly columnOrder: readonly string[];
+  readonly columns: UiColumnPreferences;
 }
 
 /** 行情刷新状态视图模型。 */
@@ -245,6 +246,7 @@ export interface AppViewModel {
   readonly header: HeaderViewModel;
   readonly groupTabs: readonly GroupTabViewModel[];
   readonly board: BoardViewModel;
+  readonly columnPanel: ColumnPanelViewModel;
   readonly toolbar: ToolbarViewModel;
   readonly batchToolbar: BatchToolbarViewModel;
   readonly quoteStatus: QuoteStatusViewModel;

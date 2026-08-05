@@ -13,6 +13,7 @@ import {
 import { emitPopupEvent } from './events.js';
 import { moveKey } from './stock-card.js';
 import { updateKeyedChildren } from './keyed-update.js';
+import { DEFAULT_UI_COLUMNS, normalizeUiColumns, type ColumnKey, type UiColumnPreferences } from '../ui-preferences.js';
 
 const TABLE_HEADER_EXTENT = 28;
 const TABLE_ROW_EXTENT = 48;
@@ -25,7 +26,7 @@ const STATUS_LABELS: Readonly<Record<StockCardViewModel['status'], string>> = {
 };
 
 interface ColumnDef {
-  readonly key: string;
+  readonly key: ColumnKey;
   readonly label: string;
   readonly sortField?: SortField;
 }
@@ -34,7 +35,6 @@ const COLUMNS: readonly ColumnDef[] = [
   { key: 'name', label: '名称', sortField: 'name' },
   { key: 'code', label: '代码' },
   { key: 'price', label: '现价', sortField: 'price' },
-  { key: 'change', label: '涨跌额', sortField: 'change' },
   { key: 'changePercent', label: '涨跌幅', sortField: 'changePercent' },
   { key: 'amount', label: '成交额', sortField: 'amount' },
   { key: 'status', label: '状态' }
@@ -60,8 +60,10 @@ export class StockTableElement extends HTMLElement {
   private _groupId: GroupId = 'g_all' as GroupId;
   private _sortField: SortField = 'manual';
   private _sortDirection: SortDirection = 'asc';
+  private _columns: UiColumnPreferences = DEFAULT_UI_COLUMNS;
   private _viewport: VirtualViewport = { scrollOffset: 0, viewportExtent: 390 };
   private table: HTMLTableElement | null = null;
+  private headerRow: HTMLTableRowElement | null = null;
   private tbody: HTMLTableSectionElement | null = null;
   private beforeSpacer: HTMLTableRowElement | null = null;
   private afterSpacer: HTMLTableRowElement | null = null;
@@ -127,6 +129,17 @@ export class StockTableElement extends HTMLElement {
     if (this.isConnected) this.updateSortIndicators();
   }
 
+  get columns(): UiColumnPreferences {
+    return this._columns;
+  }
+
+  set columns(value: UiColumnPreferences) {
+    const normalized = normalizeUiColumns(value);
+    const changed = JSON.stringify(normalized) !== JSON.stringify(this._columns);
+    this._columns = normalized;
+    if (changed && this.isConnected) this.rebuildColumns();
+  }
+
   focusCode(code: StockCode): boolean {
     const index = this._viewModel.findIndex((vm) => vm.code === code);
     if (index < 0) return false;
@@ -145,7 +158,24 @@ export class StockTableElement extends HTMLElement {
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    for (const col of COLUMNS) {
+    this.headerRow = headerRow;
+    thead.append(headerRow);
+
+    const tbody = document.createElement('tbody');
+    this.tbody = tbody;
+    this.beforeSpacer = this.createSpacerRow('before');
+    this.afterSpacer = this.createSpacerRow('after');
+    tbody.append(this.beforeSpacer, this.afterSpacer);
+
+    table.append(thead, tbody);
+    this.append(table);
+    this.rebuildColumns();
+  }
+
+  private rebuildColumns(): void {
+    if (!this.headerRow || !this.tbody) return;
+    this.headerRow.textContent = '';
+    for (const col of this.activeColumns()) {
       const th = document.createElement('th');
       th.setAttribute('data-column', col.key);
       th.setAttribute('aria-sort', 'none');
@@ -162,25 +192,28 @@ export class StockTableElement extends HTMLElement {
         span.textContent = col.label;
         th.append(span);
       }
-      headerRow.append(th);
+      this.headerRow.append(th);
     }
     // Actions column header (no sort)
     const actionsTh = document.createElement('th');
     actionsTh.textContent = '操作';
-    headerRow.append(actionsTh);
-
-    thead.append(headerRow);
-
-    const tbody = document.createElement('tbody');
-    this.tbody = tbody;
-    this.beforeSpacer = this.createSpacerRow('before');
-    this.afterSpacer = this.createSpacerRow('after');
-    tbody.append(this.beforeSpacer, this.afterSpacer);
-
-    table.append(thead, tbody);
-    this.append(table);
-
+    this.headerRow.append(actionsTh);
+    const columnCount = this.activeColumns().length + 1;
+    const beforeCell = this.beforeSpacer?.firstElementChild as HTMLTableCellElement | null;
+    const afterCell = this.afterSpacer?.firstElementChild as HTMLTableCellElement | null;
+    if (beforeCell) beforeCell.colSpan = columnCount;
+    if (afterCell) afterCell.colSpan = columnCount;
+    for (const row of this.tbody.querySelectorAll('tr[data-key]')) row.remove();
     this.updateSortIndicators();
+    this.render();
+  }
+
+  private activeColumns(): readonly ColumnDef[] {
+    const enabled = new Set(this._columns.enabled);
+    return this._columns.order
+      .filter((key) => enabled.has(key))
+      .map((key) => COLUMNS.find((column) => column.key === key))
+      .filter((column): column is ColumnDef => column !== undefined);
   }
 
   private createSpacerRow(position: 'before' | 'after'): HTMLTableRowElement {
@@ -188,7 +221,7 @@ export class StockTableElement extends HTMLElement {
     row.className = `stock-table-spacer stock-table-spacer--${position}`;
     row.setAttribute('aria-hidden', 'true');
     const cell = document.createElement('td');
-    cell.colSpan = COLUMNS.length + 1;
+    cell.colSpan = this.activeColumns().length + 1;
     cell.style.padding = '0';
     cell.style.border = '0';
     row.append(cell);
@@ -319,37 +352,17 @@ export class StockTableElement extends HTMLElement {
   private createRow(vm: StockCardViewModel, index: number): HTMLElement {
     const tr = document.createElement('tr');
     tr.className = 'stock-table-row';
-
-    // Name
-    const nameTd = document.createElement('td');
-    nameTd.className = 'stock-table-cell stock-table-cell--name';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'stock-table-name';
-    nameTd.append(nameSpan);
-
-    // Code
-    const codeTd = document.createElement('td');
-    codeTd.className = 'stock-table-cell stock-table-cell--code';
-
-    // Price
-    const priceTd = document.createElement('td');
-    priceTd.className = 'stock-table-cell stock-table-cell--price';
-
-    // Change
-    const changeTd = document.createElement('td');
-    changeTd.className = 'stock-table-cell stock-table-cell--change';
-
-    // Change percent
-    const pctTd = document.createElement('td');
-    pctTd.className = 'stock-table-cell stock-table-cell--change-percent';
-
-    // Amount
-    const amountTd = document.createElement('td');
-    amountTd.className = 'stock-table-cell stock-table-cell--amount';
-
-    // Status
-    const statusTd = document.createElement('td');
-    statusTd.className = 'stock-table-cell stock-table-cell--status';
+    for (const column of this.activeColumns()) {
+      const cell = document.createElement('td');
+      cell.className = `stock-table-cell stock-table-cell--${column.key === 'changePercent' ? 'change-percent' : column.key}`;
+      cell.setAttribute('data-column', column.key);
+      if (column.key === 'name') {
+        const name = document.createElement('span');
+        name.className = 'stock-table-name';
+        cell.append(name);
+      }
+      tr.append(cell);
+    }
 
     // Actions
     const actionsTd = document.createElement('td');
@@ -375,23 +388,21 @@ export class StockTableElement extends HTMLElement {
     downBtn.textContent = '↓';
     actionsTd.append(downBtn);
 
-    tr.append(nameTd, codeTd, priceTd, changeTd, pctTd, amountTd, statusTd, actionsTd);
+    tr.append(actionsTd);
 
     this.updateRow(tr, vm, index);
     return tr;
   }
 
   private updateRow(tr: HTMLElement, vm: StockCardViewModel, index: number): void {
-    const cells = tr.children;
     setAttribute(tr, 'aria-rowindex', String(index + 2));
-    // Name
-    const nameSpan = cells[0]?.querySelector('.stock-table-name');
+    const cell = (key: ColumnKey): HTMLElement | undefined =>
+      tr.querySelector<HTMLElement>(`td[data-column="${key}"]`) ?? undefined;
+    const nameSpan = cell('name')?.querySelector('.stock-table-name');
     setText(nameSpan ?? undefined, vm.name);
-    // Code
-    setText(cells[1], vm.code);
-    // Price (flash on real change)
-    if (cells[2]) {
-      const priceCell = cells[2] as HTMLElement;
+    setText(cell('code'), vm.code);
+    const priceCell = cell('price');
+    if (priceCell) {
       const oldPrice = priceCell.textContent;
       setText(priceCell, vm.displayPrice);
       if (oldPrice !== vm.displayPrice && vm.displayPrice !== '--') {
@@ -399,35 +410,28 @@ export class StockTableElement extends HTMLElement {
         setTimeout(() => priceCell.classList.remove('flash'), 250);
       }
     }
-    // Change
-    if (cells[3]) {
-      setText(cells[3], vm.change !== null ? vm.change.toFixed(2) : '--');
-      cells[3].classList.toggle('is-up', vm.change !== null && vm.change > 0);
-      cells[3].classList.toggle('is-down', vm.change !== null && vm.change < 0);
+    const percentCell = cell('changePercent');
+    if (percentCell) {
+      setText(percentCell, vm.changePercent !== null ? `${vm.changePercent.toFixed(2)}%` : '--');
+      percentCell.classList.toggle('is-up', vm.changePercent !== null && vm.changePercent > 0);
+      percentCell.classList.toggle('is-down', vm.changePercent !== null && vm.changePercent < 0);
     }
-    // Change percent
-    if (cells[4]) {
-      setText(cells[4], vm.changePercent !== null ? `${vm.changePercent.toFixed(2)}%` : '--');
-      cells[4].classList.toggle('is-up', vm.changePercent !== null && vm.changePercent > 0);
-      cells[4].classList.toggle('is-down', vm.changePercent !== null && vm.changePercent < 0);
-    }
-    // Amount
-    setText(cells[5], vm.displayAmount);
-    // Status
-    if (cells[6]) {
+    setText(cell('amount'), vm.displayAmount);
+    const statusCell = cell('status');
+    if (statusCell) {
       const label = vm.staleLabel || STATUS_LABELS[vm.status] || '';
-      setText(cells[6], label);
+      setText(statusCell, label);
     }
-    // Actions
-    const pinBtn = cells[7]?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;
+    const actions = tr.querySelector('.stock-table-cell--actions');
+    const pinBtn = actions?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;
     if (pinBtn) {
       setAttribute(pinBtn, 'aria-pressed', String(vm.pinned));
       setAttribute(pinBtn, 'aria-label', vm.pinned ? `取消置顶 ${vm.name}` : `置顶 ${vm.name}`);
       setText(pinBtn, vm.pinned ? '📌' : '📍');
     }
-    const upBtn = cells[7]?.querySelector('button[data-action="move-up"]') as HTMLButtonElement | null;
+    const upBtn = actions?.querySelector('button[data-action="move-up"]') as HTMLButtonElement | null;
     setAttribute(upBtn ?? undefined, 'aria-label', `上移 ${vm.name}`);
-    const downBtn = cells[7]?.querySelector('button[data-action="move-down"]') as HTMLButtonElement | null;
+    const downBtn = actions?.querySelector('button[data-action="move-down"]') as HTMLButtonElement | null;
     setAttribute(downBtn ?? undefined, 'aria-label', `下移 ${vm.name}`);
   }
 }

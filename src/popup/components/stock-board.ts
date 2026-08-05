@@ -8,6 +8,7 @@ import './stock-grid.js';
 import './stock-table.js';
 import type { StockGridElement } from './stock-grid.js';
 import type { StockTableElement } from './stock-table.js';
+import type { UiColumnPreferences } from '../ui-preferences.js';
 
 type StockViewMode = 'list' | 'grid';
 type ActiveStockView = (StockGridElement | StockTableElement) & {
@@ -15,6 +16,7 @@ type ActiveStockView = (StockGridElement | StockTableElement) & {
   viewModel: readonly StockCardViewModel[];
   viewport: { scrollOffset: number; viewportExtent: number };
   focusCode(code: StockCode): boolean;
+  columns: UiColumnPreferences;
 };
 
 interface VirtualFocusDetail {
@@ -193,6 +195,7 @@ export class StockBoardElement extends HTMLElement {
     const activeView = this.getActiveView();
     if (!activeView) return;
     activeView.groupId = vm.groupId;
+    activeView.columns = vm.columns;
     activeView.viewModel = vm.stocks;
     this.flushViewport();
   }

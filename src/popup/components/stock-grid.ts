@@ -10,6 +10,7 @@ import {
 import { updateKeyedChildren } from './keyed-update.js';
 import './stock-card.js';
 import type { StockCardElement } from './stock-card.js';
+import { DEFAULT_UI_COLUMNS, normalizeUiColumns, type UiColumnPreferences } from '../ui-preferences.js';
 
 const GRID_COLUMNS = 2;
 const GRID_ROW_EXTENT = 126;
@@ -27,6 +28,7 @@ export class StockGridElement extends HTMLElement {
   private skeletonBuilt = false;
   private _viewModel: readonly StockCardViewModel[] = [];
   private _groupId: GroupId = 'g_all' as GroupId;
+  private _columns: UiColumnPreferences = DEFAULT_UI_COLUMNS;
   private _viewport: VirtualViewport = { scrollOffset: 0, viewportExtent: 390 };
   private container: HTMLElement | null = null;
   private beforeSpacer: HTMLElement | null = null;
@@ -77,6 +79,17 @@ export class StockGridElement extends HTMLElement {
       if (child.localName === 'stock-card') {
         (child as StockCardElement).groupId = value;
       }
+    }
+  }
+
+  get columns(): UiColumnPreferences {
+    return this._columns;
+  }
+
+  set columns(value: UiColumnPreferences) {
+    this._columns = normalizeUiColumns(value);
+    for (const child of this.container?.children ?? []) {
+      if (child.localName === 'stock-card') (child as StockCardElement).columns = this._columns;
     }
   }
 
@@ -201,6 +214,7 @@ export class StockGridElement extends HTMLElement {
     card.setAttribute('aria-setsize', String(this._viewModel.length));
     card.style.height = `${GRID_CARD_EXTENT}px`;
     card.groupId = this._groupId;
+    card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
   }

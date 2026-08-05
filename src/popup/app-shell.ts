@@ -10,6 +10,7 @@ import type { AppViewModel, DialogViewModel, LiveRegionViewModel } from './view-
 import type { PopupEventMap, DialogSubmitDetail } from './components/events.js';
 import type { DialogState } from './store/state.js';
 import type { GroupId, StockCode } from '../domain/index.js';
+import { normalizeUiColumns, saveUiColumns } from './ui-preferences.js';
 
 export interface DiagnosticSink {
   emit(event: { readonly timestamp: number; readonly scope: string; readonly type: string; readonly outcome?: string; readonly errorCode?: string }): void;
@@ -178,6 +179,12 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       groupId: store.getState().view.currentGroupId,
       patch: d.patch
     });
+  });
+
+  on('column-settings-change', ({ columns }) => {
+    const normalized = normalizeUiColumns(columns);
+    store.dispatch({ type: 'view/columns', columns: normalized });
+    saveUiColumns(window.localStorage, normalized);
   });
 
   on('search-keyword-change', (d) => {

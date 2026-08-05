@@ -10,6 +10,7 @@ import type { AppViewModel } from '../../src/popup/view-models.js';
 import { closedDialog } from '../../src/popup/view-models.js';
 import type { GroupId } from '../../src/domain/index.js';
 import type { StockCode } from '../../src/domain/index.js';
+import { DEFAULT_UI_COLUMNS } from '../../src/popup/ui-preferences.js';
 
 /** 构造最小 AppViewModel 用于断言渲染（字段均可控）。 */
 function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
@@ -25,8 +26,10 @@ function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
       loading: false,
       error: null,
       empty: true,
-      emptyMessage: '暂无股票，点击添加'
+      emptyMessage: '暂无股票，点击添加',
+      columns: DEFAULT_UI_COLUMNS
     },
+    columnPanel: { columns: DEFAULT_UI_COLUMNS },
     toolbar: {
       viewMode: 'list',
       sortField: 'manual',
@@ -129,7 +132,8 @@ test('stock-app routes focusCode to the active virtual stock view', async () => 
       loading: false,
       error: null,
       empty: false,
-      emptyMessage: '暂无股票'
+      emptyMessage: '暂无股票',
+      columns: DEFAULT_UI_COLUMNS
     }
   });
 
