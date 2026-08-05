@@ -3,7 +3,8 @@ export function updateKeyedChildren<K, V>(
   values: readonly V[],
   keyOf: (value: V) => K,
   create: (value: V) => HTMLElement,
-  update: (node: HTMLElement, value: V) => void
+  update: (node: HTMLElement, value: V) => void,
+  endSentinel: Element | null = null
 ): void {
   if (values.length === 0) {
     const stale = container.querySelectorAll('[data-key]');
@@ -16,7 +17,7 @@ export function updateKeyedChildren<K, V>(
     if (key !== null) existing.set(key, child as HTMLElement);
   }
   const seen = new Set<string>();
-  let reference: Element | null = null;
+  let reference: Element | null = endSentinel?.parentElement === container ? endSentinel : null;
   for (let i = values.length - 1; i >= 0; i--) {
     const value = values[i];
     const key = String(keyOf(value));

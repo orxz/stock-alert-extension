@@ -10,6 +10,7 @@ import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { StockCardViewModel } from '../../src/popup/view-models.js';
 import type { StockCode, GroupId, SortField, SortDirection } from '../../src/domain/index.js';
+import type { VirtualViewport } from '../../src/popup/virtualization/virtual-window.js';
 
 function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockCardViewModel {
   return {
@@ -30,8 +31,17 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
 
 const GROUP_ID = 'g_all' as GroupId;
 
+interface TestStockTableElement extends HTMLElement {
+  viewModel: StockCardViewModel[];
+  groupId: GroupId;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  viewport: VirtualViewport;
+  focusCode(code: StockCode): boolean;
+}
+
 function setupTable(stocks: StockCardViewModel[], sortField: SortField = 'manual', sortDirection: SortDirection = 'asc'): {
-  el: HTMLElement & { viewModel: StockCardViewModel[]; groupId: GroupId; sortField: SortField; sortDirection: SortDirection };
+  el: TestStockTableElement;
   spy: PopupEventSpy;
 } {
   resetDom();
@@ -39,12 +49,7 @@ function setupTable(stocks: StockCardViewModel[], sortField: SortField = 'manual
   const container = document.createElement('div');
   document.body.append(container);
   const spy = spyPopupEvents(container);
-  const el = document.createElement('stock-table') as HTMLElement & {
-    viewModel: StockCardViewModel[];
-    groupId: GroupId;
-    sortField: SortField;
-    sortDirection: SortDirection;
-  };
+  const el = document.createElement('stock-table') as TestStockTableElement;
   container.append(el);
   el.groupId = GROUP_ID;
   el.sortField = sortField;
@@ -123,14 +128,49 @@ test('node identity preserved across quote updates', () => {
   assert.equal(el.querySelector('tbody tr[data-key="sh600519"]'), row1);
 });
 
-test('row count matches viewModel length', () => {
+test('real stock row count matches a short viewModel length', () => {
   const { el } = setupTable([card('sh600519'), card('sz000001'), card('bj920001')]);
-  assert.equal(el.querySelectorAll('tbody tr').length, 3);
+  assert.equal(el.querySelectorAll('tbody tr[data-key]').length, 3);
 });
 
-test('empty viewModel renders no body rows', () => {
+test('empty viewModel renders no real stock rows', () => {
   const { el } = setupTable([]);
-  assert.equal(el.querySelectorAll('tbody tr').length, 0);
+  assert.equal(el.querySelectorAll('tbody tr[data-key]').length, 0);
+});
+
+test('500-stock table keeps real stock rows bounded', () => {
+  const stocks = Array.from({ length: 500 }, (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`));
+  const { el } = setupTable(stocks);
+  el.viewport = { scrollOffset: 0, viewportExtent: 390 };
+  const realRows = el.querySelectorAll('tbody tr[data-key]');
+  assert.ok(realRows.length <= 27, `expected <=27 real rows, got ${realRows.length}`);
+  assert.equal(el.querySelector('table')?.getAttribute('aria-rowcount'), '501');
+});
+
+test('scrolling changes the rendered key range and exposes aria-rowindex', () => {
+  const stocks = Array.from({ length: 100 }, (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`));
+  const { el } = setupTable(stocks);
+  el.viewport = { scrollOffset: 48 * 50, viewportExtent: 390 };
+  assert.ok(el.querySelector('[data-key="sh600050"]'));
+  assert.equal(el.querySelector('[data-key="sh600050"]')?.getAttribute('aria-rowindex'), '52');
+  assert.equal(el.querySelector('[data-key="sh600000"]'), null);
+});
+
+test('focusCode emits a virtual focus request for the stock index', () => {
+  const stocks = Array.from({ length: 100 }, (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`));
+  const { el } = setupTable(stocks);
+  let detail: unknown;
+  el.addEventListener('virtual-focus-request', (event) => {
+    detail = (event as CustomEvent).detail;
+  });
+
+  assert.equal(el.focusCode('sh600050' as StockCode), true);
+  assert.deepEqual(detail, { index: 50, itemExtent: 48 });
+});
+
+test('focusCode returns false for an unknown stock code', () => {
+  const { el } = setupTable([card('sh600519')]);
+  assert.equal(el.focusCode('sz000001' as StockCode), false);
 });
 
 test('reconnecting table does not duplicate header listeners', () => {

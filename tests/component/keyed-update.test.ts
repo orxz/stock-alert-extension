@@ -124,3 +124,25 @@ test('handles empty values by clearing all keyed children', () => {
   updateKeyedChildren(container, [], keyOf, create, update);
   assert.equal(container.children.length, 0);
 });
+
+test('preserves unkeyed spacer sentinels around keyed children', () => {
+  resetDom();
+  const container = document.createElement('div');
+  const before = document.createElement('div');
+  before.textContent = 'before';
+  const after = document.createElement('div');
+  after.textContent = 'after';
+  container.append(before, after);
+  document.body.append(container);
+
+  updateKeyedChildren(container, [
+    { id: 'a', label: 'A' },
+    { id: 'b', label: 'B' }
+  ], keyOf, create, update, after);
+  assert.deepEqual(labels(container), ['before', 'A', 'B', 'after']);
+
+  updateKeyedChildren(container, [{ id: 'b', label: 'B2' }], keyOf, create, update, after);
+  assert.deepEqual(labels(container), ['before', 'B2', 'after']);
+  assert.equal(container.firstElementChild, before);
+  assert.equal(container.lastElementChild, after);
+});
