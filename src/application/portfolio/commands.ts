@@ -8,6 +8,7 @@ import type { Clock } from '../ports/clock.js';
 import { normalizeStockCode } from '../../domain/stock.js';
 import type { Stock } from '../../domain/stock.js';
 import type { Group } from '../../domain/group.js';
+import { DEFAULT_BOARD_CONFIG } from '../../domain/board-config.js';
 import type { BoardConfig } from '../../domain/board-config.js';
 import type { GroupId } from '../../domain/brands.js';
 import type { AppError } from '../../domain/errors.js';
@@ -30,14 +31,6 @@ const ALL_GROUP_ID = 'g_all' as GroupId;
 
 /** 分组上限（1 个默认 + 19 个自定义）。 */
 const MAX_GROUPS = 20;
-
-/** 默认看板配置：无 boardConfig 时创建。 */
-const DEFAULT_BOARD_CONFIG: BoardConfig = {
-  viewMode: 'list',
-  sortField: 'manual',
-  sortDirection: 'asc',
-  priceHidden: false
-};
 
 /** 构造 VALIDATION_FAILED 错误。 */
 function validationError(message: string): AppError {

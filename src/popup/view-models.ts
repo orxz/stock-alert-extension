@@ -14,6 +14,7 @@ import type {
   SortDirection,
   StockSearchResult
 } from '../domain/index.js';
+import { DEFAULT_BOARD_CONFIG } from '../domain/board-config.js';
 
 /** 单只股票卡片视图模型。 */
 export interface StockCardViewModel {
@@ -177,9 +178,9 @@ export function closedDialog(): DialogViewModel {
   };
 }
 
-/** 默认看板配置：list + manual + asc + 价格可见。 */
+/** 默认看板配置：委托 domain 的唯一定义，避免各层各存一份副本后漂移。 */
 export function defaultBoardConfig(): BoardConfig {
-  return { viewMode: 'list', sortField: 'manual', sortDirection: 'asc', priceHidden: false };
+  return DEFAULT_BOARD_CONFIG;
 }
 
 /** 格式化价格（两位小数）；非有限→'--'。 */

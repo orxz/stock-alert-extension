@@ -17,7 +17,7 @@ import type { BootstrapResult } from '../protocol/messages.js';
 import type { RefreshOptions } from '../application/quotes/quote-service.js';
 import type { GroupId, StockCode } from '../domain/brands.js';
 import type { QuoteSnapshot } from '../domain/quote.js';
-import type { BoardConfig } from '../domain/board-config.js';
+import { DEFAULT_BOARD_CONFIG } from '../domain/board-config.js';
 import { sortStocks, stocksForGroup } from '../domain/portfolio.js';
 import { getRefreshIntervalMs } from '../domain/formatting.js';
 import { startSpan } from '../application/diagnostics/span.js';
@@ -34,14 +34,6 @@ const EMPTY_TITLE = '股票提醒助手\n暂无自选股，点击添加';
 
 /** `g_all` 分组 ID（固定计算视图，badge/tooltip 投影基于此分组）。 */
 const ALL_GROUP_ID = 'g_all' as GroupId;
-
-/** 默认看板配置（boardConfig 缺失 g_all 条目时的回退值）。 */
-const DEFAULT_BOARD_CONFIG: BoardConfig = {
-  viewMode: 'list',
-  sortField: 'manual',
-  sortDirection: 'desc',
-  priceHidden: false
-};
 
 /** 触发行情刷新周期的来源。 */
 export type QuoteRunSource =

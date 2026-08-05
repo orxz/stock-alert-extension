@@ -19,6 +19,10 @@ export interface DiagnosticEvent {
   readonly durationMs?: number;
   readonly errorCode?: ErrorCode;
   readonly counts?: Readonly<Record<string, number>>;
+  /** 数据源标识（provider-failed 等传输层事件用于归因是主源还是备源）。 */
+  readonly provider?: string;
+  /** 失败原因摘要（不含 URL/PII，仅错误名或短消息，用于区分超时与协议错误）。 */
+  readonly reason?: string;
 }
 
 /**

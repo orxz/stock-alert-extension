@@ -419,6 +419,101 @@ test('single-flight: concurrent refresh calls do not overlap', async () => {
   assert.ok(r2.results.sh600519);
 });
 
+test('single-flight only merges callers that requested the same code set', async () => {
+  // Popup 与后台 scheduler 各自传自己的 watchlist 快照；刚加完股票时两边不一致。
+  // 旧实现只认「有没有在跑」，会把 A 的快照回给 B——B 新加的股票被静默丢弃。
+  const seen: string[][] = [];
+  const primary: QuoteProvider = {
+    name: 'eastmoney',
+    async fetch(codes: readonly StockCode[], _token: CancellationToken) {
+      seen.push(codes.map(String));
+      await microDelay(10);
+      const result: Record<string, Quote> = {};
+      for (const code of codes) result[code as string] = makeQuote(code as string);
+      return result;
+    }
+  };
+  const { service } = createService({ primary });
+
+  const [a, b] = await Promise.all([
+    service.refresh([sc('sh600519')], { force: true }),
+    service.refresh([sc('sh600519'), sc('sz000002')], { force: true })
+  ]);
+
+  assert.ok(a.results.sh600519, 'caller A gets what it asked for');
+  assert.ok(b.results.sh600519, 'caller B gets the shared code');
+  assert.ok(b.results.sz000002, 'caller B gets the code only it requested');
+  assert.equal(b.counts.fresh, 2);
+  assert.ok(
+    seen.some((set) => set.includes('sz000002')),
+    'the extra code actually reached a provider'
+  );
+});
+
+test('single-flight still merges identical concurrent code sets into one run', async () => {
+  const { provider, calls } = okProvider();
+  const { service } = createService({ primary: provider });
+  const codes = [sc('sh600519'), sc('sz000001')];
+
+  await Promise.all([
+    service.refresh(codes, { force: true }),
+    service.refresh([...codes], { force: true }),
+    // 顺序不同但集合相同——仍应归并为同一次运行。
+    service.refresh([sc('sz000001'), sc('sh600519')], { force: true })
+  ]);
+
+  assert.equal(calls.value, 1, 'three identical requests share one provider call');
+});
+
+test('a forced refresh does not silently join an in-flight non-forced run', async () => {
+  const { provider, calls } = okProvider();
+  const { service } = createService({ primary: provider });
+  const codes = [sc('sh600519')];
+
+  const background = service.refresh(codes);
+  const forced = service.refresh(codes, { force: true });
+  await Promise.all([background, forced]);
+
+  assert.equal(calls.value, 2, 'force runs its own fetch instead of reusing the background one');
+});
+
+// ===== provider 失败可见性 =====
+
+test('a provider transport failure is reported instead of silently swallowed', async () => {
+  const { provider: failing } = failingProvider('eastmoney');
+  const { service, events } = createService({
+    primary: failing,
+    fallback: emptyProvider('tencent')
+  });
+
+  await service.refresh([sc('sh600519')], { force: true });
+
+  const failures = events.filter((e) => e.type === 'provider-failed');
+  assert.equal(failures.length, 1, 'exactly one provider-failed event for the throwing provider');
+  assert.equal(failures[0].outcome, 'failed');
+  assert.equal(failures[0].scope, 'quote');
+  assert.equal(failures[0].counts?.codes, 1);
+});
+
+test('provider-failed distinguishes primary from fallback', async () => {
+  const { provider: failingPrimary } = failingProvider('eastmoney');
+  const { provider: failingFallback } = failingProvider('tencent');
+  const { service, events } = createService({
+    primary: failingPrimary,
+    fallback: failingFallback
+  });
+
+  await service.refresh([sc('sh600519')], { force: true });
+
+  const failures = events.filter((e) => e.type === 'provider-failed');
+  assert.equal(failures.length, 2, 'both transport failures surface');
+  assert.deepEqual(
+    failures.map((e) => e.provider).sort(),
+    ['eastmoney', 'tencent'],
+    'each failure is attributable to its provider'
+  );
+});
+
 // ===== 双源降级: primary 缺失的 code 由 fallback 补 =====
 
 test('dual-source: missing codes from primary fetched from fallback', async () => {

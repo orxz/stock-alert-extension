@@ -128,19 +128,30 @@ export function createAppShell(deps: AppShellDeps): AppShell {
   on('quote-refresh-request', () => {
     const codes = store.getState().domain.userData.watchlist.map((s) => s.code);
     void controller.refreshQuotes(codes, true).then(() => {
-      const quotes = store.getState().domain.quotes;
-      // fresh===0 说明所有 provider 都失败了，仅返回了缓存或 missing。
-      if (quotes.counts.fresh === 0) {
+      const state = store.getState();
+      const refresh = state.async.quoteRefresh;
+
+      // 播报必须依据**本次刷新的结局**（async.quoteRefresh），不能读
+      // domain.quotes.counts：quote/refresh/failed 不会重置 domain.quotes，
+      // 残留的上一次成功快照会让失败的刷新播报「已更新」——伪成功。
+      if (refresh.status === 'error') {
         store.dispatch({
           type: 'overlay/toast',
-          toast: { message: '已保留缓存', kind: 'info' }
+          toast: { message: refresh.error?.message ?? '刷新失败，已保留现有数据', kind: 'error' }
         });
-      } else {
-        store.dispatch({
-          type: 'overlay/toast',
-          toast: { message: '已更新', kind: 'success' }
-        });
+        return;
       }
+
+      // 响应被 generation 判定为 stale（期间又发起了新刷新）——
+      // 由后发起的那次负责播报，此处静默。
+      if (refresh.status !== 'success') return;
+
+      // fresh===0：请求成功但所有 provider 都没给出可用行情，仅缓存兜底。
+      store.dispatch(
+        state.domain.quotes.counts.fresh === 0
+          ? { type: 'overlay/toast', toast: { message: '已保留缓存', kind: 'info' } }
+          : { type: 'overlay/toast', toast: { message: '已更新', kind: 'success' } }
+      );
     });
   });
 

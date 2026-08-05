@@ -78,6 +78,15 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 /** 全局 runId 递增计数器（application 层不依赖 crypto 全局）。 */
 let runIdCounter = 0;
 
+/**
+ * 构造 single-flight 归并键：排序后的 code 集合 + force 标志。
+ * 排序保证「顺序不同、集合相同」的请求仍归并为一次运行；
+ * force 参与键值——用户主动刷新不应被并入一个正在跑的后台刷新。
+ */
+function refreshKey(codes: readonly StockCode[], force: boolean): string {
+  return `${force ? 'force' : 'auto'}:${[...codes].map(String).sort().join(',')}`;
+}
+
 // ── QuoteService ──
 
 /**
@@ -90,8 +99,13 @@ let runIdCounter = 0;
  */
 export class QuoteService {
   private generation = 0;
-  private activeRun: Promise<QuoteSnapshot> | undefined;
-  private pendingRun = false;
+  /**
+   * 进行中的刷新，按「请求意图」键归并。
+   * 键包含 code 集合与 force 标志——只认「有没有在跑」会把 A 的快照回给请求
+   * 不同集合的 B（Popup 与后台 scheduler 的 watchlist 快照可能不一致，
+   * 刚加完股票时尤其如此），导致 B 新增的股票被静默丢弃、渲染成「缺失」。
+   */
+  private readonly activeRuns = new Map<string, Promise<QuoteSnapshot>>();
 
   constructor(
     private readonly primary: QuoteProvider,
@@ -187,25 +201,29 @@ export class QuoteService {
 
     // ── single-flight + 执行 ──
     const runId = options?.requestId ?? `run-${++runIdCounter}`;
-    return this.singleFlight(() => this.executeRefresh(requested, now, runId));
+    const key = refreshKey(requested, options?.force === true);
+    return this.singleFlight(key, () => this.executeRefresh(requested, now, runId));
   }
 
-  // ── single-flight：同一时刻只有一个 refresh 在执行 ──
+  // ── single-flight：相同意图（同 code 集合 + 同 force 标志）的并发刷新归并 ──
 
-  private async singleFlight(
+  private singleFlight(
+    key: string,
     task: () => Promise<QuoteSnapshot>
   ): Promise<QuoteSnapshot> {
-    // 标准 single-flight：并发调用共享同一 Promise 结果。
-    // 第一个调用方执行 task，后续调用方直接 await 同一 Promise。
-    if (this.activeRun) return this.activeRun;
-    this.activeRun = (async () => {
+    // 同 key 的并发调用共享同一 Promise；不同 key 各自独立执行，
+    // 保证每个调用方拿到的快照确实覆盖它请求的 code 集合。
+    const existing = this.activeRuns.get(key);
+    if (existing) return existing;
+    const run = (async () => {
       try {
         return await task();
       } finally {
-        this.activeRun = undefined;
+        this.activeRuns.delete(key);
       }
     })();
-    return this.activeRun;
+    this.activeRuns.set(key, run);
+    return run;
   }
 
   // ── 核心刷新逻辑 ──
@@ -240,7 +258,7 @@ export class QuoteService {
     try {
       const batches = chunk(requested, CHUNK_SIZE);
       await this.runWithConcurrency(batches, MAX_CONCURRENCY, (batch) =>
-        this.processBatch(batch, attemptedAt, deadlineSource, freshResults, cacheWrites)
+        this.processBatch(batch, attemptedAt, deadlineSource, freshResults, cacheWrites, runId)
       );
     } finally {
       deadlineHandle.cancel();
@@ -350,7 +368,8 @@ export class QuoteService {
     attemptedAt: number,
     deadlineSource: CancellationSource,
     freshResults: Partial<Record<StockCode, QuoteResult>>,
-    cacheWrites: Partial<Record<StockCode, QuoteCacheEntry>>
+    cacheWrites: Partial<Record<StockCode, QuoteCacheEntry>>,
+    runId: string
   ): Promise<void> {
     if (deadlineSource.token.aborted) return;
 
@@ -361,7 +380,8 @@ export class QuoteService {
       attemptedAt,
       deadlineSource,
       freshResults,
-      cacheWrites
+      cacheWrites,
+      runId
     );
 
     // ── Fallback (Tencent)：只查 primary 缺失的 code ──
@@ -374,7 +394,8 @@ export class QuoteService {
       attemptedAt,
       deadlineSource,
       freshResults,
-      cacheWrites
+      cacheWrites,
+      runId
     );
   }
 
@@ -388,7 +409,8 @@ export class QuoteService {
     attemptedAt: number,
     deadlineSource: CancellationSource,
     freshResults: Partial<Record<StockCode, QuoteResult>>,
-    cacheWrites: Partial<Record<StockCode, QuoteCacheEntry>>
+    cacheWrites: Partial<Record<StockCode, QuoteCacheEntry>>,
+    runId: string
   ): Promise<void> {
     const source = createCancellationSource();
     const handle = this.clock.schedule(TIMEOUT_MS, () => source.cancel());
@@ -418,8 +440,21 @@ export class QuoteService {
           };
         }
       }
-    } catch {
-      // provider 调用失败（超时 / 网络 / 解析）——静默跳过，后续 fallback 或缓存兜底
+    } catch (error) {
+      // provider 调用失败（超时 / 网络 / 解析）——由 fallback 或缓存兜底，
+      // 但**必须留下痕迹**：此处此前是空 catch，导致「备源永久返回 403」
+      // 这类故障在生产和全部单测中都完全不可见，直到实网验证才暴露。
+      this.sink.emit({
+        timestamp: this.clock.now(),
+        version: '2.0.0',
+        runId,
+        scope: 'quote',
+        type: 'provider-failed',
+        outcome: 'failed',
+        provider: provider.name,
+        reason: error instanceof Error ? error.message : 'unknown',
+        counts: { codes: codes.length }
+      });
     } finally {
       handle.cancel();
       unlink();
