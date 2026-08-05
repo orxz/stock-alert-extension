@@ -5,6 +5,7 @@
 // 不含过滤、排序、RPC 或持久化逻辑。
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { BoardViewModel } from '../view-models.js';
+import { emitPopupEvent } from './events.js';
 import './stock-grid.js';
 import './stock-table.js';
 import type { StockGridElement } from './stock-grid.js';
@@ -30,6 +31,7 @@ export class StockBoardElement extends HTMLElement {
   private loadingEl: HTMLElement | null = null;
   private errorEl: HTMLElement | null = null;
   private emptyEl: HTMLElement | null = null;
+  private emptyTextEl: HTMLElement | null = null;
   /** 惰性创建：只有被激活过的视图才会存在。 */
   private gridEl: StockGridElement | null = null;
   private tableEl: StockTableElement | null = null;
@@ -47,7 +49,7 @@ export class StockBoardElement extends HTMLElement {
     const signal = this.connection.signal;
 
     if (!this.skeletonBuilt) {
-      this.buildSkeleton();
+      this.buildSkeleton(signal);
       this.skeletonBuilt = true;
     }
 
@@ -83,7 +85,7 @@ export class StockBoardElement extends HTMLElement {
     if (this.isConnected) this.applyViewModel(value);
   }
 
-  private buildSkeleton(): void {
+  private buildSkeleton(signal: AbortSignal): void {
     this.setAttribute('role', 'region');
     this.setAttribute('aria-label', '股票看板');
 
@@ -94,7 +96,9 @@ export class StockBoardElement extends HTMLElement {
     loadingEl.setAttribute('hidden', '');
     loadingEl.setAttribute('aria-busy', 'true');
     loadingEl.setAttribute('aria-label', '加载中');
-    for (let i = 0; i < 5; i++) {
+    // 六行——与 390px 看板一屏能装下的行数一致，骨架屏才像「正在来的那一屏」。
+    // 绝不渲染假数字。
+    for (let i = 0; i < 6; i++) {
       const row = document.createElement('div');
       row.className = 'skeleton-row';
       loadingEl.append(row);
@@ -108,12 +112,25 @@ export class StockBoardElement extends HTMLElement {
     errorEl.setAttribute('hidden', '');
     this.errorEl = errorEl;
 
-    // Empty container
+    // Empty container：空态是邀请动作，不是一句「暂无数据」。
     const emptyEl = document.createElement('div');
     emptyEl.setAttribute('data-region', 'empty');
     emptyEl.className = 'board-empty';
     emptyEl.setAttribute('hidden', '');
+    const emptyText = document.createElement('p');
+    emptyText.className = 'board-empty-text';
+    emptyEl.append(emptyText);
+    const emptyCta = document.createElement('button');
+    emptyCta.type = 'button';
+    emptyCta.className = 'board-empty-cta';
+    emptyCta.setAttribute('data-action', 'empty-add-stock');
+    emptyCta.textContent = '添加股票';
+    emptyCta.addEventListener('click', () => {
+      emitPopupEvent(this, 'dialog-open-request', { kind: 'add-stock' });
+    }, { signal });
+    emptyEl.append(emptyCta);
     this.emptyEl = emptyEl;
+    this.emptyTextEl = emptyText;
 
     // list / grid 视图不在此创建——只有被激活时才惰性挂载（见 mountView）。
     this.append(loadingEl, errorEl, emptyEl);
@@ -229,7 +246,8 @@ export class StockBoardElement extends HTMLElement {
     if (this.emptyEl) {
       if (vm.empty) {
         this.emptyEl.removeAttribute('hidden');
-        this.emptyEl.textContent = vm.emptyMessage;
+        // 只写文案段落——直接设 emptyEl.textContent 会把 CTA 按钮一起清掉。
+        if (this.emptyTextEl) this.emptyTextEl.textContent = vm.emptyMessage;
       } else {
         this.emptyEl.setAttribute('hidden', '');
       }

@@ -18,14 +18,14 @@ const ROOT = resolve(__dirname, '..');
 
 // v2 popup 行情模拟数据（与 v1.3 capture 一致的 8 只股票）。
 const STOCKS = [
-  ['sh600519', '贵州茅台', 1689.00, 0.81],
-  ['sz300418', '昆仑万维', 50.65, 5.61],
-  ['sz300750', '宁德时代', 210.50, 2.68],
-  ['sz002475', '立讯精密', 38.90, 3.73],
-  ['sh601899', '紫金矿业', 14.20, 2.53],
-  ['sh601318', '中国平安', 48.30, 1.05],
-  ['sz000858', '五粮液', 156.20, -1.39],
-  ['sh600036', '招商银行', 35.80, -0.83]
+  ['sh600519', '贵州茅台', 1689.00, 0.81, 4.1e9],
+  ['sz300418', '昆仑万维', 50.65, 5.61, 1.8e9],
+  ['sz300750', '宁德时代', 210.50, 2.68, 2.7e9],
+  ['sz002475', '立讯精密', 38.90, 3.73, 6.2e8],
+  ['sh601899', '紫金矿业', 14.20, 2.53, 5.1e8],
+  ['sh601318', '中国平安', 48.30, 1.05, 8.9e8],
+  ['sz000858', '五粮液', 156.20, -1.39, 9.4e8],
+  ['sh600036', '招商银行', 35.80, -0.83, 7.3e8]
 ];
 
 function buildSeed() {
@@ -39,14 +39,14 @@ function buildSeed() {
     addedAt: BASE - (STOCKS.length - index) * 60_000
   }));
   const cache = Object.fromEntries(
-    STOCKS.map(([code, name, price, changePercent], index) => [
+    STOCKS.map(([code, name, price, changePercent, amount], index) => [
       `quoteCache:${code}`,
       {
         cacheVersion: 1,
         code,
         provider: 'eastmoney',
         fetchedAt: BASE - 5000 + index * 100,
-        quote: { price, changePercent, change: +(price * changePercent / 100).toFixed(2) }
+        quote: { price, changePercent, amount, change: +(price * changePercent / 100).toFixed(2) }
       }
     ])
   );

@@ -346,3 +346,35 @@ test('virtual focus lands on the requested stock, not the first rendered one', (
   assert.equal(focusedKey, 'sh600300', `focus landed on ${focusedKey ?? active?.tagName}`);
   void el;
 });
+
+// ===== 空态 / 骨架屏（计划 Task 8） =====
+
+test('loading renders exactly six skeleton rows and no fake numbers', () => {
+  setupBoard(board({ loading: true, stocks: [] }));
+  const loading = document.querySelector('[data-region="loading"]') as HTMLElement;
+  assert.equal(loading.querySelectorAll('.skeleton-row').length, 6);
+  assert.equal(loading.textContent, '', '骨架屏绝不渲染假数据');
+  assert.equal(loading.getAttribute('aria-busy'), 'true');
+});
+
+test('empty board offers a real add action, not just a message', () => {
+  const { spy } = setupBoard(board({ empty: true, stocks: [], emptyMessage: '这个分组还没有股票' }));
+  const empty = document.querySelector('[data-region="empty"]') as HTMLElement;
+  assert.ok(empty.textContent?.includes('这个分组还没有股票'));
+
+  const cta = document.querySelector('[data-action="empty-add-stock"]') as HTMLButtonElement;
+  assert.ok(cta, '空态提供主操作');
+  spy.reset();
+  cta.click();
+  assert.equal(spy.lastEvent('dialog-open-request')?.detail.kind, 'add-stock');
+});
+
+test('empty message updates without destroying the call to action', () => {
+  const { el } = setupBoard(board({ empty: true, stocks: [], emptyMessage: '第一次' }));
+  el.viewModel = board({ empty: true, stocks: [], emptyMessage: '第二次' });
+  assert.ok(document.querySelector('[data-region="empty"]')?.textContent?.includes('第二次'));
+  assert.ok(
+    document.querySelector('[data-action="empty-add-stock"]'),
+    '写文案时不能把 CTA 一起清掉'
+  );
+});

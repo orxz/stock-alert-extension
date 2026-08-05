@@ -389,6 +389,26 @@ stock-card[data-pinned='true'] .stock-card {
   }
 }
 
+.board-empty-text {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* 空态是邀请动作，不是一句「暂无数据」——给一个真正的主操作。 */
+.board-empty-cta {
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent-fill);
+  border-radius: var(--r-md);
+}
+
+.board-empty-cta:hover {
+  opacity: 0.88;
+}
+
 .board-empty,
 .board-error {
   display: flex;
