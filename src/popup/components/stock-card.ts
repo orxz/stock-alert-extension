@@ -92,10 +92,10 @@ export class StockCardElement extends HTMLElement {
   }
 
   private buildSkeleton(): void {
-    // 卡片可聚焦（tabindex=0）+ Enter/Space 切换 pin；容器用 role=group 而非
-    // role=button，避免 axe nested-interactive（group 是容器角色，允许内部按钮）。
+    // 卡片可聚焦（tabindex=0）+ Enter/Space 切换 pin；在 stock-grid 的
+    // role=list 容器中作为 listitem，同时允许内部原生操作按钮。
     this.setAttribute('tabindex', '0');
-    this.setAttribute('role', 'group');
+    this.setAttribute('role', 'listitem');
 
     const article = document.createElement('article');
     article.className = 'stock-card';

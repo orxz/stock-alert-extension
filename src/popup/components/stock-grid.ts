@@ -1,20 +1,34 @@
 // src/popup/components/stock-grid.ts
-// Task 16 Step 3-5 — 网格视图容器组件。
-// 使用 keyed-update 保持卡片节点 identity/focus/scroll 稳定。
-// 事件委托：在 grid 容器上监听 stock-card 的 pin/order 事件并转发。
-// 架构约束：仅 import domain + view-models + events + keyed-update；per-connection AbortController。
+// 网格视图容器组件：按两列的视觉行虚拟化卡片。
+// 使用 keyed-update 保持可见卡片节点 identity/focus 稳定。
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { StockCardViewModel } from '../view-models.js';
+import {
+  calculateVirtualWindow,
+  type VirtualViewport
+} from '../virtualization/virtual-window.js';
 import { updateKeyedChildren } from './keyed-update.js';
 import './stock-card.js';
 import type { StockCardElement } from './stock-card.js';
+
+const GRID_COLUMNS = 2;
+const GRID_ROW_EXTENT = 126;
+const OVERSCAN_SCREENS = 1;
+
+interface VisibleStock {
+  readonly index: number;
+  readonly viewModel: StockCardViewModel;
+}
 
 export class StockGridElement extends HTMLElement {
   private connection: AbortController | undefined;
   private skeletonBuilt = false;
   private _viewModel: readonly StockCardViewModel[] = [];
   private _groupId: GroupId = 'g_all' as GroupId;
+  private _viewport: VirtualViewport = { scrollOffset: 0, viewportExtent: 390 };
   private container: HTMLElement | null = null;
+  private beforeSpacer: HTMLElement | null = null;
+  private afterSpacer: HTMLElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -41,6 +55,15 @@ export class StockGridElement extends HTMLElement {
     if (this.isConnected) this.render();
   }
 
+  get viewport(): VirtualViewport {
+    return this._viewport;
+  }
+
+  set viewport(value: VirtualViewport) {
+    this._viewport = value;
+    if (this.isConnected) this.render();
+  }
+
   get groupId(): GroupId {
     return this._groupId;
   }
@@ -55,28 +78,79 @@ export class StockGridElement extends HTMLElement {
     }
   }
 
+  focusCode(code: StockCode): boolean {
+    const stockIndex = this._viewModel.findIndex((vm) => vm.code === code);
+    if (stockIndex < 0) return false;
+    this.dispatchEvent(new CustomEvent('virtual-focus-request', {
+      detail: {
+        index: Math.floor(stockIndex / GRID_COLUMNS),
+        itemExtent: GRID_ROW_EXTENT
+      },
+      bubbles: true,
+      composed: true
+    }));
+    return true;
+  }
+
   private buildSkeleton(): void {
     const container = document.createElement('div');
     container.className = 'stock-grid-container';
     container.setAttribute('data-region', 'grid-cards');
+    container.setAttribute('role', 'list');
+    container.style.gridTemplateColumns = `repeat(${GRID_COLUMNS}, minmax(0, 1fr))`;
+
+    const beforeSpacer = this.createSpacer('before');
+    const afterSpacer = this.createSpacer('after');
+    this.beforeSpacer = beforeSpacer;
+    this.afterSpacer = afterSpacer;
+
     this.container = container;
+    container.append(beforeSpacer, afterSpacer);
     this.append(container);
   }
 
+  private createSpacer(position: 'before' | 'after'): HTMLElement {
+    const spacer = document.createElement('div');
+    spacer.className = `stock-grid-spacer stock-grid-spacer--${position}`;
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.gridColumn = '1 / -1';
+    return spacer;
+  }
+
   private render(): void {
-    if (!this.container) return;
+    if (!this.container || !this.beforeSpacer || !this.afterSpacer) return;
 
     // 记录当前焦点所在的 data-key，渲染后恢复焦点到同一卡片。
     const focusedKey = (document.activeElement as HTMLElement | null)?.closest('[data-key]')?.getAttribute('data-key') ?? null;
 
     const orderedCodes = this._viewModel.map((vm) => vm.code);
+    const rowCount = Math.ceil(this._viewModel.length / GRID_COLUMNS);
+    const virtualWindow = calculateVirtualWindow({
+      itemCount: rowCount,
+      itemExtent: GRID_ROW_EXTENT,
+      viewportExtent: this._viewport.viewportExtent,
+      scrollOffset: this._viewport.scrollOffset,
+      overscanScreens: OVERSCAN_SCREENS
+    });
+    const startStockIndex = virtualWindow.startIndex * GRID_COLUMNS;
+    const endStockIndex = Math.min(this._viewModel.length, virtualWindow.endIndex * GRID_COLUMNS);
+    const visibleStocks = this._viewModel
+      .slice(startStockIndex, endStockIndex)
+      .map((viewModel, offset): VisibleStock => ({
+        index: startStockIndex + offset,
+        viewModel
+      }));
+
+    this.updateSpacer(this.beforeSpacer, virtualWindow.beforeExtent);
+    this.updateSpacer(this.afterSpacer, virtualWindow.afterExtent);
 
     updateKeyedChildren(
       this.container,
-      this._viewModel,
-      (vm) => vm.code,
-      (vm) => this.createCard(vm, orderedCodes),
-      (node, vm) => this.updateCard(node, vm, orderedCodes)
+      visibleStocks,
+      ({ viewModel }) => viewModel.code,
+      ({ index, viewModel }) => this.createCard(viewModel, orderedCodes, index),
+      (node, { index, viewModel }) => this.updateCard(node, viewModel, orderedCodes, index),
+      this.afterSpacer
     );
 
     // 恢复焦点到同一 key 的卡片（keyed reorder 后节点复用）。
@@ -91,16 +165,32 @@ export class StockGridElement extends HTMLElement {
     }
   }
 
-  private createCard(vm: StockCardViewModel, orderedCodes: readonly StockCode[]): HTMLElement {
+  private updateSpacer(spacer: HTMLElement, extent: number): void {
+    const height = `${extent}px`;
+    spacer.hidden = extent === 0;
+    if (spacer.style.height !== height) spacer.style.height = height;
+  }
+
+  private createCard(
+    vm: StockCardViewModel,
+    orderedCodes: readonly StockCode[],
+    index: number
+  ): HTMLElement {
     const card = document.createElement('stock-card') as StockCardElement;
-    card.groupId = this._groupId;
-    card.orderedCodes = orderedCodes;
-    card.viewModel = vm;
+    this.updateCard(card, vm, orderedCodes, index);
     return card;
   }
 
-  private updateCard(node: HTMLElement, vm: StockCardViewModel, orderedCodes: readonly StockCode[]): void {
+  private updateCard(
+    node: HTMLElement,
+    vm: StockCardViewModel,
+    orderedCodes: readonly StockCode[],
+    index: number
+  ): void {
     const card = node as unknown as StockCardElement;
+    card.setAttribute('role', 'listitem');
+    card.setAttribute('aria-posinset', String(index + 1));
+    card.setAttribute('aria-setsize', String(this._viewModel.length));
     card.groupId = this._groupId;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;

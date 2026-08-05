@@ -60,7 +60,12 @@ function setupBoard(vm?: BoardViewModel): {
 }
 
 function setupGrid(stocks: StockCardViewModel[]): {
-  el: HTMLElement & { viewModel: StockCardViewModel[]; groupId: GroupId };
+  el: HTMLElement & {
+    viewModel: StockCardViewModel[];
+    groupId: GroupId;
+    viewport: { scrollOffset: number; viewportExtent: number };
+    focusCode(code: StockCode): boolean;
+  };
   spy: PopupEventSpy;
 } {
   resetDom();
@@ -71,6 +76,8 @@ function setupGrid(stocks: StockCardViewModel[]): {
   const el = document.createElement('stock-grid') as HTMLElement & {
     viewModel: StockCardViewModel[];
     groupId: GroupId;
+    viewport: { scrollOffset: number; viewportExtent: number };
+    focusCode(code: StockCode): boolean;
   };
   container.append(el);
   el.groupId = GROUP_ID;
@@ -163,6 +170,79 @@ test('switching viewMode toggles hidden on grid and table', () => {
 });
 
 // ===== Grid: keyed node identity + focus preservation =====
+
+test('500-stock grid keeps card nodes bounded and exposes list size', () => {
+  const stocks = Array.from(
+    { length: 500 },
+    (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`)
+  );
+  const { el } = setupGrid(stocks);
+  el.viewport = { scrollOffset: 0, viewportExtent: 390 };
+
+  const cards = el.querySelectorAll('stock-card[data-key]');
+  assert.ok(cards.length <= 24, `expected <=24 real cards, got ${cards.length}`);
+  assert.equal(el.querySelector('[data-region="grid-cards"]')?.getAttribute('role'), 'list');
+  assert.equal(cards[0]?.getAttribute('aria-setsize'), '500');
+  assert.equal(cards[0]?.getAttribute('aria-posinset'), '1');
+
+  el.viewport = { scrollOffset: 126 * 100, viewportExtent: 390 };
+  assert.ok(
+    el.querySelectorAll('stock-card[data-key]').length <= 24,
+    'middle windows also stay within the 24-card cap'
+  );
+});
+
+test('grid scroll offset renders cards around the target row with global positions', () => {
+  const stocks = Array.from(
+    { length: 100 },
+    (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`)
+  );
+  const { el } = setupGrid(stocks);
+  el.viewport = { scrollOffset: 126 * 20, viewportExtent: 390 };
+
+  const target = el.querySelector('[data-key="sh600040"]');
+  assert.ok(target);
+  assert.equal(target.getAttribute('role'), 'listitem');
+  assert.equal(target.getAttribute('aria-posinset'), '41');
+  assert.equal(target.getAttribute('aria-setsize'), '100');
+  assert.equal(el.querySelector('[data-key="sh600000"]'), null);
+  assert.equal(
+    (el.querySelector('[data-region="grid-cards"]') as HTMLElement).style.gridTemplateColumns,
+    'repeat(2, minmax(0, 1fr))'
+  );
+  assert.equal(
+    (el.querySelector('.stock-grid-spacer--before') as HTMLElement).style.height,
+    `${126 * 16}px`
+  );
+  assert.equal(
+    (el.querySelector('.stock-grid-spacer--after') as HTMLElement).style.height,
+    `${126 * 22}px`
+  );
+});
+
+test('grid focusCode emits row-based virtual focus request without moving focus', () => {
+  const stocks = Array.from(
+    { length: 100 },
+    (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`)
+  );
+  const { el } = setupGrid(stocks);
+  const sentinel = document.createElement('button');
+  document.body.append(sentinel);
+  sentinel.focus();
+  let detail: unknown;
+  el.addEventListener('virtual-focus-request', (event) => {
+    detail = (event as CustomEvent).detail;
+  });
+
+  assert.equal(el.focusCode('sh600041' as StockCode), true);
+  assert.deepEqual(detail, { index: 20, itemExtent: 126 });
+  assert.equal(document.activeElement, sentinel);
+});
+
+test('grid focusCode returns false for an unknown stock code', () => {
+  const { el } = setupGrid([card('sh600519')]);
+  assert.equal(el.focusCode('sz000001' as StockCode), false);
+});
 
 test('quote updates preserve the same card node (identity)', () => {
   const firstQuotes: StockCardViewModel[] = [

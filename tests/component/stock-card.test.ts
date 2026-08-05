@@ -64,6 +64,11 @@ test('renders an article element with data-key', () => {
   assert.ok(article);
 });
 
+test('card exposes listitem semantics for the virtual grid', () => {
+  const { el } = setup(card('sh600519'));
+  assert.equal(el.getAttribute('role'), 'listitem');
+});
+
 test('displays stock name as text content', () => {
   setup(card('sh600519', { name: '贵州茅台' }));
   const article = document.querySelector('stock-card[data-key="sh600519"]') as HTMLElement;
