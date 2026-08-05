@@ -124,3 +124,118 @@ test('handles empty values by clearing all keyed children', () => {
   updateKeyedChildren(container, [], keyOf, create, update);
   assert.equal(container.children.length, 0);
 });
+
+// ===== 无条件 DOM 移动的回归防护 =====
+
+/**
+ * 统计容器的 DOM 变更次数。
+ * 关键点：`insertBefore`/`append` 一个**已在正确位置**的节点，
+ * 在 DOM 规范里仍是「先移除再插入」——会使焦点丢失、CSS 动画重启，
+ * 并在每次行情刷新（盘中每 10s）产生 N 次无谓的结构变更。
+ */
+function countMutations(container: Element, run: () => void): number {
+  let mutations = 0;
+  const el = container as unknown as Record<string, unknown>;
+  const originalInsert = container.insertBefore.bind(container);
+  const originalAppend = container.appendChild.bind(container);
+  el.insertBefore = (node: Node, ref: Node | null) => { mutations += 1; return originalInsert(node, ref); };
+  el.appendChild = (node: Node) => { mutations += 1; return originalAppend(node); };
+  try {
+    run();
+  } finally {
+    delete el.insertBefore;
+    delete el.appendChild;
+  }
+  return mutations;
+}
+
+test('re-rendering an unchanged list performs no DOM moves', () => {
+  resetDom();
+  const container = document.createElement('div');
+  document.body.append(container);
+  const items: Item[] = [
+    { id: 'a', label: 'A' },
+    { id: 'b', label: 'B' },
+    { id: 'c', label: 'C' }
+  ];
+  updateKeyedChildren(container, items, keyOf, create, update);
+
+  const moves = countMutations(container, () => {
+    updateKeyedChildren(container, items, keyOf, create, update);
+  });
+
+  assert.equal(moves, 0, 'nodes already in position must not be reinserted');
+  assert.deepEqual(labels(container), ['A', 'B', 'C']);
+});
+
+test('updating only values performs no DOM moves', () => {
+  resetDom();
+  const container = document.createElement('div');
+  document.body.append(container);
+  const before: Item[] = [
+    { id: 'a', label: 'A' },
+    { id: 'b', label: 'B' }
+  ];
+  updateKeyedChildren(container, before, keyOf, create, update);
+
+  const moves = countMutations(container, () => {
+    updateKeyedChildren(
+      container,
+      [{ id: 'a', label: 'A2' }, { id: 'b', label: 'B2' }],
+      keyOf,
+      create,
+      update
+    );
+  });
+
+  assert.equal(moves, 0, 'a price tick must not restructure the list');
+  assert.deepEqual(labels(container), ['A2', 'B2']);
+});
+
+test('a focused control survives a re-render of an unchanged list', () => {
+  resetDom();
+  const container = document.createElement('div');
+  document.body.append(container);
+  const items: Item[] = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }];
+  const createWithButton = (item: Item): HTMLElement => {
+    const el = document.createElement('div');
+    const btn = document.createElement('button');
+    btn.id = `btn-${item.id}`;
+    btn.textContent = item.label;
+    el.append(btn);
+    return el;
+  };
+  const updateWithButton = (node: HTMLElement, item: Item): void => {
+    const btn = node.querySelector('button');
+    if (btn) btn.textContent = item.label;
+  };
+  updateKeyedChildren(container, items, keyOf, createWithButton, updateWithButton);
+
+  const target = document.querySelector<HTMLElement>('#btn-b');
+  target?.focus();
+  assert.equal(document.activeElement?.id, 'btn-b');
+
+  updateKeyedChildren(container, items, keyOf, createWithButton, updateWithButton);
+  assert.equal(document.activeElement?.id, 'btn-b', 'focus preserved without a restore hack');
+});
+
+test('reordering still moves only the nodes that actually moved', () => {
+  resetDom();
+  const container = document.createElement('div');
+  document.body.append(container);
+  updateKeyedChildren(
+    container,
+    [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }],
+    keyOf, create, update
+  );
+  const nodeA = container.querySelector('[data-key="a"]');
+
+  updateKeyedChildren(
+    container,
+    [{ id: 'c', label: 'C' }, { id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+    keyOf, create, update
+  );
+
+  assert.deepEqual(labels(container), ['C', 'A', 'B']);
+  assert.equal(container.querySelector('[data-key="a"]'), nodeA, 'node identity preserved');
+});

@@ -20,7 +20,9 @@ const ALL_EVENT_TYPES = [
   'dialog-submit',
   'dialog-close-request',
   'stock-search-select',
-  'quote-refresh-request'
+  'quote-refresh-request',
+  'stock-toggle-select',
+  'virtual-focus-request'
 ] as const;
 
 export interface PopupEventSpy {

@@ -125,12 +125,13 @@ test('node identity preserved across quote updates', () => {
 
 test('row count matches viewModel length', () => {
   const { el } = setupTable([card('sh600519'), card('sz000001'), card('bj920001')]);
-  assert.equal(el.querySelectorAll('tbody tr').length, 3);
+  // 只数数据行——tbody 里还有两个 aria-hidden 的虚拟 spacer 行。
+  assert.equal(el.querySelectorAll('tbody tr[data-key]').length, 3);
 });
 
 test('empty viewModel renders no body rows', () => {
   const { el } = setupTable([]);
-  assert.equal(el.querySelectorAll('tbody tr').length, 0);
+  assert.equal(el.querySelectorAll('tbody tr[data-key]').length, 0);
 });
 
 test('reconnecting table does not duplicate header listeners', () => {
@@ -161,4 +162,80 @@ test('amount column renders displayAmount text in row', () => {
   setupTable([card('sh600519', { displayAmount: '3.5亿' })]);
   const row = document.querySelector('tbody tr[data-key="sh600519"]') as HTMLElement;
   assert.ok(row.textContent?.includes('3.5亿'), 'row should contain the amount display text');
+});
+
+// ===== 虚拟化：真实行数有界 =====
+
+/** 构造 n 只股票的 VM 列表。 */
+function manyStocks(n: number): StockCardViewModel[] {
+  return Array.from({ length: n }, (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`));
+}
+
+/** 读取当前渲染的真实数据行（不含 spacer）。 */
+function realRows(): NodeListOf<Element> {
+  return document.querySelectorAll('tbody tr[data-key]');
+}
+
+test('500-stock table keeps real stock rows bounded', () => {
+  const { el } = setupTable(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  assert.ok(realRows().length <= 27, `expected <=27 real rows, got ${realRows().length}`);
+});
+
+test('semantic row count reflects the full list, not the rendered window', () => {
+  const { el } = setupTable(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  // 表头占第 1 行，故 aria-rowcount = 数据行数 + 1。
+  assert.equal(document.querySelector('table')?.getAttribute('aria-rowcount'), '501');
+});
+
+test('scrolling changes the rendered key range and exposes aria-rowindex', () => {
+  const { el } = setupTable(manyStocks(100));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 48 * 50, viewportExtent: 390 };
+  const row = document.querySelector('[data-key="sh600050"]');
+  assert.ok(row, 'row scrolled into the window is rendered');
+  assert.equal(row?.getAttribute('aria-rowindex'), '52', 'index 50 → rowindex 52 (header is row 1)');
+});
+
+test('spacer rows preserve total scroll height', () => {
+  const { el } = setupTable(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 48 * 100, viewportExtent: 390 };
+  const spacers = document.querySelectorAll('tbody tr[data-spacer]');
+  assert.equal(spacers.length, 2, 'top and bottom spacer');
+  const heights = [...spacers].map((s) => Number.parseFloat((s as HTMLElement).style.height) || 0);
+  const rendered = realRows().length * 48;
+  assert.equal(heights[0] + rendered + heights[1], 500 * 48, 'scrollable height is exact');
+});
+
+test('spacers are hidden from assistive technology', () => {
+  const { el } = setupTable(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  for (const spacer of document.querySelectorAll('tbody tr[data-spacer]')) {
+    assert.equal(spacer.getAttribute('aria-hidden'), 'true');
+  }
+});
+
+test('a short list renders every row with no wasted spacer height', () => {
+  const { el } = setupTable(manyStocks(3));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  assert.equal(realRows().length, 3);
+  const heights = [...document.querySelectorAll('tbody tr[data-spacer]')]
+    .map((s) => Number.parseFloat((s as HTMLElement).style.height) || 0);
+  assert.deepEqual(heights, [0, 0]);
+});
+
+test('focusCode asks the scroll owner to bring an out-of-window stock into view', () => {
+  const { el, spy } = setupTable(manyStocks(500));
+  (el as unknown as { viewport: unknown }).viewport = { scrollOffset: 0, viewportExtent: 390 };
+  const found = (el as unknown as { focusCode(code: string): boolean }).focusCode('sh600400');
+  assert.equal(found, true);
+  const event = spy.lastEvent('virtual-focus-request');
+  assert.equal(event?.detail.index, 400);
+  assert.equal(event?.detail.itemExtent, 48);
+});
+
+test('focusCode reports failure for a code that is not in the list', () => {
+  const { el } = setupTable(manyStocks(10));
+  const found = (el as unknown as { focusCode(code: string): boolean }).focusCode('sz999999');
+  assert.equal(found, false);
 });

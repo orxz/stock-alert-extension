@@ -8,6 +8,25 @@ import type { StockCardViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
 import { moveKey } from './stock-card.js';
 import { updateKeyedChildren } from './keyed-update.js';
+import { calculateVirtualWindow } from '../virtualization/virtual-window.js';
+import type { VirtualViewport } from '../virtualization/virtual-window.js';
+
+/** 单行高度（px）——与 board.css 的 .stock-table-row 固定高度一致。 */
+const TABLE_ROW_EXTENT = 48;
+/** 表头高度（px），stock-board 计算 scrollOffset 时会扣除。 */
+export const TABLE_HEADER_EXTENT = 28;
+/** 视口上下各多渲染一屏，滚动时不出现空白。 */
+const OVERSCAN_SCREENS = 1;
+
+/** 仅在文本确实变化时写入，避免无谓的 DOM 写与样式失效。 */
+function setText(node: Element | null | undefined, value: string): void {
+  if (node && node.textContent !== value) node.textContent = value;
+}
+
+/** 仅在属性确实变化时写入。 */
+function setAttr(node: Element | null | undefined, name: string, value: string): void {
+  if (node && node.getAttribute(name) !== value) node.setAttribute(name, value);
+}
 
 const STATUS_LABELS: Readonly<Record<StockCardViewModel['status'], string>> = {
   fresh: '实时',
@@ -31,6 +50,19 @@ const COLUMNS: readonly ColumnDef[] = [
   { key: 'status', label: '状态' }
 ];
 
+/** 创建一个对辅助技术隐藏的 spacer 行（撑高度用，不是数据行）。 */
+function createSpacerRow(columnCount: number): HTMLElement {
+  const tr = document.createElement('tr');
+  tr.setAttribute('data-spacer', '');
+  tr.setAttribute('aria-hidden', 'true');
+  const td = document.createElement('td');
+  td.colSpan = columnCount;
+  td.setAttribute('aria-hidden', 'true');
+  tr.append(td);
+  tr.style.height = '0px';
+  return tr;
+}
+
 export class StockTableElement extends HTMLElement {
   private connection: AbortController | undefined;
   private skeletonBuilt = false;
@@ -39,6 +71,11 @@ export class StockTableElement extends HTMLElement {
   private _sortField: SortField = 'manual';
   private _sortDirection: SortDirection = 'asc';
   private tbody: HTMLElement | null = null;
+  private table: HTMLTableElement | null = null;
+  private topSpacer: HTMLElement | null = null;
+  private bottomSpacer: HTMLElement | null = null;
+  /** 视口由 stock-board（唯一滚动拥有者）推送；默认值覆盖未挂载时的渲染。 */
+  private _viewport: VirtualViewport = { scrollOffset: 0, viewportExtent: 390 };
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -72,6 +109,27 @@ export class StockTableElement extends HTMLElement {
 
   set groupId(value: GroupId) {
     this._groupId = value;
+  }
+
+  get viewport(): VirtualViewport {
+    return this._viewport;
+  }
+
+  set viewport(value: VirtualViewport) {
+    this._viewport = value;
+    if (this.isConnected) this.render();
+  }
+
+  /**
+   * 请求把 `code` 滚入视口。目标行可能在虚拟窗口之外、尚未挂载，
+   * 因此这里只发出请求，由 stock-board 滚动后再聚焦。
+   * @returns code 是否存在于当前列表
+   */
+  focusCode(code: StockCode): boolean {
+    const index = this._viewModel.findIndex((vm) => vm.code === code);
+    if (index < 0) return false;
+    emitPopupEvent(this, 'virtual-focus-request', { index, itemExtent: TABLE_ROW_EXTENT });
+    return true;
   }
 
   get sortField(): SortField {
@@ -127,7 +185,15 @@ export class StockTableElement extends HTMLElement {
     const tbody = document.createElement('tbody');
     this.tbody = tbody;
 
+    // 上下 spacer：撑出未渲染行占据的高度，让滚动条长度与完整列表一致。
+    // 对辅助技术隐藏——它们不是数据行。
+    const columnCount = COLUMNS.length + 1;
+    this.topSpacer = createSpacerRow(columnCount);
+    this.bottomSpacer = createSpacerRow(columnCount);
+    tbody.append(this.topSpacer, this.bottomSpacer);
+
     table.append(thead, tbody);
+    this.table = table;
     this.append(table);
 
     this.updateSortIndicators();
@@ -209,22 +275,42 @@ export class StockTableElement extends HTMLElement {
   private render(): void {
     if (!this.tbody) return;
 
-    const focusedKey = (document.activeElement as HTMLElement | null)?.closest('tr[data-key]')?.getAttribute('data-key') ?? null;
+    const total = this._viewModel.length;
+    const window = calculateVirtualWindow({
+      itemCount: total,
+      itemExtent: TABLE_ROW_EXTENT,
+      viewportExtent: this._viewport.viewportExtent,
+      scrollOffset: this._viewport.scrollOffset,
+      overscanScreens: OVERSCAN_SCREENS
+    });
 
+    // 语义行数始终反映完整列表（表头占第 1 行），与实际挂载的窗口无关——
+    // 否则屏幕阅读器会把「500 选 27」读成「共 27 行」。
+    setAttr(this.table, 'aria-rowcount', String(total + 1));
+
+    if (this.topSpacer) this.topSpacer.style.height = `${window.beforeExtent}px`;
+    if (this.bottomSpacer) this.bottomSpacer.style.height = `${window.afterExtent}px`;
+
+    const visible = this._viewModel.slice(window.startIndex, window.endIndex);
+
+    // 不再保存/恢复焦点：keyed-update 只移动真正错位的节点，
+    // 位置不变的行不会被重新插入，焦点自然保留。
     updateKeyedChildren(
       this.tbody,
-      this._viewModel,
+      visible,
       (vm) => vm.code,
       (vm) => this.createRow(vm),
-      (node, vm) => this.updateRow(node, vm)
+      (node, vm) => this.updateRow(node, vm),
+      // 所有数据行必须排在底部 spacer 之前。
+      this.bottomSpacer
     );
 
-    // Restore focus to same row
-    if (focusedKey) {
-      const rowToFocus = this.tbody.querySelector(`tr[data-key="${focusedKey}"] button`);
-      if (rowToFocus && !document.activeElement?.closest(`tr[data-key="${focusedKey}"]`)) {
-        (rowToFocus as HTMLElement).focus?.();
-      }
+    // aria-rowindex 用完整列表中的位置（+2：表头占 1，索引从 0 起）。
+    let index = window.startIndex;
+    for (const vm of visible) {
+      const row = this.tbody.querySelector(`tr[data-key="${vm.code}"]`);
+      setAttr(row, 'aria-rowindex', String(index + 2));
+      index += 1;
     }
   }
 

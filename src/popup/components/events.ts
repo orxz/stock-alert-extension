@@ -35,6 +35,12 @@ export interface PopupEventMap {
   'dialog-close-request': { readonly reason: 'cancel' | 'escape' | 'backdrop' };
   'stock-search-select': { readonly code: StockCode; readonly name: string };
   'quote-refresh-request': { readonly force: true };
+  /**
+   * 虚拟列表请求把某个索引滚入视口。
+   * 由 list/grid 发出、stock-board（唯一滚动拥有者）处理——目标行可能
+   * 尚未挂载，必须先滚动再聚焦。
+   */
+  'virtual-focus-request': { readonly index: number; readonly itemExtent: number };
 }
 
 export function emitPopupEvent<K extends keyof PopupEventMap>(
