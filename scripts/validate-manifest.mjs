@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
 
 const REQUIRED_HOSTS = [
-  'https://hq.sinajs.cn/*',
+  'https://qt.gtimg.cn/*',
   'https://push2.eastmoney.com/*',
   'https://searchapi.eastmoney.com/*'
 ];

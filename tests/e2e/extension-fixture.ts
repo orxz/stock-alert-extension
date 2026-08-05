@@ -70,6 +70,17 @@ async function seedExtensionStorage(worker: Worker, values: Record<string, unkno
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
+/**
+ * 离线用例需要拦截的全部行情/搜索域名。
+ * 与 `extension/manifest.json` 的 host_permissions 一一对应（外加 push2 的重定向目标）。
+ */
+const QUOTE_HOST_PATTERNS = [
+  'https://push2.eastmoney.com/**',
+  'https://push2delay.eastmoney.com/**',
+  'https://searchapi.eastmoney.com/**',
+  'https://qt.gtimg.cn/**'
+] as const;
+
 export interface LaunchOptions {
   /** 初始 chrome.storage.local 数据（seed 后再打开 popup）。 */
   seed?: Record<string, unknown> | null;
@@ -120,17 +131,20 @@ export async function launchBuiltExtension(options: LaunchOptions = {}): Promise
   let releaseHold: (() => void) | null = null;
   if (offline) {
     await context.setOffline(true);
-    if (holdQuotes) {
-      const holdGate = new Promise<void>((resolve) => { releaseHold = resolve; });
-      const routeOrHold = (route: { abort: () => Promise<void> }) =>
-        holdGate.then(() => route.abort()).catch(() => {});
-      await context.route('https://push2.eastmoney.com/**', routeOrHold);
-      await context.route('https://hq.sinajs.cn/**', routeOrHold);
-      await context.route('https://searchapi.eastmoney.com/**', routeOrHold);
-    } else {
-      await context.route('https://push2.eastmoney.com/**', (route) => route.abort());
-      await context.route('https://hq.sinajs.cn/**', (route) => route.abort());
-      await context.route('https://searchapi.eastmoney.com/**', (route) => route.abort());
+    // 必须与 manifest host_permissions 中的数据源保持同步——漏掉任何一个域名，
+    // 「离线」用例都会悄悄打到真实网络、拿到真行情，从而断言错误的结论。
+    // push2delay 是 push2 的 302 目标：主请求被 abort 时不会产生它，
+    // 但仍显式拦截以防上游改成直连。
+    const routeOrHold = holdQuotes
+      ? (() => {
+          const holdGate = new Promise<void>((resolve) => { releaseHold = resolve; });
+          return (route: { abort: () => Promise<void> }) =>
+            holdGate.then(() => route.abort()).catch(() => {});
+        })()
+      : (route: { abort: () => Promise<void> }) => route.abort();
+
+    for (const pattern of QUOTE_HOST_PATTERNS) {
+      await context.route(pattern, routeOrHold);
     }
   }
 

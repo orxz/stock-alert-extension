@@ -15,11 +15,22 @@ export interface Quote {
   readonly amount: number;
 }
 
+/** 当前在用的行情源标识（主源 / 备源）。 */
+export type QuoteProviderName = 'eastmoney' | 'tencent';
+
+/**
+ * 缓存中可能出现的行情源标识。
+ * `sina` 是 v2.0.0 及更早版本写入的历史值——备源已于 v2.0.1 换为腾讯
+ * （新浪强制校验 Referer，MV3 无法设置，实测固定 403）。
+ * 仍在此保留以便无损读取旧缓存与 v1.3 回滚数据；新写入不再产生该值。
+ */
+export type PersistedQuoteProviderName = QuoteProviderName | 'sina';
+
 /** 行情缓存条目：持久化在 `quoteCache:<code>` 键下。 */
 export interface QuoteCacheEntry {
   readonly cacheVersion: 1;
   readonly code: StockCode;
-  readonly provider: 'eastmoney' | 'sina';
+  readonly provider: PersistedQuoteProviderName;
   readonly fetchedAt: number;
   readonly quote: Quote;
 }
@@ -28,8 +39,8 @@ export interface QuoteCacheEntry {
 export interface QuoteResult {
   readonly code: StockCode;
   readonly status: 'fresh' | 'cached' | 'missing';
-  readonly source: 'eastmoney' | 'sina' | 'cache' | 'none';
-  readonly provider: 'eastmoney' | 'sina' | 'unknown' | null;
+  readonly source: PersistedQuoteProviderName | 'cache' | 'none';
+  readonly provider: PersistedQuoteProviderName | 'unknown' | null;
   readonly fetchedAt: number | null;
   readonly quote: Quote | null;
   readonly error: string | null;

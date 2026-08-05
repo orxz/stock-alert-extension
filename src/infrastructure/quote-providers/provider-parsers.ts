@@ -1,5 +1,5 @@
 // src/infrastructure/quote-providers/provider-parsers.ts
-// 纯解析器：parseEastmoney / parseSina / parseEastmoneySearch。
+// 纯解析器：parseEastmoney / parseTencent / parseEastmoneySearch。
 // 无 fetch 依赖——接收已解析的 JSON 或文本，返回规范化的 domain Quote / StockSearchResult。
 // 可独立测试（Task 8 Step 1 的纯函数测试直接调用）。
 // 从 v1.3 quotes.js 移植，适配 v2 domain Quote 类型（精简字段）。fltt=2 返回浮点值，无价格缩放。
@@ -102,30 +102,49 @@ export function parseEastmoney(json: unknown): Readonly<Record<StockCode, Quote>
   return result;
 }
 
+/** 腾讯行情响应最少需要的字段数（低于此视为哨兵行，如 v_pv_none_match）。 */
+const TENCENT_MIN_FIELDS = 6;
+
 /**
- * 解析 Sina 行情文本（GBK 已解码）：逐行匹配 hq_str_<code>="..." 格式。
- * 字段逗号分隔：[0]=名称 [1]=开 [2]=昨收 [3]=现价 [4]=高 [5]=低 [8]=成交量 [9]=成交额。
- * price=parseFloat(fields[3])，非有限或 price<=0 → 跳过。
+ * 取腾讯成交额（元）。
+ * 优先用 [35] 的「现价/成交量/成交额」复合字段第三段——它是精确的元值，
+ * 与 Eastmoney f6 口径一致；缺失时回退 [37]（万元）换算。
  */
-export function parseSina(text: string): Readonly<Record<StockCode, Quote>> {
+function tencentAmount(fields: readonly string[]): number | null {
+  const composite = fields[35];
+  if (typeof composite === 'string' && composite.includes('/')) {
+    const exact = num(composite.split('/')[2]);
+    if (exact !== null) return exact;
+  }
+  const wan = num(fields[37]);
+  return wan === null ? null : wan * 10_000;
+}
+
+/**
+ * 解析腾讯行情文本（GBK 已解码）：逐行匹配 `v_<code>="..."`，字段以 `~` 分隔。
+ * 实测字段布局（88 个）：[1]=名称 [3]=现价 [4]=昨收 [31]=涨跌额 [32]=涨跌幅
+ * [35]=现价/成交量/成交额复合 [37]=成交额（万元）。
+ * 响应键回显带市场前缀（v_sh600519 / v_sz000001 / v_bj430047），直接小写取用。
+ * price<=0（停牌/盘前）由 enrichQuote 丢弃——绝不生成模拟价格。
+ */
+export function parseTencent(text: string): Readonly<Record<StockCode, Quote>> {
   const result = {} as Record<StockCode, Quote>;
   for (const line of text.split('\n')) {
-    const match = line.match(/hq_str_(\w+?)="(.*)"/);
+    const match = line.match(/v_(\w+)="([^"]*)"/);
     if (!match) continue;
     const [, responseCode, body] = match;
-    const fields = body.split(',');
-    const price = Number.parseFloat(fields[3]);
-    if (fields.length < 4 || !fields[0] || !Number.isFinite(price)) continue;
+    const fields = body.split('~');
+    if (fields.length < TENCENT_MIN_FIELDS || !fields[1]) continue;
 
     const code = responseCode.toLowerCase() as StockCode;
     const quote = enrichQuote({
       code,
-      name: fields[0],
-      price: num(price),
-      prevClose: num(fields[2]),
-      change: null,
-      changePercent: null,
-      amount: num(fields[9])
+      name: fields[1],
+      price: num(fields[3]),
+      prevClose: num(fields[4]),
+      change: num(fields[31]),
+      changePercent: num(fields[32]),
+      amount: tencentAmount(fields)
     });
     if (quote) result[code] = quote;
   }

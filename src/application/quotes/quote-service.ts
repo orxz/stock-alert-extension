@@ -364,7 +364,7 @@ export class QuoteService {
       cacheWrites
     );
 
-    // ── Fallback (Sina)：只查 primary 缺失的 code ──
+    // ── Fallback (Tencent)：只查 primary 缺失的 code ──
     const missing = batch.filter((code) => !freshResults[code]);
     if (missing.length === 0 || deadlineSource.token.aborted) return;
 

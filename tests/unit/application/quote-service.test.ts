@@ -36,7 +36,7 @@ function makeQuote(code: string, price = 100): Quote {
   };
 }
 
-function makeCacheEntry(code: string, price: number, fetchedAt: number, provider: 'eastmoney' | 'sina' = 'eastmoney'): QuoteCacheEntry {
+function makeCacheEntry(code: string, price: number, fetchedAt: number, provider: 'eastmoney' | 'tencent' = 'eastmoney'): QuoteCacheEntry {
   return {
     cacheVersion: 1,
     code: sc(code),
@@ -97,7 +97,7 @@ function createMockCache(initial?: Record<string, QuoteCacheEntry>) {
 // ── Mock providers ──
 
 /** Provider 返回全部 codes 的行情（price=100）。 */
-function okProvider(name: 'eastmoney' | 'sina' = 'eastmine' as 'eastmoney'): {
+function okProvider(name: 'eastmoney' | 'tencent' = 'eastmine' as 'eastmoney'): {
   provider: QuoteProvider; calls: { value: number; codes: StockCode[][] };
 } {
   const calls = { value: 0, codes: [] as StockCode[][] };
@@ -117,7 +117,7 @@ function okProvider(name: 'eastmoney' | 'sina' = 'eastmine' as 'eastmoney'): {
 }
 
 /** Provider 总是抛错。 */
-function failingProvider(name: 'eastmoney' | 'sina' = 'eastmoney'): {
+function failingProvider(name: 'eastmoney' | 'tencent' = 'eastmoney'): {
   provider: QuoteProvider; calls: { value: number };
 } {
   const calls = { value: 0 };
@@ -134,7 +134,7 @@ function failingProvider(name: 'eastmoney' | 'sina' = 'eastmoney'): {
 }
 
 /** Provider 返回空结果（无数据）。 */
-function emptyProvider(name: 'eastmoney' | 'sina' = 'eastmoney'): QuoteProvider {
+function emptyProvider(name: 'eastmoney' | 'tencent' = 'eastmoney'): QuoteProvider {
   return {
     name,
     async fetch(_codes: readonly StockCode[], _token: CancellationToken) {
@@ -144,7 +144,7 @@ function emptyProvider(name: 'eastmoney' | 'sina' = 'eastmoney'): QuoteProvider 
 }
 
 /** Provider 返回零价格行情。 */
-function zeroPriceProvider(name: 'eastmoney' | 'sina' = 'eastmoney'): QuoteProvider {
+function zeroPriceProvider(name: 'eastmoney' | 'tencent' = 'eastmoney'): QuoteProvider {
   return {
     name,
     async fetch(codes: readonly StockCode[], _token: CancellationToken) {
@@ -156,7 +156,7 @@ function zeroPriceProvider(name: 'eastmoney' | 'sina' = 'eastmoney'): QuoteProvi
 }
 
 /** Provider 返回部分 codes 的行情。 */
-function partialProvider(name: 'eastmoney' | 'sina' = 'eastmoney', fraction = 0.5): QuoteProvider {
+function partialProvider(name: 'eastmoney' | 'tencent' = 'eastmoney', fraction = 0.5): QuoteProvider {
   return {
     name,
     async fetch(codes: readonly StockCode[], _token: CancellationToken) {
@@ -202,7 +202,7 @@ function createService(overrides: ServiceOverrides = {}): {
     ? { sink: overrides.sink, events: [] as DiagnosticEvent[] }
     : collectingSink();
   const primary = overrides.primary ?? okProvider().provider;
-  const fallback = overrides.fallback ?? emptyProvider('sina');
+  const fallback = overrides.fallback ?? emptyProvider('tencent');
   const service = new QuoteService(primary, fallback, cache, clock, session, sink);
   return { service, clock: clock as FixedClock, session, cache, sink, events };
 }
@@ -434,7 +434,7 @@ test('dual-source: missing codes from primary fetched from fallback', async () =
   let fallbackCalled = false;
   let fallbackCodes: string[] = [];
   const fallback: QuoteProvider = {
-    name: 'sina',
+    name: 'tencent',
     async fetch(codes: readonly StockCode[], _token: CancellationToken) {
       fallbackCalled = true;
       fallbackCodes = codes.map((c) => c as string);
@@ -449,7 +449,7 @@ test('dual-source: missing codes from primary fetched from fallback', async () =
   assert.ok(fallbackCalled, 'fallback was called');
   assert.deepEqual(fallbackCodes, ['sz000001'], 'fallback only for missing code');
   assert.equal(result.results.sh600519.source, 'eastmoney');
-  assert.equal(result.results.sz000001.source, 'sina');
+  assert.equal(result.results.sz000001.source, 'tencent');
   assert.equal(result.counts.fresh, 2);
 });
 
@@ -574,7 +574,7 @@ test('overall deadline returns completed batches and cache', async () => {
   };
   // Fallback: 始终挂起
   const fallback: QuoteProvider = {
-    name: 'sina',
+    name: 'tencent',
     async fetch(_codes: readonly StockCode[], token: CancellationToken) {
       return new Promise<Record<string, Quote>>((_, reject) => {
         token.onCancel(() => reject(new Error('aborted')));
@@ -630,7 +630,7 @@ test('backoff-deferred returns cached (not fresh) results', async () => {
 
 // ===== primary 超时后 fallback 补充 =====
 
-test('primary timeout falls back to sina for missing codes', async () => {
+test('primary timeout falls back to tencent for missing codes', async () => {
   const cache = createMockCache();
   const primary: QuoteProvider = {
     name: 'eastmoney',
@@ -641,7 +641,7 @@ test('primary timeout falls back to sina for missing codes', async () => {
     }
   };
   const fallback: QuoteProvider = {
-    name: 'sina',
+    name: 'tencent',
     async fetch(codes: readonly StockCode[], _token: CancellationToken) {
       const result: Record<string, Quote> = {};
       for (const code of codes) result[code as string] = makeQuote(code as string, 200);
@@ -661,7 +661,7 @@ test('primary timeout falls back to sina for missing codes', async () => {
   const result = await refreshPromise;
 
   assert.equal(result.results.sh600519.status, 'fresh');
-  assert.equal(result.results.sh600519.source, 'sina');
+  assert.equal(result.results.sh600519.source, 'tencent');
 });
 
 // ── AdvanceableClock: 支持虚拟时间推进和 timer 触发 ──

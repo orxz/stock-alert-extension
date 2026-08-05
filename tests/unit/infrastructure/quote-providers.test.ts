@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { StockCode } from '../../../src/domain/brands.js';
-import { parseEastmoney, parseSina, parseEastmoneySearch } from '../../../src/infrastructure/quote-providers/provider-parsers.js';
+import { parseEastmoney, parseTencent, parseEastmoneySearch } from '../../../src/infrastructure/quote-providers/provider-parsers.js';
 import { EastmoneyQuoteProvider } from '../../../src/infrastructure/quote-providers/eastmoney-quote-provider.js';
-import { SinaQuoteProvider } from '../../../src/infrastructure/quote-providers/sina-quote-provider.js';
+import { TencentQuoteProvider } from '../../../src/infrastructure/quote-providers/tencent-quote-provider.js';
 import { EastmoneySearchProvider } from '../../../src/infrastructure/quote-providers/eastmoney-search-provider.js';
 import { searchLocalCatalog } from '../../../src/infrastructure/quote-providers/local-stock-catalog.js';
 import { createCancellationSource } from '../../../src/application/ports/cancellation.js';
@@ -96,36 +96,80 @@ test('Eastmoney skips rows without f12', () => {
   assert.ok(result.sh600519);
 });
 
-// ===== parseSina =====
+// ===== parseTencent =====
 
-test('Sina parses GBK-decoded text and filters zero price', () => {
-  const text = [
-    'var hq_str_sh600519="贵州茅台,1500,1482,1505,1510,1498,100,200,300,400";',
-    'var hq_str_sz000001="平安银行,0,0,0,0,0,0,0,0,0";'
-  ].join('\n');
-  const result = parseSina(text);
-  assert.equal(result.sh600519?.price, 1505);
+/**
+ * 构造腾讯行情行（字段布局按 qt.gtimg.cn 实测：88 字段，`~` 分隔）。
+ * [1]=名称 [3]=现价 [4]=昨收 [31]=涨跌额 [32]=涨跌幅 [35]=现价/量/额复合 [37]=成交额(万元)
+ */
+function tencentLine(
+  code: string,
+  overrides: Readonly<Record<number, string>> = {}
+): string {
+  const fields = new Array<string>(88).fill('');
+  fields[0] = '1';
+  fields[1] = '贵州茅台';
+  fields[2] = code.slice(2);
+  fields[3] = '1304.89';
+  fields[4] = '1328.36';
+  fields[5] = '1328.36';
+  fields[6] = '28566';
+  fields[30] = '20260805131747';
+  fields[31] = '-23.47';
+  fields[32] = '-1.77';
+  fields[33] = '1333.80';
+  fields[34] = '1303.50';
+  fields[35] = '1304.89/28566/3754515788';
+  fields[36] = '28566';
+  fields[37] = '375452';
+  for (const [index, value] of Object.entries(overrides)) fields[Number(index)] = value;
+  return `v_${code}="${fields.join('~')}";`;
+}
+
+test('Tencent parses GBK-decoded text into a normalized quote', () => {
+  const result = parseTencent(tencentLine('sh600519'));
   assert.equal(result.sh600519?.name, '贵州茅台');
-  assert.equal(result.sz000001, undefined);
+  assert.equal(result.sh600519?.price, 1304.89);
+  assert.equal(result.sh600519?.change, -23.47);
+  assert.equal(result.sh600519?.changePercent, -1.77);
 });
 
-test('Sina computes change/changePercent from price and prevClose', () => {
-  const text = 'var hq_str_sh600519="贵州茅台,1500,1482,1500,1510,1498,100,200,300,400000";';
-  const result = parseSina(text);
-  assert.ok(result.sh600519);
+test('Tencent takes the exact amount in yuan from the composite field', () => {
+  // [35] 第三段是精确成交额（元），与 Eastmoney f6 口径一致——不是 [37] 的万元。
+  const result = parseTencent(tencentLine('sh600519'));
+  assert.equal(result.sh600519?.amount, 3754515788);
+});
+
+test('Tencent falls back to the 万元 amount field when the composite is absent', () => {
+  const result = parseTencent(tencentLine('sh600519', { 35: '' }));
+  assert.equal(result.sh600519?.amount, 3754520000);
+});
+
+test('Tencent preserves the market prefix echoed back by the endpoint', () => {
+  const text = [tencentLine('sz000001'), tencentLine('bj430047')].join('\n');
+  const result = parseTencent(text);
+  assert.ok(result.sz000001, 'sz prefix preserved');
+  assert.ok(result.bj430047, 'bj prefix preserved');
+});
+
+test('Tencent drops non-positive prices instead of fabricating a quote', () => {
+  const result = parseTencent(tencentLine('sh600519', { 3: '0.00' }));
+  assert.equal(result.sh600519, undefined);
+});
+
+test('Tencent computes change/changePercent when the endpoint omits them', () => {
+  const result = parseTencent(
+    tencentLine('sh600519', { 3: '1500', 4: '1482', 31: '', 32: '' })
+  );
   assert.equal(result.sh600519!.change, 18);
   assert.ok(result.sh600519!.changePercent > 1.2 && result.sh600519!.changePercent < 1.23);
 });
 
-test('Sina returns empty for text without matching lines', () => {
-  assert.deepEqual(parseSina(''), {});
-  assert.deepEqual(parseSina('no match here'), {});
-});
-
-test('Sina skips lines with insufficient fields', () => {
-  const text = 'var hq_str_sh600519="贵州茅台,1500";';
-  const result = parseSina(text);
-  assert.equal(result.sh600519, undefined);
+test('Tencent returns empty for unmatched text and the none-match sentinel', () => {
+  assert.deepEqual(parseTencent(''), {});
+  assert.deepEqual(parseTencent('no match here'), {});
+  // 未知代码时腾讯返回 v_pv_none_match="1"——字段数不足，必须跳过。
+  assert.deepEqual(parseTencent('v_pv_none_match="1";'), {});
 });
 
 // ===== parseEastmoneySearch =====
@@ -245,34 +289,63 @@ test('EastmoneyQuoteProvider throws on HTTP error', async () => {
   );
 });
 
-// ===== SinaQuoteProvider: fetch injection =====
+// ===== TencentQuoteProvider: fetch injection =====
 
-test('SinaQuoteProvider constructs correct URL and parses response', async () => {
+test('TencentQuoteProvider constructs correct URL and parses response', async () => {
   let capturedUrl = '';
   const mockFetch = async (url: string) => {
     capturedUrl = url;
     return {
       ok: true,
       async arrayBuffer() {
-        const text = 'var hq_str_sh600519="贵州茅台,1500,1482,1505,1510,1498,100,200,300,400000";';
-        return new TextEncoder().encode(text).buffer;
+        return new TextEncoder().encode(tencentLine('sh600519')).buffer;
       }
     };
   };
-  const provider = new SinaQuoteProvider(mockFetch);
+  const provider = new TencentQuoteProvider(mockFetch);
   const result = await provider.fetch(['sh600519'] as readonly StockCode[], noopToken());
-  assert.ok(capturedUrl.includes('hq.sinajs.cn/list=sh600519'));
-  assert.ok(result.sh600519);
-  assert.equal(result.sh600519?.price, 1505);
+  assert.ok(capturedUrl.includes('qt.gtimg.cn/q=sh600519'));
+  assert.equal(result.sh600519?.price, 1304.89);
 });
 
-test('SinaQuoteProvider throws on HTTP error', async () => {
+test('TencentQuoteProvider batches codes into one comma-separated query', async () => {
+  let capturedUrl = '';
+  const mockFetch = async (url: string) => {
+    capturedUrl = url;
+    return {
+      ok: true,
+      async arrayBuffer() {
+        return new TextEncoder().encode(
+          [tencentLine('sh600519'), tencentLine('sz000001')].join('\n')
+        ).buffer;
+      }
+    };
+  };
+  const provider = new TencentQuoteProvider(mockFetch);
+  const result = await provider.fetch(
+    ['sh600519', 'sz000001'] as readonly StockCode[],
+    noopToken()
+  );
+  assert.ok(capturedUrl.includes('q=sh600519,sz000001'));
+  assert.equal(Object.keys(result).length, 2);
+});
+
+test('TencentQuoteProvider throws on HTTP error', async () => {
   const mockFetch = async () => ({ ok: false, status: 403 });
-  const provider = new SinaQuoteProvider(mockFetch);
+  const provider = new TencentQuoteProvider(mockFetch);
   await assert.rejects(
     provider.fetch(['sh600519'] as readonly StockCode[], noopToken()),
     /HTTP 403/
   );
+});
+
+test('TencentQuoteProvider returns empty without calling fetch for no codes', async () => {
+  let called = false;
+  const mockFetch = async () => { called = true; return { ok: true, async arrayBuffer() { return new ArrayBuffer(0); } }; };
+  const provider = new TencentQuoteProvider(mockFetch);
+  const result = await provider.fetch([] as readonly StockCode[], noopToken());
+  assert.deepEqual(result, {});
+  assert.equal(called, false);
 });
 
 // ===== EastmoneySearchProvider: fetch injection + abort propagation =====

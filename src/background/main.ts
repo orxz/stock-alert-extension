@@ -38,7 +38,7 @@ import { PortfolioCommandsImpl } from '../application/portfolio/commands.js';
 import { QuoteService } from '../application/quotes/quote-service.js';
 import { SearchService } from '../application/search/search-service.js';
 import { EastmoneyQuoteProvider } from '../infrastructure/quote-providers/eastmoney-quote-provider.js';
-import { SinaQuoteProvider } from '../infrastructure/quote-providers/sina-quote-provider.js';
+import { TencentQuoteProvider } from '../infrastructure/quote-providers/tencent-quote-provider.js';
 import { EastmoneySearchProvider } from '../infrastructure/quote-providers/eastmoney-search-provider.js';
 import { searchLocalCatalog } from '../infrastructure/quote-providers/local-stock-catalog.js';
 import { QuoteScheduler, ALARM_NAME } from './scheduler.js';
@@ -97,7 +97,7 @@ function createRuntimeDependencies() {
     // 未绑定会抛 "Illegal invocation"（调用方 this 为 undefined）。
     const boundFetch = fetch.bind(globalThis);
     const primary = new EastmoneyQuoteProvider(boundFetch);
-    const fallback = new SinaQuoteProvider(boundFetch);
+    const fallback = new TencentQuoteProvider(boundFetch);
     const searchProvider = new EastmoneySearchProvider(boundFetch);
 
     const bootstrap = new BootstrapService(userDataRepository, clock);

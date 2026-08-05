@@ -6,7 +6,7 @@
 
 | 文件 | 角色 |
 |------|------|
-| `extension/manifest.json` | 扩展清单（MV3）：`action.default_popup` = popup.html，`background.service_worker` = `runtime/background/main.js`（`type: "module"`）；权限仅 `storage` + `alarms`；host_permissions 覆盖三个数据源域名（hq.sinajs.cn / push2.eastmoney.com / searchapi.eastmoney.com） |
+| `extension/manifest.json` | 扩展清单（MV3）：`action.default_popup` = popup.html，`background.service_worker` = `runtime/background/main.js`（`type: "module"`）；权限仅 `storage` + `alarms`；host_permissions 覆盖三个数据源域名（push2.eastmoney.com / searchapi.eastmoney.com / qt.gtimg.cn） |
 | `extension/popup.html` | 弹窗 UI 入口：`<stock-app hidden>` + `#fatal-fallback` + `<script type="module" src="runtime/popup/main.js">`；链式加载 `tokens.css → layout.css → components.css` |
 | `src/background/main.ts` | Service Worker 组合根：同步注册所有 Chrome listener（onMessage/onAlarm/onInstalled/onStartup/onChanged），创建 `StorageCoordinator` + Application Services + Router + Scheduler，通过可重试初始化屏障 `idle/running/ready` 处理事件 |
 | `src/popup/main.ts` | Popup 组合根：定义 Web Components、创建 RpcClient/Store/CommandController/AppShell，调用 `app:bootstrap`，调度行情刷新 |
@@ -45,7 +45,7 @@ Infrastructure (Chrome / Storage / HTTP)  →  implements  →  Application Port
 ## 核心边界（不变量）
 
 - **存储**：`StorageCoordinator`（`src/infrastructure/storage/storage-coordinator.ts`）是 `chrome.storage.local` 的唯一业务调用者和唯一写入队列；所有用户数据/缓存读写进入同一串行临界区。schema v2 由 `groups` / `watchlist` / `boardConfig` / `quoteCache:<code>` 组成；`g_all`（「全部」）是计算视图，不存储成员标记。`userDataRevision` 是规范化 `groups + watchlist + boardConfig` 的 SHA-256 摘要，不作为独立 key 持久化。schema 迁移走 `migrateToV2`（幂等）并备份到 `migrationBackup:v1.2.1`（首次写入不覆盖）
-- **行情**：`QuoteProvider`（`src/infrastructure/quote-providers/`）是纯传输层（东财主源 + 新浪备源），只返回真实远端数据；`QuoteService`（`src/application/quotes/`）负责编排（4s Provider 超时、8s 总 deadline、50 只/批、并发 2、fresh `<30s` / cached `30s~7d` / 超期删除、失败退避 `30s→2m→5m` 持久化到 `chrome.storage.session`）；`price > 0` 才视为可用行情；缺失时保留未过期缓存，**绝不生成模拟价格**；空自选股不请求网络也不改变退避状态
+- **行情**：`QuoteProvider`（`src/infrastructure/quote-providers/`）是纯传输层（东财主源 + 腾讯备源），只返回真实远端数据；`QuoteService`（`src/application/quotes/`）负责编排（4s Provider 超时、8s 总 deadline、50 只/批、并发 2、fresh `<30s` / cached `30s~7d` / 超期删除、失败退避 `30s→2m→5m` 持久化到 `chrome.storage.session`）；`price > 0` 才视为可用行情；缺失时保留未过期缓存，**绝不生成模拟价格**；空自选股不请求网络也不改变退避状态
 - **代码规范**：股票代码带市场前缀 `sh` / `sz` / `bj`，统一经 `src/domain/stock.ts` 的 `normalizeStockCode` 规范化
 - **RPC v2**：`src/protocol/registry.ts` 是唯一的 RPC 方法/payload/result/validator 注册表（13 个方法）；所有写命令是幂等最终态命令并携带 `expectedRevision`；冲突返回 `CONFLICT` 不写入；`requestId` 贯穿全链路
 - **Popup Store**：`src/popup/store/reducer.ts` 是 `AppState` 的唯一写入口（纯函数）；`domain.boardConfig` 是持久偏好的唯一真相；超时写入进入 uncertain 状态，经 bootstrap 对账确认后更新——绝不盲目回滚

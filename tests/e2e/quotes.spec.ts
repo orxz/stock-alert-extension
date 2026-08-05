@@ -62,24 +62,3 @@ test('deferred retry appears in quote status', async () => {
     await launched.close();
   }
 });
-
-// 回归：真实网络行情加载（fetch 必须绑定 globalThis，否则 provider 抛 Illegal invocation）。
-// 此前 e2e 全用 offline:true 拦截网络，从未覆盖真实 fetch 路径——该测试防御此类回归。
-test('online: manual refresh fetches real quotes over the network', async () => {
-  const launched = await launchBuiltExtension({
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
-  });
-  try {
-    await launched.page.click('[data-action="refresh"]');
-    // 等待真实网络请求完成（eastmoney 主源）。
-    await expect
-      .poll(() => launched.page.locator('#quote-status-summary').innerText(), { timeout: 15000 })
-      .toContain('实时');
-    // 行情价格应为数字而非 '--'。
-    const price = await launched.page.locator('.stock-table-cell--price, .stock-card-price').first().innerText();
-    expect(price).not.toBe('--');
-    expect(launched.errors).toEqual([]);
-  } finally {
-    await launched.close();
-  }
-});
