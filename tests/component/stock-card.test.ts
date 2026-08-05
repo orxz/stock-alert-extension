@@ -103,59 +103,56 @@ test('missing status has a text label', () => {
   assert.ok(article.textContent?.includes('缺失') || article.textContent?.includes('无数据'));
 });
 
-test('pin button emits stock-pin-request with toggled pinned and full orderedCodes', () => {
-  const { spy } = setup(card('sh600519', { pinned: false }));
+test('the ••• trigger opens the action menu for this stock', () => {
+  const { spy } = setup(card('sh600519'));
   spy.reset();
-  clickAction('pin');
-  const detail = spy.lastEvent('stock-pin-request')?.detail;
+  clickAction('stock-menu');
+  const detail = spy.lastEvent('stock-menu-open-request')?.detail;
   assert.ok(detail);
   assert.equal(detail!.code, 'sh600519');
+  // anchorId 必须确定且随 code 走——虚拟窗口会把同一节点复用给不同股票。
+  assert.equal(detail!.anchorId, 'stock-actions-sh600519');
+});
+
+test('the ••• trigger id follows the stock when the node is reused', () => {
+  const { el } = setup(card('sh600519'));
+  el.viewModel = card('sz000001');
+  const btn = document.querySelector('button[data-action="stock-menu"]') as HTMLElement;
+  assert.equal(btn.id, 'stock-actions-sz000001');
+});
+
+test('pin/move controls are no longer inline on the card', () => {
+  // 契约变更：420px 宽的 Popup 里每行三个按钮既挤又难点中，
+  // 具体动作收敛到 stock-action-menu。
+  setup(card('sh600519'));
+  assert.equal(document.querySelector('button[data-action="pin"]'), null);
+  assert.equal(document.querySelector('button[data-action="move-up"]'), null);
+  assert.equal(document.querySelector('button[data-action="move-down"]'), null);
+});
+
+test('Enter still toggles pin directly on the focused card', () => {
+  // 置顶是高频动作，保留键盘快捷路径，不必先开菜单。
+  const { el, spy } = setup(card('sh600519', { pinned: false }));
+  spy.reset();
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const detail = spy.lastEvent('stock-pin-request')?.detail;
+  assert.ok(detail);
   assert.equal(detail!.pinned, true);
   assert.deepEqual(detail!.orderedCodes, ['sh600519', 'sz000001']);
 });
 
-test('pin button on pinned card emits pinned=false', () => {
-  const { spy } = setup(card('sh600519', { pinned: true }));
+test('Enter on a pinned card unpins it', () => {
+  const { el, spy } = setup(card('sh600519', { pinned: true }));
   spy.reset();
-  clickAction('pin');
-  const detail = spy.lastEvent('stock-pin-request')?.detail;
-  assert.equal(detail!.pinned, false);
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  assert.equal(spy.lastEvent('stock-pin-request')?.detail.pinned, false);
 });
 
-test('up button emits stock-order-request moving the card up', () => {
-  // sh600519 is at index 0 → up should be no-op (or emit same order)
-  // sz000001 is at index 1 → up should swap to index 0
-  const { spy } = setup(card('sz000001'));
-  spy.reset();
-  clickAction('move-up');
-  const detail = spy.lastEvent('stock-order-request')?.detail;
-  assert.ok(detail);
-  assert.equal(detail!.groupId, 'g_all');
-  assert.deepEqual(detail!.orderedCodes, ['sz000001', 'sh600519']);
-});
-
-test('down button emits stock-order-request moving the card down', () => {
-  const { spy } = setup(card('sh600519'));
-  spy.reset();
-  clickAction('move-down');
-  const detail = spy.lastEvent('stock-order-request')?.detail;
-  assert.ok(detail);
-  assert.deepEqual(detail!.orderedCodes, ['sz000001', 'sh600519']);
-});
-
-test('pin button has accessible label', () => {
+test('the ••• trigger has an accessible label naming the stock', () => {
   setup(card('sh600519', { name: '贵州茅台' }));
-  const btn = document.querySelector('button[data-action="pin"]') as HTMLElement;
-  const label = btn.getAttribute('aria-label') ?? '';
-  assert.ok(label.length > 0);
-});
-
-test('up and down buttons have accessible labels', () => {
-  setup(card('sh600519', { name: '贵州茅台' }));
-  const up = document.querySelector('button[data-action="move-up"]') as HTMLElement;
-  const down = document.querySelector('button[data-action="move-down"]') as HTMLElement;
-  assert.ok((up.getAttribute('aria-label') ?? '').length > 0);
-  assert.ok((down.getAttribute('aria-label') ?? '').length > 0);
+  const btn = document.querySelector('button[data-action="stock-menu"]') as HTMLElement;
+  assert.ok((btn.getAttribute('aria-label') ?? '').includes('贵州茅台'));
+  assert.equal(btn.getAttribute('aria-haspopup'), 'menu');
 });
 
 test('all buttons meet 44px minimum touch target via CSS class', () => {
@@ -179,6 +176,6 @@ test('reconnecting the card does not duplicate listeners', () => {
   el.remove();
   document.body.querySelector('div')?.append(el);
   spy.reset();
-  clickAction('pin');
-  assert.equal(spy.eventCount('stock-pin-request'), 1);
+  clickAction('stock-menu');
+  assert.equal(spy.eventCount('stock-menu-open-request'), 1);
 });

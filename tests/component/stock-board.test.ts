@@ -201,18 +201,16 @@ test('new stock card is appended to grid', () => {
   assert.ok(el.querySelector('[data-key="sz000001"]'));
 });
 
-test('keyboard reorder via card down button emits full final code order', () => {
+test('grid card ••• trigger requests the action menu for that stock', () => {
   const { spy } = setupGrid([card('sh600519'), card('sz000001')]);
   spy.reset();
-  // Click move-down on sh600519's card
-  const cardEl = spy.constructor === Object
-    ? document.querySelector('[data-key="sh600519"]')
-    : null;
-  const downBtn = document.querySelector('[data-key="sh600519"] button[data-action="move-down"]') as HTMLButtonElement;
-  downBtn.click();
-  const detail = spy.lastEvent('stock-order-request')?.detail;
+  const trigger = document.querySelector(
+    '[data-key="sh600519"] button[data-action="stock-menu"]'
+  ) as HTMLButtonElement;
+  trigger.click();
+  const detail = spy.lastEvent('stock-menu-open-request')?.detail;
   assert.ok(detail);
-  assert.deepEqual(detail!.orderedCodes, ['sz000001', 'sh600519']);
+  assert.equal(detail!.code, 'sh600519');
 });
 
 test('grid card data-key order matches viewModel order', () => {

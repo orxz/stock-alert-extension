@@ -34,6 +34,10 @@ export interface PopupEventMap {
   'column-settings-change': { readonly columns: UiColumnPreferences };
   /** 请求关闭当前 popover。 */
   'popover-close-request': Record<never, never>;
+  /** 行/卡片的 ••• 触发器请求打开该股票的操作菜单。 */
+  'stock-menu-open-request': { readonly anchorId: string; readonly code: StockCode };
+  /** 菜单里的「删除」——只请求确认，绝不即时删除。 */
+  'stock-remove-confirm-request': { readonly code: StockCode; readonly groupId: GroupId };
   'dialog-submit': DialogSubmitDetail;
   'dialog-close-request': { readonly reason: 'cancel' | 'escape' | 'backdrop' };
   'stock-search-select': { readonly code: StockCode; readonly name: string };

@@ -1,15 +1,23 @@
-/* v2.x 固定 420×560 布局：顶部/底部固定，行情区内部滚动 */
+/* ============================================================================
+   几何 —— 固定 420×560
+   ============================================================================
+   52 (Header) + 38 (Tabs) + 48 (Toolbar) + 390 (Board) + 32 (Status) = 560。
+   Board 是**唯一**纵向滚动容器；body 与 stock-app 绝不滚动。
+   这个文件只管尺寸与滚动，不管颜色与装饰。
+   ========================================================================== */
+
 body {
-  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: var(--bg-grad);
-  background-color: var(--bg);
-  color: var(--text);
   width: 420px;
   height: 560px;
+  margin: 0;
   overflow: hidden;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-  transition: background-color 0.35s, color 0.35s;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  color: var(--text-1);
+  background: var(--ink-app);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color var(--dur-theme), color var(--dur-theme);
 }
 
 stock-app {
@@ -28,18 +36,30 @@ stock-app[hidden] {
 stock-board {
   display: block;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 stock-board::-webkit-scrollbar {
-  width: 7px;
+  width: 8px;
+}
+
+stock-board::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 stock-board::-webkit-scrollbar-thumb {
-  background: var(--surface3);
+  background: var(--line-strong);
   border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+stock-board::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: content-box;
 }
 
 /* 状态栏固定底部（不随行情区滚动） */
@@ -48,25 +68,24 @@ quote-status {
   align-items: center;
   height: 32px;
   flex-shrink: 0;
-  padding: 0 13px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-  color: var(--text2);
-  gap: 13px;
+  padding: 0 var(--sp-3);
+  background: var(--ink-bar);
+  border-top: 1px solid var(--line);
 }
+
+/* ---- 致命错误兜底 ---- */
 
 #fatal-fallback {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--sp-4);
   width: 420px;
   height: 560px;
-  padding: 24px;
+  padding: var(--sp-5);
   text-align: center;
-  color: var(--text2);
+  color: var(--text-2);
 }
 
 #fatal-fallback[hidden] {
@@ -76,15 +95,14 @@ quote-status {
 #btn-reload {
   min-height: var(--touch-target-min);
   min-width: 120px;
-  padding: 0 20px;
-  border: none;
-  border-radius: 8px;
-  background: var(--brand);
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
+  padding: 0 var(--sp-5);
+  color: var(--accent-ink);
+  background: var(--accent-fill);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  border-radius: var(--r-md);
 }
 
-#btn-reload:active {
-  opacity: 0.85;
+#btn-reload:hover {
+  opacity: 0.88;
 }

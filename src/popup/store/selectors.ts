@@ -265,10 +265,33 @@ export function selectPopover(state: AppState): PopoverViewModel {
       open: true,
       kind: 'column-settings',
       anchorId: menu.anchorId,
-      columnPanel: selectColumnPanel(state)
+      columnPanel: selectColumnPanel(state),
+      stockActions: null
     };
   }
-  return { open: true, kind: 'stock-actions', anchorId: menu.anchorId, columnPanel: null };
+
+  // 目标股票可能已不在当前视图（菜单开着时被删除、或切了分组/搜索）——
+  // 返回关闭态，而不是渲染一个指向不存在股票的菜单。
+  const visible = selectVisibleStocks(state);
+  const index = visible.findIndex((vm) => vm.code === menu.code);
+  if (index < 0) return closedPopover();
+  const target = visible[index];
+
+  return {
+    open: true,
+    kind: 'stock-actions',
+    anchorId: menu.anchorId,
+    columnPanel: null,
+    stockActions: {
+      code: target.code,
+      name: target.name,
+      pinned: target.pinned,
+      canMoveUp: index > 0,
+      canMoveDown: index < visible.length - 1,
+      groupId: state.view.currentGroupId,
+      orderedCodes: visible.map((vm) => vm.code)
+    }
+  };
 }
 
 export function selectAppViewModel(state: AppState): AppViewModel {

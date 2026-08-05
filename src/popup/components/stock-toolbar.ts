@@ -83,7 +83,7 @@ export class StockToolbarElement extends HTMLElement {
     searchInput.type = 'search';
     searchInput.setAttribute('data-action', 'search');
     searchInput.setAttribute('aria-label', '搜索股票');
-    searchInput.setAttribute('placeholder', '搜索代码或名称');
+    searchInput.setAttribute('placeholder', '搜索');
     searchInput.className = 'toolbar-search-input';
     this.searchInput = searchInput;
     searchWrap.append(searchInput);

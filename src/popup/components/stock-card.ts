@@ -12,6 +12,14 @@ import { emitPopupEvent } from './events.js';
  * 纯函数：在有序代码列表中将 code 移动 delta 位，返回新数组。
  * 指针拖拽和键盘 up/down 按钮共用此 helper。
  */
+/**
+ * 卡片操作触发器的确定性 id——popover 用它定位并在关闭时归还焦点。
+ * 必须稳定：虚拟窗口滚动时卡片节点会被复用给不同股票。
+ */
+export function cardMenuId(code: string): string {
+  return `stock-actions-${code}`;
+}
+
 export function moveKey(
   orderedCodes: readonly StockCode[],
   code: StockCode,
@@ -45,9 +53,7 @@ export class StockCardElement extends HTMLElement {
   private changePercentEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private staleEl: HTMLElement | null = null;
-  private pinBtn: HTMLButtonElement | null = null;
-  private upBtn: HTMLButtonElement | null = null;
-  private downBtn: HTMLButtonElement | null = null;
+  private menuBtn: HTMLButtonElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -139,63 +145,44 @@ export class StockCardElement extends HTMLElement {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'stock-card-actions';
 
-    const pinBtn = document.createElement('button');
-    pinBtn.type = 'button';
-    pinBtn.className = 'stock-card-btn stock-card-action';
-    pinBtn.setAttribute('data-action', 'pin');
-    pinBtn.setAttribute('aria-pressed', 'false');
-    this.pinBtn = pinBtn;
+    // 单一 ••• 触发器取代 置顶/↑/↓ 三连按钮——具体动作交给 stock-action-menu。
+    // 卡片本身的 Enter/Space 仍直接切换置顶（高频动作保留快捷路径）。
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'stock-card-btn stock-card-action stock-row-menu-trigger';
+    menuBtn.setAttribute('data-action', 'stock-menu');
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    menuBtn.textContent = '•••';
+    this.menuBtn = menuBtn;
 
-    const upBtn = document.createElement('button');
-    upBtn.type = 'button';
-    upBtn.className = 'stock-card-btn stock-card-action';
-    upBtn.setAttribute('data-action', 'move-up');
-    upBtn.textContent = '↑';
-    this.upBtn = upBtn;
-
-    const downBtn = document.createElement('button');
-    downBtn.type = 'button';
-    downBtn.className = 'stock-card-btn stock-card-action';
-    downBtn.setAttribute('data-action', 'move-down');
-    downBtn.textContent = '↓';
-    this.downBtn = downBtn;
-
-    actionsDiv.append(pinBtn, upBtn, downBtn);
+    actionsDiv.append(menuBtn);
 
     article.append(headerDiv, priceDiv, statusDiv, actionsDiv);
     this.append(article);
   }
 
+  /** 切换置顶（Enter/Space 快捷键与菜单共用同一语义）。 */
+  private togglePin(): void {
+    if (!this._viewModel) return;
+    const newPinned = !this._viewModel.pinned;
+    // 置顶把自己提到最前；取消置顶保持当前顺序。
+    const orderedCodes = newPinned
+      ? [this._viewModel.code, ...this._orderedCodes.filter((c) => c !== this._viewModel!.code)]
+      : [...this._orderedCodes];
+    emitPopupEvent(this, 'stock-pin-request', {
+      code: this._viewModel.code,
+      pinned: newPinned,
+      orderedCodes
+    });
+  }
+
   private bindEvents(signal: AbortSignal): void {
-    this.pinBtn?.addEventListener('click', () => {
+    this.menuBtn?.addEventListener('click', () => {
       if (!this._viewModel) return;
-      const newPinned = !this._viewModel.pinned;
-      // Pin moves the code to the top of orderedCodes if pinning, or stays in place if unpinning.
-      const orderedCodes = newPinned
-        ? [this._viewModel.code, ...this._orderedCodes.filter((c) => c !== this._viewModel!.code)]
-        : [...this._orderedCodes];
-      emitPopupEvent(this, 'stock-pin-request', {
-        code: this._viewModel.code,
-        pinned: newPinned,
-        orderedCodes
-      });
-    }, { signal });
-
-    this.upBtn?.addEventListener('click', () => {
-      if (!this._viewModel) return;
-      const orderedCodes = moveKey(this._orderedCodes, this._viewModel.code, -1);
-      emitPopupEvent(this, 'stock-order-request', {
-        groupId: this._groupId,
-        orderedCodes
-      });
-    }, { signal });
-
-    this.downBtn?.addEventListener('click', () => {
-      if (!this._viewModel) return;
-      const orderedCodes = moveKey(this._orderedCodes, this._viewModel.code, 1);
-      emitPopupEvent(this, 'stock-order-request', {
-        groupId: this._groupId,
-        orderedCodes
+      emitPopupEvent(this, 'stock-menu-open-request', {
+        anchorId: cardMenuId(this._viewModel.code),
+        code: this._viewModel.code
       });
     }, { signal });
 
@@ -213,7 +200,7 @@ export class StockCardElement extends HTMLElement {
       if (!this._viewModel) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        this.pinBtn?.click();
+        this.togglePin();
       }
     }, { signal });
   }
@@ -222,7 +209,10 @@ export class StockCardElement extends HTMLElement {
     this.setAttribute('data-key', vm.code);
     const article = this.querySelector('article');
     if (article) {
-      article.setAttribute('aria-label', `${vm.name} ${vm.displayPrice}`);
+      article.setAttribute(
+        'aria-label',
+        `${vm.name} ${vm.displayPrice}${vm.pinned ? ' 已置顶' : ''}`
+      );
     }
 
     if (this.nameEl) {
@@ -256,17 +246,14 @@ export class StockCardElement extends HTMLElement {
       this.staleEl.classList.toggle('stock-card-stale', Boolean(vm.staleLabel));
       this.staleEl.toggleAttribute('data-stale', Boolean(vm.staleLabel));
     }
-    if (this.pinBtn) {
-      this.pinBtn.setAttribute('aria-pressed', String(vm.pinned));
-      this.pinBtn.setAttribute('aria-label', vm.pinned ? `取消置顶 ${vm.name}` : `置顶 ${vm.name}`);
-      this.pinBtn.textContent = vm.pinned ? '📌' : '📍';
-      this.pinBtn.classList.toggle('is-active', vm.pinned);
+    if (this.menuBtn) {
+      this.menuBtn.id = cardMenuId(vm.code);
+      this.menuBtn.setAttribute('aria-label', `打开 ${vm.name} 操作菜单`);
+      // 置顶状态在菜单未打开时仍需可感知。
+      this.menuBtn.classList.toggle('is-pinned', vm.pinned);
     }
-    if (this.upBtn) {
-      this.upBtn.setAttribute('aria-label', `上移 ${vm.name}`);
-    }
-    if (this.downBtn) {
-      this.downBtn.setAttribute('aria-label', `下移 ${vm.name}`);
-    }
+    // 置顶状态进入可访问名称，而不是 aria-pressed——卡片在网格里的 role 是
+    // listitem，aria-pressed 只允许用在 button 类角色上（axe: aria-allowed-attr）。
+    this.setAttribute('data-pinned', String(vm.pinned));
   }
 }

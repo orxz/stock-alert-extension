@@ -1,0 +1,389 @@
+/* ============================================================================
+   浮层 —— 对话框 / popover / 操作菜单 / 列设置 / 搜索
+   ============================================================================
+   所有浮层共用一套规则：--ink-pop 表面、1px 描边、同一组阴影与圆角、
+   8/12/16 的间距节奏。用户不该感觉「对话框和菜单来自两个设计」。
+
+   阴影只允许出现在这里和 Popup 外框——逐行/逐卡片挂阴影会让 500 行列表
+   的合成开销显著上升。禁止 backdrop-filter。
+   ========================================================================== */
+
+/* ===== 对话框 ===== */
+
+app-dialog-host {
+  display: contents;
+}
+
+.app-dialog {
+  width: 360px;
+  max-width: calc(100vw - 2 * var(--sp-5));
+  max-height: calc(100vh - 2 * var(--sp-5));
+  padding: 0;
+  color: var(--text-1);
+  background: var(--ink-pop);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.app-dialog::backdrop {
+  background: rgba(4, 6, 10, 0.62);
+}
+
+.app-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  max-height: calc(100vh - 2 * var(--sp-5));
+  overflow-y: auto;
+}
+
+.app-dialog-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.app-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.app-dialog-info {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.app-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.app-dialog-label,
+.app-dialog-legend {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* 输入的表面/边框/文字全部来自 base.css，这里只补差异。 */
+.app-dialog-input {
+  width: 100%;
+  font-size: var(--fs-body);
+}
+
+.app-dialog-fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.app-dialog-legend {
+  padding: 0 var(--sp-1);
+}
+
+.app-dialog-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 30px;
+  font-size: var(--fs-meta);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.app-dialog-status {
+  display: none;
+  font-size: var(--fs-meta);
+  color: var(--up);
+}
+
+.app-dialog-status.is-visible {
+  display: block;
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-1);
+}
+
+.app-dialog-btn {
+  min-height: 36px;
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-body);
+  border-radius: var(--r-md);
+  transition: background-color var(--dur-fade), opacity var(--dur-fade);
+}
+
+.app-dialog-btn--cancel {
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+}
+
+.app-dialog-btn--cancel:hover:not(:disabled) {
+  color: var(--text-1);
+  background: var(--ink-row);
+}
+
+.app-dialog-btn--submit {
+  color: var(--accent-ink);
+  background: var(--accent-fill);
+  font-weight: 600;
+}
+
+.app-dialog-btn--submit:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+/* 破坏性操作用危险色实心——必须和确认动作在视觉上分得开。 */
+.app-dialog-btn--danger {
+  color: #fff;
+  background: var(--up);
+  font-weight: 600;
+}
+
+.app-dialog-btn--danger:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.app-dialog-btn:disabled {
+  opacity: 0.5;
+}
+
+/* ===== 搜索 combobox ===== */
+
+.combobox-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.combobox-input {
+  width: 100%;
+  font-size: var(--fs-body);
+}
+
+/* 结果在对话框内部滚动，不把 Popup 撑高。 */
+.combobox-listbox {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-0);
+  max-height: 168px;
+  overflow-y: auto;
+  background: var(--ink-row);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.combobox-listbox:empty {
+  display: none;
+}
+
+.combobox-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-meta);
+  color: var(--text-1);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.combobox-option:hover,
+.combobox-option[aria-selected='true'] {
+  background: var(--ink-pop);
+}
+
+/* ===== popover 宿主 ===== */
+
+app-popover-host {
+  display: contents;
+}
+
+.app-popover {
+  position: fixed;
+  z-index: 40;
+  min-width: 152px;
+  max-width: calc(100vw - 2 * var(--sp-2));
+  padding: var(--sp-1);
+  color: var(--text-1);
+  background: var(--ink-pop);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+}
+
+.app-popover[hidden] {
+  display: none;
+}
+
+/* ===== 股票操作菜单 ===== */
+
+.stock-action-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stock-action-menu[hidden] {
+  display: none;
+}
+
+.stock-action-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-body);
+  text-align: left;
+  color: var(--text-1);
+  background: transparent;
+  border-radius: var(--r-sm);
+}
+
+.stock-action-menu-item:hover:not(:disabled) {
+  background: var(--ink-row);
+}
+
+.stock-action-menu-item:disabled {
+  color: var(--text-3);
+}
+
+.stock-action-menu-item.is-destructive {
+  color: var(--up);
+}
+
+.stock-action-menu-item.is-destructive:hover:not(:disabled) {
+  background: var(--up-bg);
+}
+
+/* ===== 列设置 ===== */
+
+column-panel {
+  display: block;
+}
+
+column-panel[hidden] {
+  display: none;
+}
+
+.column-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.column-panel-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 34px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+}
+
+.column-panel-item:hover {
+  background: var(--ink-row);
+}
+
+.column-panel-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-meta);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.column-panel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  background: transparent;
+  border-radius: var(--r-sm);
+}
+
+.column-panel-btn:hover:not(:disabled) {
+  color: var(--text-1);
+  background: var(--ink-pop);
+}
+
+.column-panel-btn:disabled {
+  opacity: 0.3;
+}
+
+/* ===== 行内 ••• 触发器 ===== */
+
+.stock-row-menu-trigger {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 var(--sp-1);
+  font-size: var(--fs-body);
+  line-height: 1;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+}
+
+.stock-row-menu-trigger:hover {
+  color: var(--text-1);
+  background: var(--ink-row);
+}
+
+.stock-row-menu-trigger[aria-expanded='true'] {
+  color: var(--text-1);
+  background: var(--ink-row);
+  border-color: var(--line-strong);
+}
+
+/* 置顶在行内的第二通道：金色圆点（不只靠行背景色表达）。 */
+.stock-row-menu-trigger.is-pinned::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 3px;
+  vertical-align: middle;
+  background: var(--gold);
+  border-radius: 50%;
+}
+
+/* ===== 实时播报区（视觉隐藏，仅供辅助技术） ===== */
+
+app-live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

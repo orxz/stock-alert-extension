@@ -1,60 +1,136 @@
-/* v2.x 双主题设计令牌
- * 深色（默认）：交易终端气质
- * 浅色：通过 [data-theme="light"] 覆盖
- * 所有组件样式只引用变量，不硬编码颜色。
- */
+/* ============================================================================
+   设计令牌 —— 精密终端
+   ============================================================================
+
+   核心纪律：**界面 chrome 不使用任何彩色。**
+
+   屏幕上只允许出现三种色相，且每一种都承载数据语义：
+     红 = 涨、绿 = 跌（A 股语义，与欧美相反）、金 = 置顶。
+   按钮、标签、选中态、焦点环一律走中性灰阶——主次靠对比度表达，不靠色相。
+
+   理由：在数据仪表里，任何装饰性颜色都在和语义色抢注意力。品牌蓝一旦出现，
+   红绿的「跳出来」就被稀释了。去掉它，数字才是主角。
+
+   命名：ink 是背景层级（数字越大越深/越靠后），text 是文字层级（1 最强）。
+   ========================================================================== */
+
 :root {
-  /* 深色主题（默认） */
-  --bg: #0a0e15;
-  --bg-grad: linear-gradient(180deg, #0d1220 0%, #0a0e15 40%);
-  --surface: #121722;
-  --surface2: #1a2130;
-  --surface3: #222b3d;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --text: #e9edf5;
-  --text2: #96a0b5;
-  --text3: #5f6a80;
-  --up: #ff5b5b;
-  --up-soft: rgba(255, 91, 91, 0.12);
-  --down: #2fd18c;
-  --down-soft: rgba(47, 209, 140, 0.12);
-  --brand-strong: #2563eb;
-  --brand: #4d9fff;
-  --brand-soft: rgba(77, 159, 255, 0.15);
-  --gold: #e8b341;
-  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  /* 告诉浏览器本页是深色的。这是让**原生控件**（滚动条、select 下拉、
+     复选框、自动填充背景）跟随主题的唯一可靠开关——只给自定义类写
+     background 不会影响这些由浏览器绘制的部件。 */
+  color-scheme: dark;
+
+  /* ---- 表面层级 ---- */
+  --ink-app: #080b11;      /* 应用底色 */
+  --ink-bar: #0e131c;      /* 固定条（Header / Status） */
+  --ink-row: #151c28;      /* 行 hover、输入框 */
+  --ink-pop: #1b2433;      /* 浮层（菜单、对话框） */
+
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.12);
+
+  /* ---- 文字层级（对比度均 ≥4.5:1，见 accessibility 门禁） ---- */
+  --text-1: #e8ecf3;
+  --text-2: #93a0b5;
+  --text-3: #808ca3;
+
+  /* ---- 语义色（唯一允许的色相） ---- */
+  --up: #ff5a5c;           /* 涨 */
+  --up-bg: rgba(255, 90, 92, 0.14);
+  --down: #16c79a;         /* 跌 */
+  --down-bg: rgba(22, 199, 154, 0.14);
+  --gold: #f2b01e;         /* 置顶 */
+  --gold-bg: rgba(242, 176, 30, 0.12);
+
+  /* ---- 交互（中性） ---- */
+  --accent-fill: var(--text-1);   /* 主按钮：反相高对比 */
+  --accent-ink: #080b11;          /* 主按钮上的文字 */
+  --focus: #ffffff;
+
+  /* ---- 间距节奏 ---- */
+  --sp-0: 2px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+
+  /* ---- 圆角 ---- */
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 11px;
+
+  /* ---- 字体 ----
+     数字用等宽、名称用中文无衬线——这个配对本身就是终端语汇，
+     并让价格列天然对齐。无网络字体（CSP 禁止外链）。 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
+    'Hiragino Sans GB', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono',
+    'Segoe UI Mono', 'Roboto Mono', menlo, monospace;
+
+  --fs-price: 15px;
+  --fs-num: 13px;
+  --fs-body: 13px;
+  --fs-meta: 11px;
+  --fs-micro: 10px;
+
+  /* ---- 动效 ---- */
+  --dur-flash: 180ms;
+  --dur-theme: 120ms;
+  --dur-fade: 120ms;
+
+  /* ---- 高度 ---- */
+  --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.55);
+
+  /* ---- 尺寸 ---- */
   --touch-target-min: 44px;
+  --row-h: 48px;
+
+  /* A 股单日涨跌停 ±10%：涨跌幅条的归一化基准。
+     这是本地市场独有的常数，也是每个投资者的心智刻度。 */
+  --limit-pct: 10;
 }
 
-:root[data-theme="light"] {
-  --bg: #f2f4f8;
-  --bg-grad: linear-gradient(180deg, #ffffff 0%, #f2f4f8 45%);
-  --surface: #ffffff;
-  --surface2: #eef1f6;
-  --surface3: #e3e8f0;
-  --border: rgba(20, 30, 55, 0.08);
-  --border-strong: rgba(20, 30, 55, 0.14);
-  --text: #1c2333;
-  --text2: #5c6779;
-  --text3: #9aa3b2;
-  --up: #d93025;
-  --up-soft: rgba(217, 48, 37, 0.09);
-  --down: #0d8042;
-  --down-soft: rgba(15, 138, 76, 0.09);
-  --brand: #2a66b3;
-  --brand-soft: rgba(47, 111, 189, 0.11);
-  --gold: #c98a12;
-  --shadow: 0 10px 40px rgba(30, 45, 80, 0.14);
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --ink-app: #f4f6fa;
+  --ink-bar: #ffffff;
+  --ink-row: #eef1f7;
+  --ink-pop: #ffffff;
+
+  --line: rgba(16, 24, 40, 0.09);
+  --line-strong: rgba(16, 24, 40, 0.16);
+
+  --text-1: #10151f;
+  --text-2: #566072;
+  --text-3: #5f6a7d;
+
+  --up: #d22b30;
+  --up-bg: rgba(210, 43, 48, 0.1);
+  --down: #05704c;
+  --down-bg: rgba(5, 112, 76, 0.1);
+  --gold: #9a6510;
+  --gold-bg: rgba(154, 101, 16, 0.1);
+
+  --accent-fill: #10151f;
+  --accent-ink: #ffffff;
+  --focus: #10151f;
+
+  --shadow-pop: 0 10px 28px rgba(16, 24, 40, 0.18);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
+/* 兼容旧变量名——仍有少量选择器引用，逐步收敛。 */
+:root {
+  --bg: var(--ink-app);
+  --surface: var(--ink-bar);
+  --surface2: var(--ink-row);
+  --surface3: var(--ink-pop);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --text: var(--text-1);
+  --text2: var(--text-2);
+  --text3: var(--text-3);
+  --brand: var(--accent-fill);
+  --shadow: var(--shadow-pop);
 }

@@ -24,7 +24,9 @@ const ALL_EVENT_TYPES = [
   'stock-toggle-select',
   'virtual-focus-request',
   'column-settings-change',
-  'popover-close-request'
+  'popover-close-request',
+  'stock-menu-open-request',
+  'stock-remove-confirm-request'
 ] as const;
 
 export interface PopupEventSpy {

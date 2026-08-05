@@ -9,7 +9,9 @@
 import type { PopoverViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
 import './column-panel.js';
+import './stock-action-menu.js';
 import type { ColumnPanelElement } from './column-panel.js';
+import type { StockActionMenuElement } from './stock-action-menu.js';
 
 /** 距视口边缘的最小留白（px），避免弹层被裁切。 */
 const VIEWPORT_MARGIN = 8;
@@ -20,6 +22,7 @@ export class AppPopoverHostElement extends HTMLElement {
   private _viewModel: PopoverViewModel | null = null;
   private panelEl: HTMLElement | null = null;
   private columnPanelEl: ColumnPanelElement | null = null;
+  private actionMenuEl: StockActionMenuElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -83,8 +86,14 @@ export class AppPopoverHostElement extends HTMLElement {
     this.panelEl = panel;
 
     const columnPanel = document.createElement('column-panel') as ColumnPanelElement;
+    columnPanel.hidden = true;
     this.columnPanelEl = columnPanel;
     panel.append(columnPanel);
+
+    const actionMenu = document.createElement('stock-action-menu') as StockActionMenuElement;
+    actionMenu.hidden = true;
+    this.actionMenuEl = actionMenu;
+    panel.append(actionMenu);
 
     this.append(panel);
   }
@@ -105,9 +114,23 @@ export class AppPopoverHostElement extends HTMLElement {
     }
 
     panel.hidden = false;
-    if (vm.kind === 'column-settings' && this.columnPanelEl && vm.columnPanel) {
-      this.columnPanelEl.viewModel = vm.columnPanel;
+
+    // 按 kind 切换内容，并同步 aria-label——两种弹层用同一个 role="dialog"
+    // 容器，标签不切换的话屏幕阅读器会把操作菜单读成「列设置」。
+    const isColumns = vm.kind === 'column-settings';
+    if (this.columnPanelEl) {
+      this.columnPanelEl.hidden = !isColumns;
+      if (isColumns && vm.columnPanel) this.columnPanelEl.viewModel = vm.columnPanel;
     }
+    if (this.actionMenuEl) {
+      this.actionMenuEl.hidden = isColumns;
+      if (!isColumns && vm.stockActions) this.actionMenuEl.viewModel = vm.stockActions;
+    }
+    panel.setAttribute(
+      'aria-label',
+      isColumns ? '列设置' : `${vm.stockActions?.name ?? ''} 操作菜单`.trim()
+    );
+
     this.position(vm.anchorId);
     this.setAnchorExpanded(vm.anchorId, true);
 

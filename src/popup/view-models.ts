@@ -97,17 +97,31 @@ export interface ColumnPanelViewModel {
   readonly columnOrder: readonly string[];
 }
 
-/** 弹出层视图模型（列设置等轻量非模态面板）。 */
+/** 单只股票的操作菜单视图模型（纯数据，含可用性判定）。 */
+export interface StockActionMenuViewModel {
+  readonly code: StockCode;
+  readonly name: string;
+  readonly pinned: boolean;
+  /** 已在首位时禁用上移、末位时禁用下移——避免发出无效的重排命令。 */
+  readonly canMoveUp: boolean;
+  readonly canMoveDown: boolean;
+  readonly groupId: GroupId;
+  /** 当前可见顺序的完整 code 列表；重排命令以最终态形式携带。 */
+  readonly orderedCodes: readonly StockCode[];
+}
+
+/** 弹出层视图模型（列设置 / 股票操作等轻量非模态面板）。 */
 export interface PopoverViewModel {
   readonly open: boolean;
   readonly kind: 'column-settings' | 'stock-actions' | null;
   readonly anchorId: string | null;
   readonly columnPanel: ColumnPanelViewModel | null;
+  readonly stockActions: StockActionMenuViewModel | null;
 }
 
 /** 关闭态 PopoverViewModel。 */
 export function closedPopover(): PopoverViewModel {
-  return { open: false, kind: null, anchorId: null, columnPanel: null };
+  return { open: false, kind: null, anchorId: null, columnPanel: null, stockActions: null };
 }
 
 /** 行情刷新状态视图模型。 */

@@ -18,6 +18,13 @@ export const TABLE_HEADER_EXTENT = 28;
 /** 视口上下各多渲染一屏，滚动时不出现空白。 */
 const OVERSCAN_SCREENS = 1;
 
+/**
+ * A 股单日涨跌停幅度（%）。
+ * 涨跌幅列的幅度条以此归一化——这是本地市场独有的刻度，
+ * 也是每个投资者判断「离涨停还有多远」的心智基准。
+ */
+const LIMIT_PCT = 10;
+
 /** 仅在文本确实变化时写入，避免无谓的 DOM 写与样式失效。 */
 function setText(node: Element | null | undefined, value: string): void {
   if (node && node.textContent !== value) node.textContent = value;
@@ -40,15 +47,31 @@ interface ColumnDef {
   readonly sortField?: SortField;
 }
 
+/**
+ * 真实表格列：股票 / 现价 / 涨跌幅 / 成交额，外加固定的操作列。
+ *
+ * 为什么只有四列：Popup 宽 420px。上一版把 名称/代码/现价/涨跌额/涨跌幅/
+ * 成交额/状态 七列全部平铺，每列分不到 50px，结果全部截断成「贵…」「+10…」——
+ * 数据再准确也读不出来。代码与行情状态改为**股票列的副标题**（见 SUBLINE_KEYS），
+ * 既保留可配置性，又把宽度让给真正要扫的数字。
+ */
 const COLUMNS: readonly ColumnDef[] = [
-  { key: 'name', label: '名称', sortField: 'name' },
-  { key: 'code', label: '代码' },
+  { key: 'name', label: '股票', sortField: 'name' },
   { key: 'price', label: '现价', sortField: 'price' },
-  { key: 'change', label: '涨跌额', sortField: 'change' },
   { key: 'changePercent', label: '涨跌幅', sortField: 'changePercent' },
-  { key: 'amount', label: '成交额', sortField: 'amount' },
-  { key: 'status', label: '状态' }
+  { key: 'amount', label: '成交额', sortField: 'amount' }
 ];
+
+/** 以副标题形式挂在股票列下的可选信息（仍由列设置控制显隐）。 */
+const SUBLINE_KEYS = ['code', 'status'] as const;
+
+/**
+ * 行操作触发器的确定性 id——popover 用它定位并在关闭时归还焦点。
+ * 必须稳定：虚拟窗口滚动时节点会被复用，随机 id 会让焦点归还失效。
+ */
+export function rowMenuId(code: string): string {
+  return `stock-actions-${code}`;
+}
 
 /** 创建一个对辅助技术隐藏的 spacer 行（撑高度用，不是数据行）。 */
 function createSpacerRow(columnCount: number): HTMLElement {
@@ -123,19 +146,31 @@ export class StockTableElement extends HTMLElement {
   }
 
   /**
-   * 按启用集合显隐列。用 hidden 属性而非移除节点——列切换是高频轻量操作，
-   * 重建整张表会丢焦点、丢滚动位置。操作列始终可见。
+   * 按启用集合显隐列与副标题字段。
+   * 用 hidden 属性而非移除节点——列切换是高频轻量操作，重建整张表会丢焦点、
+   * 丢滚动位置。股票列与操作列始终可见（股票列是必需列）。
    */
   private applyColumnVisibility(): void {
     if (!this.table) return;
     const enabled = this._columns.length > 0 ? new Set(this._columns) : null;
-    for (let i = 0; i < COLUMNS.length; i += 1) {
-      const visible = enabled === null || enabled.has(COLUMNS[i].key);
-      const th = this.table.querySelector(`thead th[data-column="${COLUMNS[i].key}"]`);
+    const isOn = (key: string): boolean => enabled === null || enabled.has(key);
+
+    for (const col of COLUMNS) {
+      const visible = isOn(col.key);
+      const th = this.table.querySelector(`thead th[data-column="${col.key}"]`);
       if (th) (th as HTMLElement).hidden = !visible;
-      for (const row of this.tbody?.querySelectorAll('tr[data-key]') ?? []) {
-        const cell = row.children[i] as HTMLElement | undefined;
-        if (cell) cell.hidden = !visible;
+      for (const td of this.querySelectorAll<HTMLElement>(
+        `tbody [data-column="${col.key}"]`
+      )) {
+        td.hidden = !visible;
+      }
+    }
+
+    // 副标题字段（代码 / 状态）不是独立列，单独控制。
+    for (const key of SUBLINE_KEYS) {
+      const visible = isOn(key);
+      for (const el of this.querySelectorAll<HTMLElement>(`[data-subline="${key}"]`)) {
+        el.hidden = !visible;
       }
     }
   }
@@ -259,30 +294,10 @@ export class StockTableElement extends HTMLElement {
       const action = actionBtn.getAttribute('data-action');
       if (!action) return;
 
-      const orderedCodes = this._viewModel.map((vm) => vm.code);
-
-      if (action === 'pin') {
-        const vm = this._viewModel.find((v) => v.code === code);
-        if (vm) {
-          const newPinned = !vm.pinned;
-          const newOrdered = newPinned
-            ? [code, ...orderedCodes.filter((c) => c !== code)]
-            : [...orderedCodes];
-          emitPopupEvent(this, 'stock-pin-request', {
-            code,
-            pinned: newPinned,
-            orderedCodes: newOrdered
-          });
-        }
-      } else if (action === 'move-up') {
-        emitPopupEvent(this, 'stock-order-request', {
-          groupId: this._groupId,
-          orderedCodes: moveKey(orderedCodes, code, -1)
-        });
-      } else if (action === 'move-down') {
-        emitPopupEvent(this, 'stock-order-request', {
-          groupId: this._groupId,
-          orderedCodes: moveKey(orderedCodes, code, 1)
+      if (action === 'stock-menu') {
+        emitPopupEvent(this, 'stock-menu-open-request', {
+          anchorId: actionBtn.id || rowMenuId(code),
+          code
         });
       }
     }, { signal });
@@ -350,118 +365,108 @@ export class StockTableElement extends HTMLElement {
     const tr = document.createElement('tr');
     tr.className = 'stock-table-row';
 
-    // Name
+    // 股票列：名称 + 副标题（代码 · 行情状态）
     const nameTd = document.createElement('td');
     nameTd.className = 'stock-table-cell stock-table-cell--name';
+    nameTd.setAttribute('data-column', 'name');
     const nameSpan = document.createElement('span');
     nameSpan.className = 'stock-table-name';
     nameSpan.setAttribute('data-field', 'name');
-    nameTd.append(nameSpan);
+    const subline = document.createElement('span');
+    subline.className = 'stock-table-subline';
+    const codeSpan = document.createElement('span');
+    codeSpan.className = 'stock-table-code';
+    codeSpan.setAttribute('data-subline', 'code');
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'stock-table-status';
+    statusSpan.setAttribute('data-subline', 'status');
+    subline.append(codeSpan, statusSpan);
+    nameTd.append(nameSpan, subline);
 
-    // Code
-    const codeTd = document.createElement('td');
-    codeTd.className = 'stock-table-cell stock-table-cell--code';
-
-    // Price
     const priceTd = document.createElement('td');
     priceTd.className = 'stock-table-cell stock-table-cell--price';
+    priceTd.setAttribute('data-column', 'price');
     priceTd.setAttribute('data-field', 'price');
 
-    // Change
-    const changeTd = document.createElement('td');
-    changeTd.className = 'stock-table-cell stock-table-cell--change';
-
-    // Change percent
     const pctTd = document.createElement('td');
     pctTd.className = 'stock-table-cell stock-table-cell--change-percent';
+    pctTd.setAttribute('data-column', 'changePercent');
 
-    // Amount
     const amountTd = document.createElement('td');
     amountTd.className = 'stock-table-cell stock-table-cell--amount';
+    amountTd.setAttribute('data-column', 'amount');
 
-    // Status
-    const statusTd = document.createElement('td');
-    statusTd.className = 'stock-table-cell stock-table-cell--status';
-
-    // Actions
     const actionsTd = document.createElement('td');
     actionsTd.className = 'stock-table-cell stock-table-cell--actions';
 
-    const pinBtn = document.createElement('button');
-    pinBtn.type = 'button';
-    pinBtn.className = 'stock-table-btn';
-    pinBtn.setAttribute('data-action', 'pin');
-    actionsTd.append(pinBtn);
+    // 单一 ••• 触发器取代原来的 置顶/↑/↓ 三连按钮：
+    // 420px 宽的 Popup 里每行塞三个按钮既挤又难点中（触控目标不达标），
+    // 具体动作交给 stock-action-menu。
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'stock-table-btn stock-row-menu-trigger';
+    menuBtn.setAttribute('data-action', 'stock-menu');
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    menuBtn.textContent = '•••';
+    actionsTd.append(menuBtn);
 
-    const upBtn = document.createElement('button');
-    upBtn.type = 'button';
-    upBtn.className = 'stock-table-btn';
-    upBtn.setAttribute('data-action', 'move-up');
-    upBtn.textContent = '↑';
-    actionsTd.append(upBtn);
-
-    const downBtn = document.createElement('button');
-    downBtn.type = 'button';
-    downBtn.className = 'stock-table-btn';
-    downBtn.setAttribute('data-action', 'move-down');
-    downBtn.textContent = '↓';
-    actionsTd.append(downBtn);
-
-    tr.append(nameTd, codeTd, priceTd, changeTd, pctTd, amountTd, statusTd, actionsTd);
+    tr.append(nameTd, priceTd, pctTd, amountTd, actionsTd);
 
     this.updateRow(tr, vm);
     return tr;
   }
 
   private updateRow(tr: HTMLElement, vm: StockCardViewModel): void {
-    const cells = tr.children;
-    // Name
-    const nameSpan = cells[0]?.querySelector('.stock-table-name');
-    if (nameSpan) nameSpan.textContent = vm.name;
-    // Code
-    if (cells[1]) cells[1].textContent = vm.code;
-    // Price (flash on real change)
-    if (cells[2]) {
-      const priceCell = cells[2] as HTMLElement;
-      const oldPrice = priceCell.textContent;
-      priceCell.textContent = vm.displayPrice;
-      if (oldPrice !== vm.displayPrice && vm.displayPrice !== '--') {
+    // 按 data-column 取单元格，而不是按下标——列结构变化时下标会整体错位，
+    // 这正是上一版把状态文字写进操作列那类问题的来源。
+    const cell = (key: string): HTMLElement | null =>
+      tr.querySelector(`[data-column="${key}"]`);
+
+    // 股票：名称 + 副标题（代码 · 状态）
+    setText(tr.querySelector('.stock-table-name'), vm.name);
+    setText(tr.querySelector('[data-subline="code"]'), vm.code);
+    const statusEl = tr.querySelector('[data-subline="status"]');
+    if (statusEl) {
+      setText(statusEl, vm.staleLabel || STATUS_LABELS[vm.status] || '');
+      // data-stale 只在确实过期时出现——它表达状态，不是字段锚点。
+      statusEl.toggleAttribute('data-stale', Boolean(vm.staleLabel));
+    }
+
+    // 现价（真实变化时闪烁）
+    const priceCell = cell('price');
+    if (priceCell) {
+      const previous = priceCell.textContent;
+      setText(priceCell, vm.displayPrice);
+      if (previous && previous !== vm.displayPrice && vm.displayPrice !== '--') {
         priceCell.classList.add('flash');
         setTimeout(() => priceCell.classList.remove('flash'), 250);
       }
     }
-    // Change
-    if (cells[3]) {
-      cells[3].textContent = vm.change !== null ? vm.change.toFixed(2) : '--';
-      cells[3].classList.toggle('is-up', vm.change !== null && vm.change > 0);
-      cells[3].classList.toggle('is-down', vm.change !== null && vm.change < 0);
+
+    // 涨跌幅（含幅度条：宽度按 |涨跌幅| 相对 A 股 ±10% 涨跌停归一化）
+    const pctCell = cell('changePercent');
+    if (pctCell) {
+      const pct = vm.changePercent;
+      setText(pctCell, pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '--');
+      pctCell.classList.toggle('is-up', pct !== null && pct > 0);
+      pctCell.classList.toggle('is-down', pct !== null && pct < 0);
+      pctCell.classList.toggle('is-limit', pct !== null && Math.abs(pct) >= LIMIT_PCT - 0.1);
+      pctCell.style.setProperty(
+        '--pct',
+        pct === null ? '0' : Math.min(1, Math.abs(pct) / LIMIT_PCT).toFixed(3)
+      );
     }
-    // Change percent
-    if (cells[4]) {
-      cells[4].textContent = vm.changePercent !== null ? `${vm.changePercent.toFixed(2)}%` : '--';
-      cells[4].classList.toggle('is-up', vm.changePercent !== null && vm.changePercent > 0);
-      cells[4].classList.toggle('is-down', vm.changePercent !== null && vm.changePercent < 0);
+
+    setText(cell('amount'), vm.displayAmount);
+
+    const menuBtn = tr.querySelector('button[data-action="stock-menu"]') as HTMLButtonElement | null;
+    if (menuBtn) {
+      // id 随行复用而变——虚拟窗口会把同一个 DOM 节点分配给不同股票。
+      menuBtn.id = rowMenuId(vm.code);
+      setAttr(menuBtn, 'aria-label', `打开 ${vm.name} 操作菜单`);
+      // 置顶状态在行内仍需可感知（菜单未打开时）。
+      menuBtn.classList.toggle('is-pinned', vm.pinned);
     }
-    // Amount
-    if (cells[5]) {
-      cells[5].textContent = vm.displayAmount;
-    }
-    // Status（data-stale 只在确实过期时出现——它表达状态，不是字段锚点）
-    if (cells[6]) {
-      const label = vm.staleLabel || STATUS_LABELS[vm.status] || '';
-      setText(cells[6], label);
-      cells[6].toggleAttribute('data-stale', Boolean(vm.staleLabel));
-    }
-    // Actions
-    const pinBtn = cells[7]?.querySelector('button[data-action="pin"]') as HTMLButtonElement | null;
-    if (pinBtn) {
-      pinBtn.setAttribute('aria-pressed', String(vm.pinned));
-      pinBtn.setAttribute('aria-label', vm.pinned ? `取消置顶 ${vm.name}` : `置顶 ${vm.name}`);
-      pinBtn.textContent = vm.pinned ? '📌' : '📍';
-    }
-    const upBtn = cells[7]?.querySelector('button[data-action="move-up"]') as HTMLButtonElement | null;
-    if (upBtn) upBtn.setAttribute('aria-label', `上移 ${vm.name}`);
-    const downBtn = cells[7]?.querySelector('button[data-action="move-down"]') as HTMLButtonElement | null;
-    if (downBtn) downBtn.setAttribute('aria-label', `下移 ${vm.name}`);
   }
 }

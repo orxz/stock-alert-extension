@@ -151,6 +151,25 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     store.dispatch({ type: 'overlay/menu', menu: null });
   });
 
+  on('stock-menu-open-request', (d) => {
+    store.dispatch({
+      type: 'overlay/menu',
+      menu: { kind: 'stock-actions', anchorId: d.anchorId, code: d.code }
+    });
+  });
+
+  on('stock-remove-confirm-request', (d) => {
+    // 删除自选股不可撤销——先关菜单，再打确认对话框，绝不即时删除。
+    // 对话框关闭后焦点回到打开菜单的那个触发器。
+    const anchorId = store.getState().overlay.menu?.anchorId ?? null;
+    store.dispatch({ type: 'overlay/menu', menu: null });
+    store.dispatch({ type: 'overlay/focusReturn', id: anchorId });
+    store.dispatch({
+      type: 'overlay/dialog',
+      dialog: { kind: 'confirm-remove', codes: [d.code], groupId: d.groupId }
+    });
+  });
+
   on('column-settings-change', (d) => {
     // 组件发的是完整最终态，这里再规范化一次（防御第三方注入/旧版本残留）。
     const normalized = normalizeUiColumns(d.columns);
