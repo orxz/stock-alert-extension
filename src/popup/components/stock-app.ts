@@ -3,6 +3,7 @@
 // 子组件通过 CustomEvent（bubbles+composed）冒泡语义事件到本元素，
 // AppShell 在此元素上监听并路由到 Store dispatch / CommandController。
 // 架构约束：仅 import domain types + view-models + 子组件；无 RPC/Store 依赖。
+import type { StockCode } from '../../domain/index.js';
 import type { AppViewModel } from '../view-models.js';
 import './stock-header.js';
 import './group-tabs.js';
@@ -57,6 +58,10 @@ export class StockAppElement extends HTMLElement {
   set viewModel(value: AppViewModel) {
     this._viewModel = value;
     if (this.isConnected) this.applyViewModel(value);
+  }
+
+  focusCode(code: StockCode): boolean {
+    return this.boardEl?.focusCode(code) ?? false;
   }
 
   private buildSkeleton(): void {

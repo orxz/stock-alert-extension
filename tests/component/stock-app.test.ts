@@ -9,6 +9,7 @@ import { definePopupElements } from '../../src/popup/components/define-elements.
 import type { AppViewModel } from '../../src/popup/view-models.js';
 import { closedDialog } from '../../src/popup/view-models.js';
 import type { GroupId } from '../../src/domain/index.js';
+import type { StockCode } from '../../src/domain/index.js';
 
 /** 构造最小 AppViewModel 用于断言渲染（字段均可控）。 */
 function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
@@ -97,4 +98,44 @@ test('definePopupElements is idempotent (guard against duplicate registration)',
   const el = document.createElement('stock-app');
   document.body.append(el);
   assert.ok(el.querySelector('[data-region="header"]'));
+});
+
+test('stock-app routes focusCode to the active virtual stock view', async () => {
+  resetDom();
+  definePopupElements();
+  const stocks = Array.from({ length: 100 }, (_, i) => ({
+    code: `sh${String(600000 + i).padStart(6, '0')}` as StockCode,
+    name: `股票${i}`,
+    price: 100,
+    change: 1,
+    changePercent: 1,
+    status: 'fresh' as const,
+    pinned: false,
+    staleLabel: '',
+    displayPrice: '100.00',
+    displayChange: '+1.00',
+    displayAmount: '1.2亿'
+  }));
+  const el = document.createElement('stock-app') as HTMLElement & {
+    viewModel: AppViewModel;
+    focusCode(code: StockCode): boolean;
+  };
+  document.body.append(el);
+  el.viewModel = mkViewModel({
+    board: {
+      viewMode: 'list',
+      groupId: 'g_all' as GroupId,
+      stocks,
+      loading: false,
+      error: null,
+      empty: false,
+      emptyMessage: '暂无股票'
+    }
+  });
+
+  assert.equal(el.focusCode('sh600050' as StockCode), true);
+  const board = el.querySelector('stock-board') as HTMLElement;
+  assert.equal(board.scrollTop, 48 * 50);
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  assert.equal(document.activeElement?.closest('[data-key]')?.getAttribute('data-key'), 'sh600050');
 });

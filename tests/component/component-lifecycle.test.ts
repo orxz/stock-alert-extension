@@ -8,6 +8,8 @@ import test from 'node:test';
 import { resetDom } from '../helpers/dom-environment.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { HeaderViewModel } from '../../src/popup/view-models.js';
+import type { BoardViewModel } from '../../src/popup/view-models.js';
+import type { GroupId } from '../../src/domain/index.js';
 
 function makeHeaderVm(): HeaderViewModel {
   return { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' };
@@ -92,4 +94,135 @@ test('app-live-region exposes an aria-live polite region for screen readers', ()
   document.body.append(el);
   const live = el.querySelector('[aria-live]') ?? el;
   assert.equal((live as Element).getAttribute('aria-live'), 'polite');
+});
+
+test('reconnecting stock-board does not duplicate its empty CTA listener', () => {
+  resetDom();
+  definePopupElements();
+  const container = document.createElement('div');
+  document.body.append(container);
+  const el = document.createElement('stock-board') as HTMLElement & { viewModel: BoardViewModel };
+  container.append(el);
+  el.viewModel = {
+    viewMode: 'list',
+    groupId: 'g_all' as GroupId,
+    stocks: [],
+    loading: false,
+    error: null,
+    empty: true,
+    emptyMessage: '暂无股票'
+  };
+
+  let openCount = 0;
+  container.addEventListener('dialog-open-request', () => { openCount++; });
+  el.remove();
+  container.append(el);
+  el.querySelector<HTMLButtonElement>('[data-action="add-stock"]')?.click();
+  assert.equal(openCount, 1);
+});
+
+test('disconnecting stock-board cancels a queued viewport frame', async () => {
+  resetDom();
+  definePopupElements();
+  const el = document.createElement('stock-board') as HTMLElement & { viewModel: BoardViewModel };
+  document.body.append(el);
+  el.viewModel = {
+    viewMode: 'list',
+    groupId: 'g_all' as GroupId,
+    stocks: [],
+    loading: false,
+    error: null,
+    empty: false,
+    emptyMessage: '暂无股票'
+  };
+  const table = el.querySelector('stock-table') as HTMLElement & {
+    viewport: { scrollOffset: number; viewportExtent: number };
+  };
+  let updates = 0;
+  let viewport = table.viewport;
+  Object.defineProperty(table, 'viewport', {
+    configurable: true,
+    get: () => viewport,
+    set: (value) => {
+      updates++;
+      viewport = value as { scrollOffset: number; viewportExtent: number };
+    }
+  });
+
+  el.scrollTop = 96;
+  el.dispatchEvent(new Event('scroll'));
+  el.remove();
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  assert.equal(updates, 0);
+});
+
+test('reconnecting stock-board replaces and disconnects its ResizeObserver', async () => {
+  resetDom();
+  definePopupElements();
+  const OriginalResizeObserver = window.ResizeObserver;
+  const observers: Array<{
+    disconnected: boolean;
+    notify(): void;
+  }> = [];
+
+  class TestResizeObserver {
+    disconnected = false;
+
+    constructor(private readonly callback: ResizeObserverCallback) {
+      observers.push(this);
+    }
+
+    observe(): void {}
+    unobserve(): void {}
+
+    disconnect(): void {
+      this.disconnected = true;
+    }
+
+    notify(): void {
+      if (!this.disconnected) {
+        this.callback([], this as unknown as ResizeObserver);
+      }
+    }
+  }
+
+  Object.defineProperty(window, 'ResizeObserver', {
+    configurable: true,
+    value: TestResizeObserver
+  });
+  try {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const el = document.createElement('stock-board') as HTMLElement & { viewModel: BoardViewModel };
+    Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => 472 });
+    container.append(el);
+    el.viewModel = {
+      viewMode: 'list',
+      groupId: 'g_all' as GroupId,
+      stocks: [],
+      loading: false,
+      error: null,
+      empty: false,
+      emptyMessage: '暂无股票'
+    };
+    assert.equal(observers.length, 1);
+
+    el.remove();
+    assert.equal(observers[0]?.disconnected, true);
+    container.append(el);
+    assert.equal(observers.length, 2);
+    assert.equal(observers[1]?.disconnected, false);
+
+    observers[1]?.notify();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    const table = el.querySelector('stock-table') as HTMLElement & {
+      viewport: { scrollOffset: number; viewportExtent: number };
+    };
+    assert.equal(table.viewport.viewportExtent, 472);
+  } finally {
+    Object.defineProperty(window, 'ResizeObserver', {
+      configurable: true,
+      value: OriginalResizeObserver
+    });
+  }
 });

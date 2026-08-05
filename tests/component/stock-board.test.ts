@@ -45,7 +45,10 @@ function board(overrides: Partial<BoardViewModel> = {}): BoardViewModel {
 }
 
 function setupBoard(vm?: BoardViewModel): {
-  el: HTMLElement & { viewModel: BoardViewModel };
+  el: HTMLElement & {
+    viewModel: BoardViewModel;
+    focusCode(code: StockCode): boolean;
+  };
   spy: PopupEventSpy;
 } {
   resetDom();
@@ -53,7 +56,10 @@ function setupBoard(vm?: BoardViewModel): {
   const container = document.createElement('div');
   document.body.append(container);
   const spy = spyPopupEvents(container);
-  const el = document.createElement('stock-board') as HTMLElement & { viewModel: BoardViewModel };
+  const el = document.createElement('stock-board') as HTMLElement & {
+    viewModel: BoardViewModel;
+    focusCode(code: StockCode): boolean;
+  };
   container.append(el);
   if (vm) el.viewModel = vm;
   return { el, spy };
@@ -102,44 +108,35 @@ test('board has aria-label and no aria-live on stock list container', () => {
   }
 });
 
-test('list view shows stock-table and hides stock-grid', () => {
+test('board connects only the active list view', () => {
   setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
-  assert.ok(grid.hasAttribute('hidden'));
-  assert.ok(!table.hasAttribute('hidden'));
+  assert.ok(document.querySelector('stock-table'));
+  assert.equal(document.querySelector('stock-grid'), null);
 });
 
-test('grid view shows stock-grid and hides stock-table', () => {
+test('board connects only the active grid view', () => {
   setupBoard(board({ stocks: [card('sh600519')], viewMode: 'grid' }));
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
-  assert.ok(!grid.hasAttribute('hidden'));
-  assert.ok(table.hasAttribute('hidden'));
+  assert.ok(document.querySelector('stock-grid'));
+  assert.equal(document.querySelector('stock-table'), null);
 });
 
-test('loading state shows loading container and hides grid/table', () => {
+test('loading state shows loading container and detaches data views', () => {
   setupBoard(board({ loading: true, stocks: [] }));
   const loading = document.querySelector('[data-region="loading"]') as HTMLElement;
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
   assert.ok(loading);
   assert.ok(!loading.hasAttribute('hidden'));
-  assert.ok(grid.hasAttribute('hidden'));
-  assert.ok(table.hasAttribute('hidden'));
+  assert.equal(document.querySelector('stock-grid'), null);
+  assert.equal(document.querySelector('stock-table'), null);
 });
 
-// Task 8: 骨架屏 loading——5 个灰色占位条（无假数字）+ aria-busy 无障碍状态。
-test('loading state renders skeleton rows with aria-busy', () => {
+// Task 8: 骨架屏 loading——6 个稳定灰色占位条（无假数字）+ aria-busy 无障碍状态。
+test('loading state renders exactly six stable skeleton rows with aria-busy', () => {
   setupBoard(board({ loading: true, stocks: [] }));
   const loading = document.querySelector('[data-region="loading"]') as HTMLElement;
   assert.ok(loading, 'loading container exists');
   assert.equal(loading.getAttribute('hidden'), null, 'loading is visible');
   assert.equal(loading.getAttribute('aria-busy'), 'true');
-  assert.ok(
-    loading.querySelectorAll('.skeleton-row').length >= 3,
-    'has at least 3 skeleton rows'
-  );
+  assert.equal(loading.querySelectorAll('.skeleton-row').length, 6);
   // 不变量：骨架屏绝不渲染假价格/假数字
   assert.equal(loading.textContent, '', 'skeleton must not render fake data text');
 });
@@ -160,13 +157,119 @@ test('empty state shows empty container with message', () => {
   assert.ok(empty.textContent?.includes('暂无股票'));
 });
 
-test('switching viewMode toggles hidden on grid and table', () => {
+test('empty state exposes a semantic add-stock CTA', () => {
+  const { spy } = setupBoard(board({ empty: true, stocks: [], emptyMessage: '暂无股票，点击添加' }));
+  const cta = document.querySelector<HTMLButtonElement>('[data-region="empty"] button[data-action="add-stock"]');
+  assert.ok(cta);
+  assert.equal(cta.type, 'button');
+  cta.click();
+  assert.deepEqual(spy.lastEvent('dialog-open-request')?.detail, { kind: 'add-stock' });
+});
+
+test('loading, error, empty, and data states are mutually exclusive', () => {
+  const { el } = setupBoard(board({
+    loading: true,
+    error: '网络错误',
+    empty: true,
+    stocks: [card('sh600519')]
+  }));
+  assert.equal(el.querySelector('[data-region="loading"]')?.hasAttribute('hidden'), false);
+  assert.equal(el.querySelector('[data-region="error"]')?.hasAttribute('hidden'), true);
+  assert.equal(el.querySelector('[data-region="empty"]')?.hasAttribute('hidden'), true);
+  assert.equal(el.querySelector('stock-table, stock-grid'), null);
+
+  el.viewModel = board({ error: '网络错误', empty: true, stocks: [card('sh600519')] });
+  assert.equal(el.querySelector('[data-region="loading"]')?.hasAttribute('hidden'), true);
+  assert.equal(el.querySelector('[data-region="error"]')?.hasAttribute('hidden'), false);
+  assert.equal(el.querySelector('[data-region="empty"]')?.hasAttribute('hidden'), true);
+  assert.equal(el.querySelector('stock-table, stock-grid'), null);
+
+  el.viewModel = board({ empty: true, stocks: [] });
+  assert.equal(el.querySelector('[data-region="loading"]')?.hasAttribute('hidden'), true);
+  assert.equal(el.querySelector('[data-region="error"]')?.hasAttribute('hidden'), true);
+  assert.equal(el.querySelector('[data-region="empty"]')?.hasAttribute('hidden'), false);
+  assert.equal(el.querySelector('stock-table, stock-grid'), null);
+});
+
+test('switching viewMode detaches the old view and connects the new view', () => {
   const { el } = setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
+  const table = el.querySelector('stock-table');
+  assert.ok(table);
   el.viewModel = board({ stocks: [card('sh600519')], viewMode: 'grid' });
-  const grid = document.querySelector('stock-grid') as HTMLElement;
-  const table = document.querySelector('stock-table') as HTMLElement;
-  assert.ok(!grid.hasAttribute('hidden'));
-  assert.ok(table.hasAttribute('hidden'));
+  assert.ok(el.querySelector('stock-grid'));
+  assert.equal(el.querySelector('stock-table'), null);
+  assert.equal(table.isConnected, false);
+});
+
+test('inactive view does not receive later quote updates', () => {
+  const { el } = setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));
+  const detachedTable = el.querySelector('stock-table') as HTMLElement;
+  assert.ok(detachedTable);
+  el.viewModel = board({ stocks: [card('sh600519')], viewMode: 'grid' });
+  const before = detachedTable.querySelector('[data-key="sh600519"]')?.textContent;
+  el.viewModel = board({
+    stocks: [card('sh600519', { displayPrice: '999.00' })],
+    viewMode: 'grid'
+  });
+  assert.equal(detachedTable.querySelector('[data-key="sh600519"]')?.textContent, before);
+});
+
+test('list and grid restore independent normalized scroll offsets', () => {
+  const stocks = Array.from(
+    { length: 100 },
+    (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`)
+  );
+  const { el } = setupBoard(board({ stocks, viewMode: 'list' }));
+  el.scrollTop = 144;
+  el.viewModel = board({ stocks, viewMode: 'grid' });
+  assert.equal(el.scrollTop, 0);
+  el.scrollTop = 252;
+  el.viewModel = board({ stocks, viewMode: 'list' });
+  assert.equal(el.scrollTop, 144);
+  el.viewModel = board({ stocks, viewMode: 'grid' });
+  assert.equal(el.scrollTop, 252);
+});
+
+test('restored scroll offsets never become negative', () => {
+  const stocks = [card('sh600519')];
+  const { el } = setupBoard(board({ stocks, viewMode: 'list' }));
+  el.scrollTop = -20;
+  el.viewModel = board({ stocks, viewMode: 'grid' });
+  el.viewModel = board({ stocks, viewMode: 'list' });
+  assert.equal(el.scrollTop, 0);
+});
+
+test('active view receives scroll viewport with a 390px fallback extent', async () => {
+  const stocks = Array.from(
+    { length: 100 },
+    (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`)
+  );
+  const { el } = setupBoard(board({ stocks, viewMode: 'list' }));
+  const table = el.querySelector('stock-table') as HTMLElement & {
+    viewport: { scrollOffset: number; viewportExtent: number };
+  };
+  assert.deepEqual(table.viewport, { scrollOffset: 0, viewportExtent: 390 });
+
+  el.scrollTop = 240;
+  el.dispatchEvent(new Event('scroll'));
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  assert.deepEqual(table.viewport, { scrollOffset: 212, viewportExtent: 390 });
+});
+
+test('virtual focus scrolls synchronously and focuses the requested keyed control next frame', async () => {
+  const stocks = Array.from(
+    { length: 100 },
+    (_, i) => card(`sh${String(600000 + i).padStart(6, '0')}`)
+  );
+  const { el } = setupBoard(board({ stocks, viewMode: 'grid' }));
+
+  assert.equal(el.focusCode('sh600041' as StockCode), true);
+  assert.equal(el.scrollTop, 126 * 20);
+  assert.ok(el.querySelector('[data-key="sh600041"]'), 'requested card is rendered synchronously');
+  assert.notEqual(document.activeElement?.closest('[data-key]')?.getAttribute('data-key'), 'sh600041');
+
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  assert.equal(document.activeElement?.closest('[data-key]')?.getAttribute('data-key'), 'sh600041');
 });
 
 // ===== Grid: keyed node identity + focus preservation =====
@@ -328,5 +431,6 @@ test('hidden state placeholders are not rendered (display none, not flex)', () =
   }
   // 表格（当前视图）不应 hidden。
   const table = el.querySelector('stock-table') as HTMLElement | null;
-  assert.equal(table?.hasAttribute('hidden'), false, 'active table must not be hidden');
+  assert.ok(table, 'active table must be connected');
+  assert.equal(table.hasAttribute('hidden'), false, 'active table must not be hidden');
 });
