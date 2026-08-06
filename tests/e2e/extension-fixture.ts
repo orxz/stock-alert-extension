@@ -265,3 +265,15 @@ export function gridBoardConfig(): Record<string, unknown> {
     g_all: { viewMode: 'grid', sortField: 'manual', sortDirection: 'asc', priceHidden: false }
   };
 }
+
+/**
+ * 以列表视图打开看板的 boardConfig（含 g_tech，便于切分组后仍是列表）。
+ *
+ * 断言 `stock-table` 行为（thead/tbody/列顺序/列显隐）的用例必须显式声明列表视图：
+ * 默认视图已改为网格，只挂载激活视图意味着表格根本不在 DOM 里。
+ * 用例依赖全局默认值是脆的——默认一改，一批与「默认值」无关的用例就集体变红。
+ */
+export function listBoardConfig(): Record<string, unknown> {
+  const list = { viewMode: 'list', sortField: 'manual', sortDirection: 'asc', priceHidden: false };
+  return { g_all: { ...list }, g_tech: { ...list } };
+}

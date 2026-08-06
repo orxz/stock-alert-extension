@@ -413,7 +413,7 @@ test('setOrder creates default boardConfig if missing', async () => {
   });
   const cfg = result.userData.boardConfig.g_all;
   assert.equal(cfg.sortField, 'manual');
-  assert.equal(cfg.viewMode, 'list');
+  assert.equal(cfg.viewMode, 'grid');
   assert.equal(cfg.sortDirection, 'asc');
   assert.equal(cfg.priceHidden, false);
 });
@@ -699,7 +699,7 @@ test('patchPreferences creates default config if missing', async () => {
     patch: { sortField: 'price' }
   });
   assert.equal(result.value.sortField, 'price');
-  assert.equal(result.value.viewMode, 'list'); // default
+  assert.equal(result.value.viewMode, 'grid'); // default
   assert.equal(result.value.sortDirection, 'asc'); // default
   assert.equal(result.value.priceHidden, false); // default
 });

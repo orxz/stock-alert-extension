@@ -192,7 +192,7 @@ test('stocksForGroup returns a copy, not the original array', () => {
 
 test('DEFAULT_BOARD_CONFIG is the single shared fallback and is immutable', () => {
   assert.deepEqual(DEFAULT_BOARD_CONFIG, {
-    viewMode: 'list',
+    viewMode: 'grid',
     sortField: 'manual',
     sortDirection: 'asc',
     priceHidden: false

@@ -74,31 +74,34 @@ function buildSeed() {
       { groupId: 'g_watch', name: '关注', order: 1, isDefault: false, createdAt: BASE, updatedAt: BASE }
     ],
     watchlist,
-    boardConfig: {
-      g_all: { viewMode: 'list', sortField: 'manual' },
-      g_watch: { viewMode: 'list', sortField: 'manual' }
-    },
+    // 不写 boardConfig：走 DEFAULT_BOARD_CONFIG，素材第一张即真实首屏形态。
+    boardConfig: {},
     ...cache
   };
 }
 
-/** 三张截图各自的界面状态与配套文案（文案只描述真实存在的功能）。 */
+/**
+ * 三张截图各自的界面状态与配套文案（文案只描述真实存在的功能）。
+ *
+ * 顺序即商店展示顺序：第一张必须是**打开就看到的样子**（网格 + 深色，
+ * 见 DEFAULT_BOARD_CONFIG 与 popup/main.ts），否则商店页与真实首屏对不上。
+ */
 const SHOTS = [
   {
-    key: 'list',
-    file: 'screenshot1-list.png',
+    key: 'grid',
+    file: 'screenshot1-grid.png',
     preAction: null,
-    title: '一屏看完全部自选股',
-    lead: '列表视图按分组展示行情，涨跌幅带幅度条，数字等宽对齐便于纵向扫描。',
-    bullets: ['实时 / 缓存 / 缺失三态如实标注', '涨红跌绿，界面其余部分不用彩色', '成交额、代码与行情状态一并呈现']
+    title: '打开就是一屏卡片',
+    lead: '默认网格视图，每张卡片一只股票：现价、涨跌额、涨跌幅与成交额一次看全。',
+    bullets: ['列表 / 网格一键切换并记住选择', '支持按涨跌幅、价格、成交额排序', '置顶与拖拽排序保留在两种视图']
   },
   {
-    key: 'grid',
-    file: 'screenshot2-grid.png',
-    preAction: 'toggleGrid',
-    title: '网格卡片，换个密度看',
-    lead: '同一份数据的另一种排布，卡片视图同样跟随列设置显隐字段。',
-    bullets: ['列表 / 网格一键切换并记住选择', '支持按涨跌幅、价格、成交额排序', '置顶与拖拽排序保留在两种视图']
+    key: 'list',
+    file: 'screenshot2-list.png',
+    preAction: 'toggleList',
+    title: '想看密度就切列表',
+    lead: '列表视图按分组展示行情，涨跌幅带幅度条，数字等宽对齐便于纵向扫描。',
+    bullets: ['实时 / 缓存 / 缺失三态如实标注', '涨红跌绿，界面其余部分不用彩色', '成交额、代码与行情状态一并呈现']
   },
   {
     key: 'add',
@@ -263,8 +266,8 @@ async function main() {
     // 1) 先取三张真实 popup 截图（内存中，不落盘）。
     const popupShots = {};
     for (const shot of SHOTS) {
-      if (shot.preAction === 'toggleGrid') {
-        await page.locator('[data-action="view-grid"]').first().click().catch(() => {});
+      if (shot.preAction === 'toggleList') {
+        await page.locator('[data-action="view-list"]').first().click().catch(() => {});
       }
       if (shot.preAction === 'openAddDialog') {
         await page.locator('[data-action="add-stock"]').first().click().catch(() => {});
@@ -292,7 +295,7 @@ async function main() {
       await render(screenshotStage(shot, popupShots[shot.key], shotScale), 1280, 800, shot.file);
     }
     // 顶部图块 1400x560：popup 高 470px。
-    await render(marqueeStage(popupShots.list, iconDataUri, 470 / POPUP.height), 1400, 560, 'promo-large.png');
+    await render(marqueeStage(popupShots.grid, iconDataUri, 470 / POPUP.height), 1400, 560, 'promo-large.png');
     // 小图块 440x280。
     await render(smallTileStage(iconDataUri), 440, 280, 'promo-small.png');
 

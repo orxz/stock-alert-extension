@@ -5,14 +5,14 @@
 // 但 app-shell 用一行注释显式忽略了该事件——ColumnPanelElement 已实现、已注册、
 // 有 236 行组件测试，用户点下去却毫无反应。全部门禁都是绿的。
 import { expect, test } from '@playwright/test';
-import { launchBuiltExtension, stock, baseSeed } from './extension-fixture';
+import { launchBuiltExtension, stock, baseSeed, listBoardConfig } from './extension-fixture';
 
 const COLUMN_TRIGGER = '[data-action="column-settings"]';
 
 test('column settings button opens a working panel', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     const page = launched.page;
@@ -34,7 +34,7 @@ test('column settings button opens a working panel', async () => {
 test('disabling a column hides it and the choice survives reopening the popup', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     const page = launched.page;
@@ -59,7 +59,7 @@ test('disabling a column hides it and the choice survives reopening the popup', 
 test('the locked name column is absent and price can be switched off', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     const page = launched.page;
@@ -84,7 +84,7 @@ test('the locked name column is absent and price can be switched off', async () 
 test('escape closes the popover and returns focus to the trigger', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     const page = launched.page;
@@ -104,7 +104,7 @@ test('escape closes the popover and returns focus to the trigger', async () => {
 test('grid cards apply column settings', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     const page = launched.page;
@@ -127,7 +127,7 @@ test('grid cards apply column settings', async () => {
 test('reordering a column reorders the table columns persistently', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     const page = launched.page;

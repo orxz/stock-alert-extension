@@ -38,7 +38,7 @@ export function stocksForGroup(stocks: readonly Stock[], groupId: GroupId): read
  * 忽略 direction 才没暴露成真实 bug。任何新的消费方都必须引用此常量。
  */
 export const DEFAULT_BOARD_CONFIG: BoardConfig = Object.freeze({
-  viewMode: 'list',
+  viewMode: 'grid',
   sortField: 'manual',
   sortDirection: 'asc',
   priceHidden: false

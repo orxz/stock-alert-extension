@@ -1,5 +1,15 @@
 # 更新日志
 
+## Unreleased
+
+### 变更
+- **默认视图改为网格**：`DEFAULT_BOARD_CONFIG.viewMode` 由 `list` 改为 `grid`——全新用户打开即一屏卡片。深色主题本就是默认（`popup/main.ts` 只在 `localStorage.uiTheme === 'light'` 时转浅色，不跟随系统），本次一并由 E2E「fresh profile」用例锁死「深色 + 网格」这一首屏契约
+- 已保存过视图偏好的用户不受影响：`boardConfig` 有该分组条目时读用户自己的选择，默认值只用于缺失时回退
+- 断言表格结构的 E2E 改为显式声明视图（新增 `listBoardConfig()` 夹具）——此前它们依赖全局默认值，默认一改就集体变红
+- 商店素材首图改为网格视图并去掉种子里写死的 `boardConfig`，使第一张截图就是真实首屏
+
+---
+
 ## v2.0.1 — 列设置修复与详情面板丰富
 
 ### 变更

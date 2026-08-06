@@ -113,7 +113,7 @@ test('selectCurrentBoardConfig returns the boardConfig for the current group', (
 test('selectCurrentBoardConfig falls back to default when group has no config', () => {
   const state = stateWith([], { boardConfig: {} });
   const cfg = selectCurrentBoardConfig(state);
-  assert.equal(cfg.viewMode, 'list');
+  assert.equal(cfg.viewMode, 'grid');
   assert.equal(cfg.priceHidden, false);
   assert.equal(cfg.sortField, 'manual');
 });

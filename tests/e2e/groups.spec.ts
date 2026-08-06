@@ -2,7 +2,7 @@
 // Task 18 Step 4 — 分组生命周期完整测试。
 // 每个流程后重开 Popup 检查 chrome.storage.local 确保持久化。
 import { expect, test } from '@playwright/test';
-import { launchBuiltExtension, GROUPS, stock, baseSeed, getStorage , gridBoardConfig} from './extension-fixture';
+import { launchBuiltExtension, GROUPS, stock, baseSeed, getStorage , gridBoardConfig, listBoardConfig } from './extension-fixture';
 
 test('create a new custom group', async () => {
   const launched = await launchBuiltExtension({
@@ -67,7 +67,8 @@ test('rename a custom group', async () => {
 test('delete a custom group', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
-    seed: baseSeed({ watchlist: [stock('sh600519')] })
+    // 该用例断言回退到「全部」后表格里能看到那只股票——显式声明列表视图。
+    seed: baseSeed({ watchlist: [stock('sh600519')], boardConfig: listBoardConfig() })
   });
   try {
     // 切换到 g_tech → 触发 rename-group 对话框（包含删除按钮）。
