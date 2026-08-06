@@ -33,14 +33,14 @@ Infrastructure (Chrome / Storage / HTTP)  →  implements  →  Application Port
 
 - `npm run build`：`tsc --build` 编译 `src/` → `build/extension/runtime/`，复制 `extension/` 静态资源
 - `npm run check`：check:types（tsc）+ lint（eslint）+ check:architecture + build + check:runtime-imports + validate:manifest
-- `npm run test:contracts`：node:test 跑 `tests/contracts/`（冻结 v1.3 契约）
 - `npm run test:unit`：`tsx` + node:test 跑 `tests/unit/**/*.test.ts`，c8 覆盖率门槛 lines/statements/functions 90 / branches 85
 - `npm run test:critical-coverage`：Domain/Protocol/Storage/Reducer per-file 门槛 95/90/95/95
 - `npm run test:component`：`tsx` + happy-dom 跑 `tests/component/**/*.test.ts`
 - `npm run test:e2e`：Playwright 加载 `build/extension/` 真实扩展 E2E
 - `npm run test:a11y`：axe-core 无障碍扫描
-- `npm run ci`：check + test:contracts + test:unit + test:critical-coverage + test:component + test:e2e + test:a11y
-- `npm run release:verify`：ci + test:performance + npm audit + verify-rollback + verify-deterministic-build + capture:store + package:extension + check:bundle
+- `npm run ci`：check + test:unit + test:critical-coverage + test:component + test:e2e + test:a11y
+- `npm run release:verify`：ci + test:performance + npm audit + verify-deterministic-build + capture:store + package:extension + check:bundle
+- `npm run test:live`：实网行情冒烟（**不进 ci**，依赖第三方端点可达性）
 
 ## 核心边界（不变量）
 
