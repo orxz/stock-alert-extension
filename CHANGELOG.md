@@ -1,5 +1,65 @@
 # 更新日志
 
+## v2.0.1 — 列设置修复与详情面板丰富
+
+### 变更
+- **「多选」改名「管理持仓」**：旧名描述的是交互手段（能勾选多行），不是用户来这里要办的事——该模式的出口是全选 / 移动到分组 / 移除，即成批管理自选持仓。按钮可见文案与 `aria-label` 统一为「管理持仓」，`data-action` 改为 `manage-holdings`，批量工具栏的 `aria-label` 改为「持仓管理」、取消按钮改为「退出持仓管理」——读屏用户从入口到工具栏听到的是同一个词。420px 下实测：按钮固定 78×28 且位置不随分组数变化（标签栏内部滚动吸收压力），8 分组时仍不溢出
+
+### 修复
+- **列设置面板排序**：代码/状态是名称列副标题、不参与列重排——面板中它们的 ↑↓ 按钮禁用并固定到列表尾部，消除「移动副标题却毫无反应」的困惑；主列排序实时生效
+- **列设置在卡片视图生效**：网格/卡片视图按列设置显隐代码/状态/现价/涨跌幅/成交额，卡片新增成交额展示（状态行右侧、弱色等宽）
+- **列取消不再弹回**：锁定列收敛为只有「名称」——它固定显示在列表最前且不进入设置面板（用户无法取消它，也就不会遇到取消即弹回）；现价/涨跌幅/成交额/代码/状态均可自由显隐并持久化
+- **列表名称列宽度收敛**：股票列从吃掉全部剩余空间（420px 面板中约 174px）改为固定 100px 设定（实际约 121px，占 29%），数字列相应加宽更易读；「代码·状态」副标题实测无截断
+- **报错信息友好化**：新增展示层错误映射（`error-messages.ts`）——错误视图、行情状态条、toast、对话框错误不再透出英文技术文案（`eastmoney HTTP 403`、`internal error` 等），按结构化错误码优先、message 特征次之映射为中文提示（网络/超时/行情服务/搜索/存储/版本冲突等），未分类一律回退中文兜底
+- **删除当前分组自动回退「全部」**：`currentGroupId` 新增不变量守护——`bootstrap/confirmed` 与 `mutation/confirmed` 落地 userData 时，若当前分组已不存在（被删除 / uncertain 对账后消失），自动切回「全部」并清空选中集；删除最后一个自定义分组后不再显示空列表
+- **验收修复（代码审查后）**：① 对话框搜索清空时经 `dialogReset` 递增 generation，作废在途响应（旧关键词结果不再复活到空查询）；② 成交额 <100 万回退「X万」，≥100 万仍为亿且保留两位小数（400 万 → `0.04亿`），不再出现「0.0亿」读作零成交；③ 悬停详情浮层在滚动容器底部自动向上翻转（表格行/卡片按可视区判定加 `is-flipped`），最后几行的详情不再被裁剪；④ rename-group 对话框补齐分组列表，重名提前校验恢复生效；⑤ 列设置面板最后一个主列的 ↓ 禁用（不再跨入副标题区导致「点了没反应」）；⑥ mutation 落地后被移出当前分组的选中项自动剔除（选中集 ⊆ 可见集不变量补全）；⑦ 错误分类正则收紧为 `\bsearch\b`（research 等含子串单词不再误判）
+- **验收修复（实网核对后）**：① 东财 f51/f52 **不是**涨停价/跌停价——实网核对发现该 endpoint 上它们是无关量纲（茅台 2715 亿、平安银行 0），照搬会把「涨停价」渲染成 `271524528742.40`、`0.00`；已从请求字段与解析中移除，主源缺失即显示 `--`（原单测 fixture 手写 `f51: 1650` 把错误假设固化，任何 mock 测试都无法证伪）；② `选中集 ⊆ 可见集` 不变量补齐到 bootstrap 对账路径——批量删除超时经 `app:bootstrap` 落地权威快照时，已删除的选中项此前不会被剔除，批量工具栏仍为其计数
+
+### 新增
+- **详情面板丰富**：悬停列表行/卡片的详情数据从 5 项扩展到 16 项——新增成交额、涨跌额、换手率、振幅、量比、市盈率、市净率、总市值、流通市值、涨停价、跌停价；面板改双栏布局（8 行 × 2 项）
+- **成交额单位以亿为主**：表格成交额列、卡片与详情面板优先显示「X.X亿」（≥1 万亿升级为「X.X万亿」）；≥100 万保留两位小数的亿（400 万 → `0.04亿`），<100 万才回退「X万」——否则两位小数的亿会显示 `0.00亿`，读作零成交
+- **行情字段扩展**：东财主源 fields 请求 f7/f8/f9/f10/f20/f21/f23；腾讯备源解析 [38][39][43][44][45][46][47][48][49]；市值统一为元口径（腾讯亿→元换算）；涨停/跌停价以源数据为准，缺失显示 `--`；价格隐藏时涨停/跌停与今开/最高等同为 `****` 掩码
+  - **涨停/跌停仅腾讯源提供**：东财批量接口 `ulist.np/get` 不提供涨跌停价——该 endpoint 上 f51/f52 装的是别的量纲（实测 sh600519 返回 2715 亿、sz000001 返回 0），仅逐只的 `stock/get` 上才是涨跌停。改用逐只接口会让 500 只自选股从 1 次请求变成 500 次，故主源该两项按既有约定显示 `--`
+
+---
+
+## v2.0.0 — 基础架构重建
+
+> **基础架构重建，不新增提醒功能。** 用户数据（schema v2）与权限保持不变，v1.3.0 发布包可安全回滚。
+
+### 架构升级
+- **TypeScript + 原生 ES Modules**：所有运行时 JavaScript 改为 TypeScript 源码，`tsc` 输出原生 ESM；`module: ES2022`、`target: ES2022`、`moduleResolution: Bundler`、`strict: true`
+- **分层架构与 Project References**：Domain / Protocol / Application / Infrastructure / Background / Popup 六层，依赖只能由外向内；架构检查脚本拒绝反向 import 和循环依赖
+- **单一 StorageCoordinator**：`chrome.storage.local` 的唯一业务调用者和唯一写入队列；用户数据、缓存写入、缓存删除、一致性读取均进入同一串行临界区
+- **内容 revision 乐观并发**：`userDataRevision` 是规范化 `groups + watchlist + boardConfig` 的 SHA-256 摘要；所有写命令携带 `expectedRevision`，冲突返回 `CONFLICT` 不执行写入
+- **版本化 RPC v2**：单一注册表 `rpcRegistry` 统一方法 / payload / result / 运行时校验；`requestId` 贯穿 Popup、Router、Application、Repository；结构化错误码 + `retryable` 标记
+- **不可变 Popup Store**：纯 Reducer 是唯一状态写入口；Selector 派生 ViewModel；Command 负责 RPC / 副作用 / uncertain 对账（超时 → bootstrap 对账 → desired-state predicate → 安全重试）
+- **Light DOM Web Components**：组件只接收 ViewModel、发出语义事件；`connectedCallback` 使用每次连接新建的 `AbortController`；keyed update 保留节点身份、焦点、滚动
+- **可重试初始化屏障**：Service Worker listener 同步注册，handler 等待共享 `idle/running/ready` 三态屏障；失败回到 `idle` 让下一事件重试
+- **持久化退避**：退避状态写入 `chrome.storage.session`，Service Worker 重建后恢复；空自选股不请求网络也不改变退避
+- **安全 Alarm 调度**：每次任务开始前创建最迟安全 Alarm，结束后替换为精确一次性 Alarm；每次激活执行 `ensureAlarm`
+
+### 数据与权限保证
+- **schema v2 不变**：`groups` / `watchlist` / `boardConfig` / `quoteCache:<code>` 持久化语义不变；不执行破坏性迁移
+- **权限不变**：`storage` + `alarms`；host permissions 仍为 `hq.sinajs.cn` / `push2.eastmoney.com` / `searchapi.eastmoney.com`
+- **行情语义不变**：`price > 0`、东财主源 + 新浪备源、50 只/批、4 秒 Provider 超时、8 秒总 deadline、fresh `<30s`、cached `30s–7d`、退避 `30s→2m→5m`；缺失行情绝不生成模拟价格
+- **回滚兼容**：v2.0.0 写出的 schema v2 数据可被冻结的 v1.3.0 发布包安全读取；v2.0.0 不持久化只有新版本才能解释的必需字段
+
+### 质量门禁
+- **架构检查**：TypeScript Compiler API 解析 import graph，拒绝反向跨层 import 和循环依赖
+- **覆盖率**：全局 `src/**` lines/statements/functions 90% + branches 85%；Domain/Protocol/Storage/Reducer 95% + 90%
+- **无障碍**：axe-core 零 critical/serious；44×44px 触控目标；WCAG 2.1 AA 对比度；完整键盘操作等价；`prefers-reduced-motion`
+- **性能**：20 分组 / 500 股票夹具；bootstrap p95 ≤ 250ms；首次可交互 p95 ≤ 500ms；缓存 ViewModel + keyed DOM 更新 p95 ≤ 100ms
+- **确定性构建**：两次清洁构建产生字节一致 ZIP；ZIP 只含运行时文件（无源码 / 测试 / map / 文档）；200 KB 提醒 / 500 KB 硬限制
+- **回滚验证**：`verify-rollback.mjs` 验证 v1.3 → v2 写入 → v1.3 回读 → v2 再升级的数据兼容性
+
+### 变更文件
+- **新增**：`src/`（84 个 TypeScript 源文件）、`extension/`（manifest.json + popup.html + styles + icons + privacy）、`tsconfig*.json`（4 个）、`scripts/build-extension.mjs` / `check-architecture.mjs` / `check-runtime-imports.mjs` / `verify-deterministic-build.mjs` / `verify-rollback.mjs`、`tests/fixtures/v1.3/`（冻结契约）、`tests/fixtures/capacity/`
+- **删除**：`background.js` / `popup-actions.js` / `popup-bridge.js` / `popup-render.js` / `popup-state.js` / `popup.js` / `quote-format.js` / `quote-service.js` / `quotes.js` / `router.js` / `stock-utils.js` / `storage.js`（v1 运行时）及对应 v1 测试
+- **修改**：`package.json`（v2 scripts）、`eslint.config.mjs`、`playwright.config.mjs`、`scripts/validate-manifest.mjs` / `package-extension.mjs` / `check-bundle-size.mjs` / `capture-store-assets.mjs`
+
+---
+
 ## v1.3.0 — 架构与体验
 
 ### 架构升级

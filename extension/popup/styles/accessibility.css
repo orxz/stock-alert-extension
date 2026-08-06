@@ -1,0 +1,13 @@
+/* v2 无障碍样式：reduced-motion 覆盖。
+ * Global Constraints L29：reduced motion 是发布要求。
+ * prefers-reduced-motion 下禁用所有 transition/animation（duration 归零为 0s）。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

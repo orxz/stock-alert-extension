@@ -12,6 +12,7 @@ node_modules/
 
 # Build output
 dist/
+/build/
 *.zip
 
 # Test output
@@ -22,3 +23,6 @@ test-results/
 # Agent workspace data
 .workbuddy/
 .qoder/
+.worktrees/
+.gstack/
+.superpowers/

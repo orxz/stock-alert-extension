@@ -1,4 +1,5 @@
 // scripts/check-bundle-size.mjs — 检查打包 ZIP 体积是否在合理范围内
+// Task 20 Step 2 — 从 extension/manifest.json 读取版本号。
 import { statSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
@@ -6,8 +7,8 @@ import { join, dirname } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-// 从 manifest.json 动态读取版本号，与 package-extension.mjs 保持一致
-const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
+// 从 extension/manifest.json 读取版本号（正式 manifest）。
+const manifest = JSON.parse(readFileSync(join(root, 'extension/manifest.json'), 'utf8'));
 const ZIP_PATH = join(root, 'dist', `stock-alert-extension-v${manifest.version}.zip`);
 const MAX_SIZE_KB = 200; // 200 KB 警告阈值
 const HARD_LIMIT_KB = 500; // 500 KB 硬限制

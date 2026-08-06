@@ -1,0 +1,329 @@
+// src/popup/store/selectors.ts
+// 纯 Selector：从 AppState 派生 ViewModel。只读、无副作用、不缓存可变值。
+// Selectors 是组件渲染的唯一数据来源；偏好只从 domain.boardConfig 派生（单一真相）。
+import type { BoardConfig, Stock, GroupId } from '../../domain/index.js';
+import { stocksForGroup, sortStocks } from '../../domain/index.js';
+import type { AppState } from './state.js';
+import {
+  defaultBoardConfig,
+  toStockCardViewModels,
+  toGroupTabs,
+  closedDialog,
+  closedPopover
+} from '../view-models.js';
+import { friendlyErrorMessage } from '../error-messages.js';
+import type {
+  AppViewModel,
+  BoardViewModel,
+  StockCardViewModel,
+  GroupTabViewModel,
+  ToolbarViewModel,
+  HeaderViewModel,
+  BatchToolbarViewModel,
+  QuoteStatusViewModel,
+  LiveRegionViewModel,
+  DialogViewModel,
+  DialogGroupOption,
+  ColumnPanelViewModel,
+  PopoverViewModel
+} from '../view-models.js';
+
+/** 列的中文标签（展示层文案，不进 domain）。 */
+const COLUMN_LABELS: Readonly<Record<string, string>> = {
+  name: '名称',
+  code: '代码',
+  status: '状态',
+  price: '现价',
+  changePercent: '涨跌幅',
+  amount: '成交额'
+};
+
+/** 固定计算视图分组 ID。 */
+const ALL_GROUP_ID = 'g_all' as GroupId;
+
+/**
+ * 当前看板配置：从 domain.userData.boardConfig[currentGroupId] 派生；缺省回退 defaultBoardConfig。
+ * 这是 viewMode / sortField / sortDirection / priceHidden 的唯一真相来源。
+ */
+export function selectCurrentBoardConfig(state: AppState): BoardConfig {
+  return state.domain.userData.boardConfig[state.view.currentGroupId] ?? defaultBoardConfig();
+}
+
+/** 按当前分组过滤，再按搜索关键词（代码或名称）二次过滤。 */
+function filterStocks(state: AppState): readonly Stock[] {
+  const stocks = stocksForGroup(state.domain.userData.watchlist, state.view.currentGroupId);
+  const keyword = state.view.searchKeyword.trim().toLowerCase();
+  if (!keyword) return stocks;
+  return stocks.filter(
+    (stock) =>
+      String(stock.code).toLowerCase().includes(keyword) ||
+      String(stock.name).toLowerCase().includes(keyword)
+  );
+}
+
+/**
+ * 可见股票卡片视图模型：filter → sort → toViewModels。
+ * 价格掩码、staleLabel、pinned 均在此投影中计算。
+ */
+export function selectVisibleStocks(state: AppState): readonly StockCardViewModel[] {
+  const config = selectCurrentBoardConfig(state);
+  const groupId: GroupId = state.view.currentGroupId;
+  const visible = sortStocks(filterStocks(state), state.domain.quotes, groupId, config);
+  return toStockCardViewModels(visible, state.domain.quotes, config, groupId);
+}
+
+/** 看板视图模型：视图模式 + 股票列表 + 加载/空/错误状态。 */
+export function selectBoard(state: AppState): BoardViewModel {
+  const config = selectCurrentBoardConfig(state);
+  const stocks = selectVisibleStocks(state);
+  const loading = state.async.bootstrap.status === 'loading';
+  const error = state.async.bootstrap.status === 'error'
+    ? friendlyErrorMessage(state.async.bootstrap.error, '加载失败')
+    : null;
+  // 列设置面板的 order 是含 code/status 副标题键的完整排列；主列顺序过滤掉它们。
+  const columnOrder = state.view.columns.order.filter((key) => key !== 'code' && key !== 'status');
+  return {
+    viewMode: config.viewMode,
+    groupId: state.view.currentGroupId,
+    stocks,
+    columns: columnOrder,
+    enabledColumns: state.view.columns.enabled,
+    loading,
+    error,
+    empty: !loading && !error && stocks.length === 0,
+    emptyMessage: '暂无股票，点击添加'
+  };
+}
+
+/** 分组标签（按 order 升序，标记当前激活）。 */
+export function selectGroupTabs(state: AppState): GroupTabViewModel[] {
+  return toGroupTabs(state.domain.userData.groups, state.view.currentGroupId);
+}
+
+/** 顶部工具栏视图模型。 */
+export function selectToolbar(state: AppState): ToolbarViewModel {
+  const config = selectCurrentBoardConfig(state);
+  const total = stocksForGroup(state.domain.userData.watchlist, state.view.currentGroupId).length;
+  return {
+    viewMode: config.viewMode,
+    sortField: config.sortField,
+    sortDirection: config.sortDirection,
+    priceHidden: config.priceHidden,
+    searchKeyword: state.view.searchKeyword,
+    totalCount: total,
+    hasStocks: total > 0
+  };
+}
+
+/** 头部视图模型：当前分组名 + 股票数 + 按钮状态。 */
+export function selectHeader(state: AppState): HeaderViewModel {
+  const group = state.domain.userData.groups.find((g) => g.groupId === state.view.currentGroupId);
+  const groupName = group?.name ?? '全部';
+  const stockCount = stocksForGroup(state.domain.userData.watchlist, state.view.currentGroupId).length;
+  const config = selectCurrentBoardConfig(state);
+  return {
+    groupName,
+    stockCount,
+    priceHidden: config.priceHidden,
+    canAddStock: true,
+    theme: state.view.theme
+  };
+}
+
+/** 批量工具栏视图模型：选中态 + 全选状态。 */
+export function selectBatchToolbar(state: AppState): BatchToolbarViewModel {
+  const codes = state.view.selectedCodes;
+  // 只要个数，就别走 selectVisibleStocks——那条链是 filter → sort → 逐只构造
+  // 视图模型，selectBoard 已经跑过一遍，再跑一遍等于每次 dispatch 都把 500 只
+  // 股票投影两遍。filterStocks 是纯过滤，不排序不分配视图模型。
+  // 持仓管理关闭时连过滤都不需要（工具栏此时不可见）。
+  const totalCount = state.view.selectionMode ? filterStocks(state).length : 0;
+  return {
+    visible: state.view.selectionMode,
+    selectedCount: codes.length,
+    totalCount,
+    selectedCodes: codes,
+    groupId: state.view.currentGroupId
+  };
+}
+
+/** 行情刷新状态视图模型。 */
+export function selectQuoteStatus(state: AppState): QuoteStatusViewModel {
+  const status = state.async.quoteRefresh.status;
+  const message =
+    status === 'loading' ? '刷新中…'
+    : status === 'success' ? '已更新'
+    : status === 'error' ? friendlyErrorMessage(state.async.quoteRefresh.error, '刷新失败')
+    : '';
+  const q = state.domain.quotes;
+  const lastRefreshTime = q.succeededAt ? new Date(q.succeededAt).toLocaleTimeString('zh-CN') : '';
+  const deferredUntil = q.deferredUntil ? new Date(q.deferredUntil).toLocaleTimeString('zh-CN') : '';
+  return {
+    status,
+    message,
+    freshCount: q.counts.fresh,
+    cachedCount: q.counts.cached,
+    missingCount: q.counts.missing,
+    lastRefreshTime,
+    deferredUntil
+  };
+}
+
+/** 无障碍实时区域视图模型：toast 优先，否则空。 */
+export function selectLiveRegion(state: AppState): LiveRegionViewModel {
+  const toast = state.overlay.toast;
+  if (!toast) return { message: '', kind: 'none' };
+  return { message: toast.message, kind: toast.kind };
+}
+
+/**
+ * 对话框视图模型：从 overlay.dialog + async.mutations + view.dialogSearch 派生。
+ * dialog=null 时返回关闭态。
+ */
+export function selectDialog(state: AppState): DialogViewModel {
+  const dialog = state.overlay.dialog;
+  if (!dialog) return closedDialog();
+
+  // 检查是否有 pending / uncertain mutation。
+  const mutationValues = Object.values(state.async.mutations);
+  const pending = mutationValues.some((m) => m.status === 'pending');
+  const uncertain = mutationValues.some((m) => m.status === 'uncertain');
+  const failedMutation = mutationValues.find((m) => m.status === 'failed');
+  const errorMessage = failedMutation ? friendlyErrorMessage(failedMutation.error, '操作失败') : null;
+
+  // 可用分组列表（按 order 升序）。
+  const allGroups: DialogGroupOption[] = state.domain.userData.groups
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((g) => ({ groupId: g.groupId, name: g.name }));
+
+  // 非 g_all 的分组用于 move-stocks 目标选择。
+  const customGroups = allGroups.filter((g) => g.groupId !== ALL_GROUP_ID);
+
+  const base: DialogViewModel = {
+    ...closedDialog(),
+    open: true,
+    focusReturnId: state.overlay.focusReturnId,
+    pending,
+    uncertain,
+    errorMessage,
+    // 对话框搜索从独立的 dialogSearch 读取，不再共用工具栏的 searchResults/searchKeyword。
+    searchResults: state.view.dialogSearch.results,
+    searchStatus: state.async.stockSearch.status,
+    searchKeyword: state.view.dialogSearch.keyword,
+    searchGeneration: state.async.searchGeneration,
+    groups: []
+  };
+
+  switch (dialog.kind) {
+    case 'add-stock':
+      return { ...base, kind: 'add-stock', groups: allGroups };
+    case 'create-group':
+      return { ...base, kind: 'create-group' };
+    case 'rename-group':
+      return {
+        ...base,
+        kind: 'rename-group',
+        renameGroupId: dialog.groupId,
+        renameCurrentName: dialog.currentName,
+        canDeleteGroup: dialog.groupId !== ALL_GROUP_ID,
+        // 分组列表用于输入时重名提前校验——不带的话 validateInput 的
+        // 判重恒为 false，「已有同名分组」提示完全失效。
+        groups: allGroups
+      };
+    case 'move-stocks':
+      return {
+        ...base,
+        kind: 'move-stocks',
+        moveCodes: dialog.codes,
+        moveFromGroupId: dialog.fromGroupId,
+        groups: customGroups
+      };
+    case 'confirm-remove':
+      return {
+        ...base,
+        kind: 'confirm-remove',
+        removeCodes: dialog.codes,
+        removeGroupId: dialog.groupId
+      };
+    default:
+      return closedDialog();
+  }
+}
+
+/**
+ * 根 AppViewModel：聚合所有子 ViewModel，供 stock-app 根组件单次渲染（Task 14）。
+ * 各子 selector 独立派生、只读；任一分支异常会向上传播（被 AppShell.renderAppSafely 捕获）。
+ */
+/** 列设置面板视图模型：从 view.columns 投影为可勾选/可排序的列表。 */
+export function selectColumnPanel(state: AppState): ColumnPanelViewModel {
+  const { enabled, order } = state.view.columns;
+  const enabledSet = new Set<string>(enabled);
+  // name 是锁定列：固定在列表最前且不进入面板（用户无法取消它，也就不该看到它）——
+  // 面板只展示可配置列：主列可排序 + code/status 副标题固定尾部只勾选。
+  const mainKeys = order.filter((key) => key !== 'name' && key !== 'code' && key !== 'status');
+  const sublineKeys = order.filter((key) => key === 'code' || key === 'status');
+  const displayKeys = [...mainKeys, ...sublineKeys];
+  return {
+    columns: displayKeys.map((key) => ({
+      key,
+      label: COLUMN_LABELS[key] ?? key,
+      enabled: enabledSet.has(key)
+    })),
+    columnOrder: displayKeys
+  };
+}
+
+/** 弹出层视图模型：overlay.menu 为空时返回关闭态。 */
+export function selectPopover(state: AppState): PopoverViewModel {
+  const menu = state.overlay.menu;
+  if (!menu) return closedPopover();
+  if (menu.kind === 'column-settings') {
+    return {
+      open: true,
+      kind: 'column-settings',
+      anchorId: menu.anchorId,
+      columnPanel: selectColumnPanel(state),
+      stockActions: null
+    };
+  }
+
+  // 目标股票可能已不在当前视图（菜单开着时被删除、或切了分组/搜索）——
+  // 返回关闭态，而不是渲染一个指向不存在股票的菜单。
+  const visible = selectVisibleStocks(state);
+  const index = visible.findIndex((vm) => vm.code === menu.code);
+  if (index < 0) return closedPopover();
+  const target = visible[index];
+
+  return {
+    open: true,
+    kind: 'stock-actions',
+    anchorId: menu.anchorId,
+    columnPanel: null,
+    stockActions: {
+      code: target.code,
+      name: target.name,
+      pinned: target.pinned,
+      canMoveUp: index > 0,
+      canMoveDown: index < visible.length - 1,
+      groupId: state.view.currentGroupId,
+      orderedCodes: visible.map((vm) => vm.code)
+    }
+  };
+}
+
+export function selectAppViewModel(state: AppState): AppViewModel {
+  return {
+    currentGroupId: state.view.currentGroupId,
+    searchKeyword: state.view.searchKeyword,
+    header: selectHeader(state),
+    groupTabs: selectGroupTabs(state),
+    board: selectBoard(state),
+    toolbar: selectToolbar(state),
+    batchToolbar: selectBatchToolbar(state),
+    quoteStatus: selectQuoteStatus(state),
+    liveRegion: selectLiveRegion(state),
+    dialog: selectDialog(state),
+    popover: selectPopover(state)
+  };
+}

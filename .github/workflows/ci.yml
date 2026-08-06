@@ -20,6 +20,10 @@ jobs:
       - run: npm run check
       - run: npm run test:unit
       - run: xvfb-run -a npm run test:e2e
+      # test:e2e 现在只跑 default project（实网用例已隔离到 live project，
+      # 境外 runner 上会随第三方网络状况随机变红）。性能预算此前是被
+      # `playwright test` 顺带跑到的，这里显式保留，避免门禁悄悄变松。
+      - run: xvfb-run -a npm run test:performance
       - run: npm run package:extension
       - run: npm run check:bundle
       - uses: actions/upload-artifact@v4

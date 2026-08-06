@@ -1,0 +1,111 @@
+/* ============================================================================
+   几何 —— 固定 420×560
+   ============================================================================
+   44 (Header) + 38 (Tabs) + 40 (Toolbar) + 408 (Board) + 30 (Status) = 560。
+   Board 是 flex:1 的余量项——改动其余任何一条的高度，Board 会自动吸收，
+   但这行注释必须跟着改：它是这份纵向契约唯一的书面记录。
+   Board 是**唯一**纵向滚动容器；body 与 stock-app 绝不滚动。
+   这个文件只管尺寸与滚动，不管颜色与装饰。
+   ========================================================================== */
+
+body {
+  width: 420px;
+  height: 560px;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  color: var(--text-1);
+  background: var(--ink-app);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color var(--dur-theme), color var(--dur-theme);
+}
+
+stock-app {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  height: 560px;
+  overflow: hidden;
+}
+
+stock-app[hidden] {
+  display: none;
+}
+
+/* 行情区：唯一纵向滚动区 */
+stock-board {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+stock-board::-webkit-scrollbar {
+  width: 8px;
+}
+
+stock-board::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+stock-board::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+stock-board::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: content-box;
+}
+
+/* 状态栏固定底部（不随行情区滚动） */
+quote-status {
+  display: flex;
+  align-items: center;
+  height: var(--h-status);
+  flex-shrink: 0;
+  padding: 0 var(--sp-3);
+  background: var(--ink-bar);
+  border-top: 1px solid var(--line);
+}
+
+/* ---- 致命错误兜底 ---- */
+
+#fatal-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  width: 420px;
+  height: 560px;
+  padding: var(--sp-5);
+  text-align: center;
+  color: var(--text-2);
+}
+
+#fatal-fallback[hidden] {
+  display: none;
+}
+
+#btn-reload {
+  min-height: var(--touch-target-min);
+  min-width: 120px;
+  padding: 0 var(--sp-5);
+  color: var(--text-1);
+  background: var(--ink-pop);
+  border: 1px solid var(--accent-line);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  border-radius: var(--r-md);
+}
+
+#btn-reload:hover {
+  border-color: var(--text-3);
+}

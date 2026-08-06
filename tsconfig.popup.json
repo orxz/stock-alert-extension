@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["chrome"],
+    "tsBuildInfoFile": "build/cache/popup.tsbuildinfo",
+    "declarationDir": "build/types/popup"
+  },
+  "include": ["src/popup"],
+  "references": [{ "path": "./tsconfig.shared.json" }]
+}

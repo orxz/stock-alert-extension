@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>股票提醒助手</title>
+<link rel="stylesheet" href="popup/styles/tokens.css"/>
+<link rel="stylesheet" href="popup/styles/base.css"/>
+<link rel="stylesheet" href="popup/styles/layout.css"/>
+<link rel="stylesheet" href="popup/styles/controls.css"/>
+<link rel="stylesheet" href="popup/styles/board.css"/>
+<link rel="stylesheet" href="popup/styles/overlays.css"/>
+<link rel="stylesheet" href="popup/styles/accessibility.css"/>
+</head>
+<body>
+<stock-app id="stock-app" hidden></stock-app>
+<app-live-region id="app-live-region"></app-live-region>
+<app-dialog-host id="dialog-host"></app-dialog-host>
+    <app-popover-host id="popover-host"></app-popover-host>
+<div id="fatal-fallback" role="alert" hidden>
+  <p id="fatal-message">页面加载失败，请重新加载。</p>
+  <button id="btn-reload" type="button">重新加载</button>
+</div>
+<script type="module" src="runtime/popup/main.js"></script>
+</body>
+</html>

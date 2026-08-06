@@ -1,0 +1,227 @@
+/* ============================================================================
+   基础层 —— 元素默认值与共享原语
+   ============================================================================
+
+   这一层存在的理由，就是上一版那个「深色主题下添加表单是白底黑字」的缺陷。
+
+   根因不是漏了一条 background，而是**没有基础层**：每个组件各自决定要不要
+   上色，谁忘了谁就掉回浏览器默认值。这里把默认值一次性接管——任何控件进入
+   Popup 都先落在主题色板上，组件只负责差异，不负责兜底。
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+/* ---- 表单控件：统一继承，杜绝原生默认值 ---- */
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--text-1);
+  background-color: transparent;
+}
+
+/* 文本类输入统一表面。写成属性选择器而非类名——新加的输入框
+   不需要记得套 class 就已经是对的。 */
+input[type='text'],
+input[type='search'],
+input[type='number'],
+input[type='password'],
+input:not([type]),
+textarea,
+select {
+  min-height: var(--touch-target-min);
+  padding: 0 var(--sp-3);
+  color: var(--text-1);
+  background-color: var(--ink-row);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  caret-color: var(--text-1);
+  appearance: none;
+}
+
+textarea {
+  padding: var(--sp-2) var(--sp-3);
+  resize: vertical;
+}
+
+::placeholder {
+  color: var(--text-3);
+  opacity: 1; /* Firefox 会再压一层透明度，占位符几乎不可见 */
+}
+
+/* 搜索框的原生清除按钮在深色下是黑色方块，隐藏它。 */
+input[type='search']::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+/* 复选框/单选由浏览器绘制，background 对它们无效，只能用 accent-color。 */
+input[type='checkbox'],
+input[type='radio'] {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--text-1);
+  cursor: pointer;
+}
+
+/* Chrome 自动填充会强推自己的浅色背景，只能用超长 inset shadow 覆盖。 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-1);
+  box-shadow: 0 0 0 1000px var(--ink-row) inset;
+}
+
+button {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---- 焦点 ----
+   只在键盘导航时显示，且是中性环——焦点不是语义色。 */
+
+:focus {
+  outline: none;
+}
+
+/* 只画环，不要动元素自身的圆角。
+   原来这里带一条 border-radius: var(--r-sm)，会把被聚焦元素的圆角强行改成
+   5px——胶囊标签、分段控件、主按钮（都是 --r-md 8px）一被键盘聚焦就「跳」
+   一下形状。现代浏览器的 outline 本来就会跟随元素自身圆角，不需要这条。 */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---- 数字 ----
+   等宽 + tabular-nums：价格列必须逐位对齐，否则纵向扫描会失效。 */
+
+.num,
+.stock-table-cell--price,
+.stock-table-cell--change,
+.stock-table-cell--change-percent,
+.stock-table-cell--amount,
+.stock-card-price,
+.stock-card-change,
+.stock-card-change-percent,
+.quote-status-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---- 涨跌方向 ----
+   颜色之外必须还有第二通道（符号/文字），不能只靠色相表达。 */
+
+.is-up {
+  color: var(--up);
+}
+
+.is-down {
+  color: var(--down);
+}
+
+/* ---- 价格跳动高亮 ---- */
+
+/* 不能用 currentcolor：现价单元格现在会跟随涨跌染色，currentcolor 等于
+   拿数字自己的颜色把它的背景铺满——那 180ms 里数字是「隐身」的。
+   改用与方向对应的低饱和底色（--up-bg / --down-bg 本来就是为铺底设计的），
+   跳动因此既看得见、又不会盖住要读的那个数。 */
+@keyframes price-flash {
+  from {
+    background-color: var(--flash-bg);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.flash {
+  --flash-bg: var(--state-selected);
+  animation: price-flash var(--dur-flash) ease-out;
+}
+
+.flash.is-up {
+  --flash-bg: var(--up-bg);
+}
+
+.flash.is-down {
+  --flash-bg: var(--down-bg);
+}
+
+/* ---- 共享按钮原语 ----
+   三档：安静（默认）、描边（次要）、实心（主要，靠对比度而非色相）。 */
+
+.btn-quiet,
+.btn-outline,
+.btn-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  border-radius: var(--r-md);
+  font-size: var(--fs-body);
+  white-space: nowrap;
+  transition: background-color var(--dur-fade), color var(--dur-fade),
+    border-color var(--dur-fade);
+}
+
+.btn-quiet {
+  color: var(--text-2);
+  background: transparent;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--text-1);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.btn-outline {
+  color: var(--text-1);
+  background-color: transparent;
+  border: 1px solid var(--line-strong);
+}
+
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--text-3);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+/* 实心（主）按钮：填充与所在栏的对比只有 1.19:1（浅色 1.04:1），
+   形状完全由描边承担，因此必须走 --accent-line 而不是 --line-strong。 */
+.btn-solid {
+  color: var(--accent-ink);
+  background-color: var(--accent-fill);
+  border: 1px solid var(--accent-line);
+  font-weight: 600;
+}
+
+.btn-solid:hover:not(:disabled) {
+  border-color: var(--text-2);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.btn-quiet:disabled,
+.btn-outline:disabled,
+.btn-solid:disabled {
+  color: var(--text-3);
+  background: transparent;
+  opacity: 0.6;
+}

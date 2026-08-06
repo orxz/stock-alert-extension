@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "noEmitOnError": true,
+    "sourceMap": false,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "rootDir": "src",
+    "outDir": "build/extension/runtime"
+  }
+}
