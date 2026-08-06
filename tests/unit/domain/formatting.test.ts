@@ -1,5 +1,7 @@
 // tests/unit/domain/formatting.test.ts
-// Task 4 Step 5 — 格式化纯函数测试 + v1.3 golden parity。
+// Task 4 Step 5 — 格式化纯函数测试 + golden 基线。
+// golden 值锁定 Badge/Tooltip 的对外文案与配色：这是用户可见的行为契约，
+// 与已移除的 v1.3 回退方案无关。
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -16,8 +18,8 @@ import {
   getRefreshIntervalMs
 } from '../../../src/domain/formatting.js';
 
-// ── golden fixture（v1.3 冻结契约）──
-const fixtureUrl = new URL('../../fixtures/v1.3/formatting.json', import.meta.url);
+// ── golden fixture（格式化行为基线）──
+const fixtureUrl = new URL('../../fixtures/formatting-golden.json', import.meta.url);
 const fixture = JSON.parse(readFileSync(fixtureUrl, 'utf8'));
 const NOW = fixture.capturedAt; // Date.parse('2026-08-03T01:30:00.000Z') = 1785720600000
 const quote = { code: 'sh600519', price: 1500, change: 12, changePercent: 0.81, amount: 2_000_000_000 };

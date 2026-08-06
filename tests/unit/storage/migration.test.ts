@@ -12,7 +12,6 @@ import {
   DEFAULT_GROUP_ID,
   MAX_GROUPS
 } from '../../../src/infrastructure/storage/sanitize-v2.js';
-import { readWithV13Rules } from '../../fixtures/v1.3/reference-reader.mjs';
 
 const NOW = 1_000_000;
 
@@ -198,26 +197,6 @@ test('migrateToV2 removes g_all from groupIds during migration', async () => {
   });
   const result = await migrateViaService(area, area.peek(), 100);
   assert.deepEqual(result.watchlist[0].groupIds, ['g_tech' as never]);
-});
-
-// ===== v2 ↔ v1.3 互读兼容 =====
-
-test('sanitizeV2 output is losslessly readable by readWithV13Rules', () => {
-  const raw = {
-    groups: [
-      { groupId: 'g_all', name: '全部', order: 0, isDefault: true },
-      { groupId: 'g_watch', name: '关注', order: 1, isDefault: false, createdAt: 9000, updatedAt: 9500 }
-    ],
-    watchlist: [
-      { code: 'sh600519', name: '贵州茅台', groupIds: ['g_watch'], manualOrder: { g_watch: 0 }, pinned: { g_watch: true }, addedAt: 58000 }
-    ],
-    boardConfig: { g_watch: { viewMode: 'list', sortField: 'manual', priceHidden: true } }
-  };
-  const v2 = sanitizeV2(raw, NOW);
-  const v13 = readWithV13Rules(v2, NOW);
-  assert.deepEqual(v13.watchlist, v2.watchlist);
-  assert.deepEqual(v13.groups, v2.groups);
-  assert.deepEqual(v13.boardConfig, v2.boardConfig);
 });
 
 // ===== sanitize-v2 边界分支补测 =====
