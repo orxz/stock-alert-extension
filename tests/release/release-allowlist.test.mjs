@@ -1,13 +1,17 @@
-// tests/unit/build/release-allowlist.test.mjs
+// tests/release/release-allowlist.test.mjs
 // Task 20 Step 1 — 释放包允许列表断言。
 // 确保正式 ZIP 只包含 build/extension/ 中的构建产物，不含源码、测试、map、文档、v1 运行时。
+//
+// 为什么单独放 tests/release/ 而不与 tests/unit/build/ 同目录：本文件的前置条件是
+// 「已经打过包」（dist/*.zip 存在），只有 release:verify 满足；ci 不打包。
+// 用目录区分前置条件，两个 glob 各归各的门禁，新增文件不会再落进跑不起来的那一档。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync, strFromU8 } from 'fflate';
 
-const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+const REPO_ROOT = join(import.meta.dirname, '..', '..');
 
 /** 读取 dist/ 目录下的版本化 ZIP 并返回条目名列表。 */
 function listReleaseEntries() {

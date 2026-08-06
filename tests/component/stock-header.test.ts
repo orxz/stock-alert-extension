@@ -1,6 +1,6 @@
 // tests/component/stock-header.test.ts
 // Task 15 Step 1 — stock-header 组件测试。
-// 断言：三个原生按钮（添加股票 / 多选 / 价格可见性）的语义事件、aria-pressed、disabled、标签。
+// 断言：三个原生按钮（添加股票 / 主题切换 / 价格可见性）的语义事件、aria-pressed、disabled、标签。
 import '../helpers/dom-environment.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -13,7 +13,6 @@ function mkHeader(overrides: Partial<HeaderViewModel> = {}): HeaderViewModel {
   return {
     groupName: '全部',
     stockCount: 3,
-    selectionMode: false,
     priceHidden: false,
     canAddStock: true,
     theme: 'dark',
@@ -44,32 +43,6 @@ test('add-stock button emits dialog-open-request with kind add-stock', () => {
   spy.reset();
   clickAction('add-stock');
   assert.deepEqual(spy.lastEvent('dialog-open-request')?.detail, { kind: 'add-stock' });
-});
-
-test('multiselect toggle emits selection-mode-change with the final enabled value (off→on)', () => {
-  const { spy } = setup(mkHeader({ selectionMode: false }));
-  spy.reset();
-  clickAction('multiselect');
-  assert.deepEqual(spy.lastEvent('selection-mode-change')?.detail, { enabled: true });
-});
-
-test('multiselect toggle emits selection-mode-change with the final enabled value (on→off)', () => {
-  const { spy } = setup(mkHeader({ selectionMode: true }));
-  spy.reset();
-  clickAction('multiselect');
-  assert.deepEqual(spy.lastEvent('selection-mode-change')?.detail, { enabled: false });
-});
-
-test('multiselect button reflects aria-pressed from selectionMode', () => {
-  setup(mkHeader({ selectionMode: true }));
-  const btn = document.querySelector('button[data-action="multiselect"]') as HTMLElement;
-  assert.equal(btn.getAttribute('aria-pressed'), 'true');
-});
-
-test('multiselect button aria-pressed is false when selectionMode is false', () => {
-  setup(mkHeader({ selectionMode: false }));
-  const btn = document.querySelector('button[data-action="multiselect"]') as HTMLElement;
-  assert.equal(btn.getAttribute('aria-pressed'), 'false');
 });
 
 test('price visibility toggle emits preferences-change with priceHidden true when currently visible', () => {
@@ -113,13 +86,11 @@ test('add-stock button is enabled when canAddStock is true', () => {
 });
 
 test('updating viewModel re-renders text and aria-pressed states', () => {
-  const { el, spy } = setup(mkHeader({ selectionMode: false, priceHidden: false }));
-  el.viewModel = mkHeader({ groupName: '金融', stockCount: 7, selectionMode: true, priceHidden: true });
+  const { el, spy } = setup(mkHeader({ priceHidden: false }));
+  el.viewModel = mkHeader({ groupName: '金融', stockCount: 7, priceHidden: true });
   const title = document.querySelector('[data-region="header-title"]');
   assert.ok((title?.textContent ?? '').includes('金融'));
-  const multiBtn = document.querySelector('button[data-action="multiselect"]') as HTMLElement;
   const priceBtn = document.querySelector('button[data-action="price-visibility"]') as HTMLElement;
-  assert.equal(multiBtn.getAttribute('aria-pressed'), 'true');
   assert.equal(priceBtn.getAttribute('aria-pressed'), 'true');
   // After toggling price on (now hidden), click should set priceHidden false
   spy.reset();
@@ -137,11 +108,43 @@ test('reconnecting the header does not duplicate listeners', () => {
 });
 
 test('all header buttons have accessible labels (aria-label or text)', () => {
-  for (const action of ['theme-toggle', 'add-stock', 'multiselect', 'price-visibility']) {
+  for (const action of ['theme-toggle', 'add-stock', 'price-visibility']) {
     const btn = document.querySelector(`button[data-action="${action}"]`) as HTMLElement;
     const label = btn.getAttribute('aria-label') ?? btn.textContent ?? '';
     assert.ok(label.trim().length > 0, `button[${action}] must have accessible text`);
   }
+});
+
+test('add-stock button displays 添加股票 as its text label', () => {
+  setup(mkHeader());
+  const btn = document.querySelector('button[data-action="add-stock"]') as HTMLButtonElement;
+  assert.equal(btn.textContent, '添加股票');
+});
+
+test('price button shows open-eye icon (with pupil) when price is visible', () => {
+  setup(mkHeader({ priceHidden: false }));
+  const btn = document.querySelector('button[data-action="price-visibility"]') as HTMLElement;
+  const pupil = btn.querySelector('circle');
+  const slash = btn.querySelector('line');
+  assert.ok(pupil, 'open eye should have a pupil circle');
+  assert.ok(!slash, 'open eye should not have a slash line');
+});
+
+test('price button shows closed-eye icon (with slash) when price is hidden', () => {
+  setup(mkHeader({ priceHidden: true }));
+  const btn = document.querySelector('button[data-action="price-visibility"]') as HTMLElement;
+  const pupil = btn.querySelector('circle');
+  const slash = btn.querySelector('line');
+  assert.ok(!pupil, 'closed eye should not have a pupil circle');
+  assert.ok(slash, 'closed eye should have a slash line');
+});
+
+test('price button icon switches to closed-eye after toggling to hidden', () => {
+  const { el } = setup(mkHeader({ priceHidden: false }));
+  el.viewModel = mkHeader({ priceHidden: true });
+  const btn = document.querySelector('button[data-action="price-visibility"]') as HTMLElement;
+  assert.ok(btn.querySelector('line'), 'should now have slash line for closed eye');
+  assert.ok(!btn.querySelector('circle'), 'should not have pupil for closed eye');
 });
 
 test('theme toggle button emits theme-change event (dark→light)', () => {

@@ -5,6 +5,7 @@
 // 不含过滤、排序、RPC 或持久化逻辑。
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { BoardViewModel } from '../view-models.js';
+import type { StockCode } from '../../domain/brands.js';
 import { emitPopupEvent } from './events.js';
 import './stock-grid.js';
 import './stock-table.js';
@@ -15,7 +16,9 @@ import { createRafScheduler } from '../virtualization/raf-scheduler.js';
 import type { RafScheduler } from '../virtualization/raf-scheduler.js';
 
 /** 看板可视高度兜底（元素未布局时 clientHeight 为 0）。 */
-const FALLBACK_VIEWPORT_EXTENT = 390;
+// 看板实际高度：560 - 44(Header) - 38(Tabs) - 40(Toolbar) - 30(Status) = 408。
+// 仅在 clientHeight 为 0（尚未布局）时兜底。
+const FALLBACK_VIEWPORT_EXTENT = 408;
 
 type ViewMode = 'list' | 'grid';
 
@@ -27,6 +30,8 @@ interface VirtualView extends HTMLElement {
 export class StockBoardElement extends HTMLElement {
   private skeletonBuilt = false;
   private _viewModel: BoardViewModel | null = null;
+  private _selectedCodes: readonly StockCode[] = [];
+  private _selectionMode = false;
 
   private loadingEl: HTMLElement | null = null;
   private errorEl: HTMLElement | null = null;
@@ -83,6 +88,38 @@ export class StockBoardElement extends HTMLElement {
   set viewModel(value: BoardViewModel) {
     this._viewModel = value;
     if (this.isConnected) this.applyViewModel(value);
+  }
+
+  get selectedCodes(): readonly StockCode[] {
+    return this._selectedCodes;
+  }
+
+  set selectedCodes(value: readonly StockCode[]) {
+    // 与子视图 setter 相同的引用守卫：store 每轮 dispatch 都会重推，引用未变就跳过。
+    if (value === this._selectedCodes) return;
+    this._selectedCodes = value;
+    this.syncSelection();
+  }
+
+  get selectionMode(): boolean {
+    return this._selectionMode;
+  }
+
+  set selectionMode(value: boolean) {
+    if (value === this._selectionMode) return;
+    this._selectionMode = value;
+    this.syncSelection();
+  }
+
+  /** 将选中集与持仓管理模式同步到当前激活的子视图。 */
+  private syncSelection(): void {
+    const view = this.activeView() as unknown as
+      | { selectedCodes: readonly StockCode[]; selectionMode?: boolean }
+      | null;
+    if (!view) return;
+    view.selectedCodes = this._selectedCodes;
+    // 只有 list 视图有选择列；grid 的卡片本来就整卡可点，不需要这个属性。
+    if ('selectionMode' in view) view.selectionMode = this._selectionMode;
   }
 
   private buildSkeleton(signal: AbortSignal): void {
@@ -262,12 +299,18 @@ export class StockBoardElement extends HTMLElement {
     if (!view) return;
     if (this.activeMode === 'list' && this.tableEl) {
       this.tableEl.groupId = vm.groupId;
-      this.tableEl.columns = vm.columns;
+      this.tableEl.columnOrder = vm.columns;
+      this.tableEl.columns = vm.enabledColumns;
       this.tableEl.viewModel = vm.stocks;
     } else if (this.activeMode === 'grid' && this.gridEl) {
       this.gridEl.groupId = vm.groupId;
+      this.gridEl.columns = vm.enabledColumns;
       this.gridEl.viewModel = vm.stocks;
     }
+    // 选中态由本组件负责推给激活视图，不能依赖调用方「先 viewModel 后
+    // selectedCodes」的语句顺序：list⇄grid 切换会挂载新视图，
+    // connectedCallback 重连时也会重放 viewModel 而没有人再推一次选中集。
+    this.syncSelection();
     this.flushViewport();
   }
 }

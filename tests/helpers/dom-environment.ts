@@ -22,6 +22,7 @@ globalThis.HTMLElement = win.HTMLElement as unknown as typeof HTMLElement;
 globalThis.CustomEvent = win.CustomEvent as unknown as typeof CustomEvent;
 globalThis.Event = win.Event as unknown as typeof Event;
 globalThis.KeyboardEvent = win.KeyboardEvent as unknown as typeof KeyboardEvent;
+globalThis.MouseEvent = win.MouseEvent as unknown as typeof MouseEvent;
 globalThis.EventTarget = win.EventTarget as unknown as typeof EventTarget;
 globalThis.Node = win.Node as unknown as typeof Node;
 globalThis.Element = win.Element as unknown as typeof Element;

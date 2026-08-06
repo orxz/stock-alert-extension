@@ -101,10 +101,13 @@ button:disabled {
   outline: none;
 }
 
+/* 只画环，不要动元素自身的圆角。
+   原来这里带一条 border-radius: var(--r-sm)，会把被聚焦元素的圆角强行改成
+   5px——胶囊标签、分段控件、主按钮（都是 --r-md 8px）一被键盘聚焦就「跳」
+   一下形状。现代浏览器的 outline 本来就会跟随元素自身圆角，不需要这条。 */
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: var(--r-sm);
 }
 
 /* ---- 数字 ----
@@ -137,9 +140,13 @@ button:disabled {
 
 /* ---- 价格跳动高亮 ---- */
 
+/* 不能用 currentcolor：现价单元格现在会跟随涨跌染色，currentcolor 等于
+   拿数字自己的颜色把它的背景铺满——那 180ms 里数字是「隐身」的。
+   改用与方向对应的低饱和底色（--up-bg / --down-bg 本来就是为铺底设计的），
+   跳动因此既看得见、又不会盖住要读的那个数。 */
 @keyframes price-flash {
   from {
-    background-color: currentcolor;
+    background-color: var(--flash-bg);
   }
   to {
     background-color: transparent;
@@ -147,7 +154,16 @@ button:disabled {
 }
 
 .flash {
+  --flash-bg: var(--state-selected);
   animation: price-flash var(--dur-flash) ease-out;
+}
+
+.flash.is-up {
+  --flash-bg: var(--up-bg);
+}
+
+.flash.is-down {
+  --flash-bg: var(--down-bg);
 }
 
 /* ---- 共享按钮原语 ----
@@ -174,27 +190,32 @@ button:disabled {
 
 .btn-quiet:hover:not(:disabled) {
   color: var(--text-1);
-  background: var(--ink-row);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .btn-outline {
   color: var(--text-1);
-  background: transparent;
+  background-color: transparent;
   border: 1px solid var(--line-strong);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: var(--ink-row);
+  border-color: var(--text-3);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
+/* 实心（主）按钮：填充与所在栏的对比只有 1.19:1（浅色 1.04:1），
+   形状完全由描边承担，因此必须走 --accent-line 而不是 --line-strong。 */
 .btn-solid {
   color: var(--accent-ink);
-  background: var(--accent-fill);
+  background-color: var(--accent-fill);
+  border: 1px solid var(--accent-line);
   font-weight: 600;
 }
 
 .btn-solid:hover:not(:disabled) {
-  opacity: 0.88;
+  border-color: var(--text-2);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .btn-quiet:disabled,

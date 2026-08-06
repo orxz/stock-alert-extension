@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "股票提醒助手 - 自选股分组与看板",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "轻量级 A 股自选股分组与实时行情看板，数据仅存储在本地。",
   "action": {
     "default_title": "股票提醒助手",

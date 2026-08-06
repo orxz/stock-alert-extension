@@ -485,15 +485,83 @@ test('renameGroup updates name and updatedAt', async () => {
   assert.equal(group?.updatedAt, NOW + 5000);
 });
 
-test('renameGroup is no-op for non-existent group', async () => {
+// 原来这里是「静默 no-op」：改一个不存在的分组会返回成功，但什么都没发生。
+// 调用方无法区分「改好了」和「压根没这个分组」，只能当成功处理。
+test('renameGroup rejects a non-existent group instead of silently succeeding', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  await assert.rejects(
+    commands.renameGroup({
+      expectedRevision: rev,
+      groupId: 'g_nonexistent' as GroupId,
+      name: '不存在'
+    }),
+    (e: { code: string }) => e.code === 'VALIDATION_FAILED'
+  );
+});
+
+// ============================================================
+// 分组重名 / 空名校验
+// ============================================================
+
+test('createGroup rejects a duplicate name', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  await assert.rejects(
+    commands.createGroup({ expectedRevision: rev, groupId: 'g_x' as GroupId, name: '科技' }),
+    (e: { code: string }) => e.code === 'VALIDATION_FAILED'
+  );
+});
+
+// 归一化后再比：「 科技 」和「科技」是同一个名字，否则标签栏会出现两个一模一样的分组。
+test('createGroup rejects a name that only differs by surrounding whitespace', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  await assert.rejects(
+    commands.createGroup({ expectedRevision: rev, groupId: 'g_x' as GroupId, name: '  科技  ' }),
+    (e: { code: string }) => e.code === 'VALIDATION_FAILED'
+  );
+});
+
+test('createGroup rejects an empty or whitespace-only name', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  await assert.rejects(
+    commands.createGroup({ expectedRevision: rev, groupId: 'g_x' as GroupId, name: '   ' }),
+    (e: { code: string }) => e.code === 'VALIDATION_FAILED'
+  );
+});
+
+test('createGroup stores the normalized name', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  const result = await commands.createGroup({
+    expectedRevision: rev,
+    groupId: 'g_x' as GroupId,
+    name: '  新能源   车  '
+  });
+  assert.equal(result.value.name, '新能源 车');
+});
+
+test('renameGroup rejects a name taken by another group', async () => {
+  const { bootstrap, commands } = createEnv();
+  const rev = await getRevision(bootstrap);
+  await assert.rejects(
+    commands.renameGroup({ expectedRevision: rev, groupId: 'g_tech' as GroupId, name: '全部' }),
+    (e: { code: string }) => e.code === 'VALIDATION_FAILED'
+  );
+});
+
+// 排除自己：把「科技」原样保存不该被判成重名。
+test('renameGroup accepts the group keeping its own name', async () => {
   const { bootstrap, commands } = createEnv();
   const rev = await getRevision(bootstrap);
   const result = await commands.renameGroup({
     expectedRevision: rev,
-    groupId: 'g_nonexistent' as GroupId,
-    name: '不存在'
+    groupId: 'g_tech' as GroupId,
+    name: '科技'
   });
-  assert.equal(result.userData.groups.length, 2);
+  assert.equal(result.userData.groups.find((g) => g.groupId === 'g_tech')?.name, '科技');
 });
 
 // ============================================================

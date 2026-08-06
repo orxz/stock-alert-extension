@@ -22,7 +22,7 @@ const threeGroups: GroupTabViewModel[] = [
 ];
 
 function setup(tabs: GroupTabViewModel[] = threeGroups): {
-  el: HTMLElement & { viewModel: GroupTabViewModel[] };
+  el: HTMLElement & { viewModel: GroupTabViewModel[]; selectionMode: boolean };
   spy: PopupEventSpy;
 } {
   resetDom();
@@ -30,7 +30,7 @@ function setup(tabs: GroupTabViewModel[] = threeGroups): {
   const container = document.createElement('div');
   document.body.append(container);
   const spy = spyPopupEvents(container);
-  const el = document.createElement('group-tabs') as HTMLElement & { viewModel: GroupTabViewModel[] };
+  const el = document.createElement('group-tabs') as HTMLElement & { viewModel: GroupTabViewModel[]; selectionMode: boolean };
   container.append(el);
   el.viewModel = tabs;
   return { el, spy };
@@ -55,6 +55,96 @@ function clickReorder(groupId: string, direction: 'left' | 'right'): void {
   if (!btn) throw new Error(`move-${direction} button for ${groupId} not found`);
   btn.click();
 }
+
+// ===== 管理持仓按钮（从 Header 移到 GroupTabs actions） =====
+
+test('manage-holdings button exists in right-actions', () => {
+  setup();
+  const btn = document.querySelector('[data-region="right-actions"] button[data-action="manage-holdings"]');
+  assert.ok(btn, 'manage-holdings button should exist in right-actions');
+});
+
+/**
+ * 按钮名必须表达「用户来做什么」而不是「怎么点」。
+ * 「多选」描述交互手段；该模式的出口是全选/移动分组/移除，即管理自选持仓。
+ * 可见文案与 aria-label 一并锁死，避免只改一处、读屏仍念旧名。
+ */
+test('manage-holdings button is named for the task, not the interaction', () => {
+  setup();
+  const btn = document.querySelector('button[data-action="manage-holdings"]') as HTMLElement;
+  assert.equal(btn.querySelector('span')?.textContent, '管理持仓');
+  assert.equal(btn.getAttribute('aria-label'), '管理持仓');
+});
+
+test('add-group button exists in group-actions', () => {
+  setup();
+  const btn = document.querySelector('[data-region="group-actions"] button[data-action="add-group"]');
+  assert.ok(btn, 'add-group button should exist in group-actions');
+});
+
+test('clicking manage-holdings emits selection-mode-change with enabled true', () => {
+  const { spy } = setup();
+  spy.reset();
+  const btn = document.querySelector('button[data-action="manage-holdings"]') as HTMLButtonElement;
+  btn.click();
+  assert.deepEqual(spy.lastEvent('selection-mode-change')?.detail, { enabled: true });
+});
+
+test('manage-holdings button aria-pressed reflects selectionMode', () => {
+  const { el } = setup();
+  el.selectionMode = true;
+  const btn = document.querySelector('button[data-action="manage-holdings"]') as HTMLElement;
+  assert.equal(btn.getAttribute('aria-pressed'), 'true');
+});
+
+// ===== 重命名入口：必须带上「被点的那个」分组 =====
+// 回归防线：事件不带 groupId 时，app-shell 会回落到 currentGroupId。
+// 右键不会激活标签，于是右键「关注」实际改的是当前激活的「全部」(g_all)——
+// 而 g_all 恰恰是删除逻辑专门设防、不允许改动的默认分组。
+
+test('right-click on a non-active tab renames THAT group, not the active one', () => {
+  const { spy } = setup(); // g_all 处于激活态，g_watch 未激活
+  spy.reset();
+  const tab = document.querySelector('button[data-group-id="g_watch"]') as HTMLElement;
+  tab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  const detail = spy.lastEvent('dialog-open-request')?.detail;
+  assert.equal(detail?.kind, 'rename-group');
+  assert.equal(detail?.groupId, 'g_watch', '必须是被右键的分组，而不是当前激活分组');
+});
+
+test('double-click on a non-active tab renames THAT group', () => {
+  const { spy } = setup();
+  spy.reset();
+  const tab = document.querySelector('button[data-group-id="g_tech"]') as HTMLElement;
+  tab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+  const detail = spy.lastEvent('dialog-open-request')?.detail;
+  assert.equal(detail?.kind, 'rename-group');
+  assert.equal(detail?.groupId, 'g_tech');
+});
+
+test('right-click on g_all does not open the rename dialog', () => {
+  const { spy } = setup();
+  spy.reset();
+  const tab = document.querySelector('button[data-group-id="g_all"]') as HTMLElement;
+  tab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  assert.equal(spy.lastEvent('dialog-open-request'), undefined);
+});
+
+// 420px 宽度硬约束：每个分组常驻一对重排箭头会把右侧「管理持仓」挤出屏幕。
+test('reorder arrows are shown only for the active group', () => {
+  setup();
+  const visible = [...document.querySelectorAll('[data-region="tab-actions"] .group-tab-move-group')]
+    .filter((n) => !(n as HTMLElement).hidden)
+    .map((n) => n.getAttribute('data-group-id'));
+  assert.deepEqual(visible, [], 'g_all 激活时不该有任何箭头（默认分组不可重排）');
+
+  const el = document.querySelector('group-tabs') as HTMLElement & { viewModel: GroupTabViewModel[] };
+  el.viewModel = [g('g_all', '全部', false, 0), g('g_watch', '关注', true, 1), g('g_tech', '科技', false, 2)];
+  const nowVisible = [...document.querySelectorAll('[data-region="tab-actions"] .group-tab-move-group')]
+    .filter((n) => !(n as HTMLElement).hidden)
+    .map((n) => n.getAttribute('data-group-id'));
+  assert.deepEqual(nowVisible, ['g_watch'], '只有激活分组显示箭头');
+});
 
 test('renders a nav containing a role=tablist', () => {
   setup();

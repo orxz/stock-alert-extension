@@ -26,8 +26,13 @@ export interface PopupEventMap {
   'selection-mode-change': { readonly enabled: boolean };
   'theme-change': { readonly theme: 'dark' | 'light' };
   'stock-toggle-select': { readonly code: StockCode };
+  'batch-select-all': Record<never, never>;
   'search-keyword-change': { readonly keyword: string };
-  'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove' };
+  /**
+   * 打开对话框。groupId 可选——rename-group 必须带上目标分组，
+   * 否则会回落到「当前分组」，在右键非激活标签时改错分组（右键不激活标签）。
+   */
+  'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove'; readonly groupId?: GroupId };
   /** 工具栏「列设置」触发；detail 带触发元素 id 以便定位与焦点归还。 */
   'column-panel-open-request': { readonly anchorId: string };
   /** 列设置面板提交完整的最终态（非增量 patch）。 */

@@ -37,6 +37,44 @@ function validationError(message: string): AppError {
   return { code: 'VALIDATION_FAILED', message, retryable: false };
 }
 
+/**
+ * 分组名归一化：去首尾空白 + 折叠内部连续空白。
+ * 存的就是归一化后的值——否则「科技 」和「科技」会并存为两个分组，
+ * 用户看到的是两个一模一样的标签。
+ */
+function normalizeGroupName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
+/** 重名比较用的键：大小写无关（"tech" 与 "TECH" 视为同名）。 */
+function groupNameKey(name: string): string {
+  return normalizeGroupName(name).toLocaleLowerCase();
+}
+
+/**
+ * 校验分组名并返回归一化结果。
+ * 放在命令层而不是只放在对话框里：这里是所有写入的必经之路，
+ * 任何调用方（对话框、RPC、将来的导入功能）都绕不过去。
+ */
+function assertGroupNameAvailable(
+  groups: readonly { readonly groupId: GroupId; readonly name: string }[],
+  rawName: string,
+  exceptGroupId?: GroupId
+): string {
+  const name = normalizeGroupName(rawName);
+  if (!name) {
+    throw validationError('group name must not be empty');
+  }
+  const key = groupNameKey(name);
+  const clash = groups.some(
+    (g) => g.groupId !== exceptGroupId && groupNameKey(g.name) === key
+  );
+  if (clash) {
+    throw validationError(`group name already exists: ${name}`);
+  }
+  return name;
+}
+
 /** 从只读记录中移除指定键，返回新的可变记录。 */
 function omitKey<V>(record: Readonly<Record<string, V>>, omit: string): Record<string, V> {
   const out: Record<string, V> = {};
@@ -236,10 +274,11 @@ export class PortfolioCommandsImpl implements PortfolioCommands {
       if (draft.groups.length >= MAX_GROUPS) {
         throw validationError(`group limit reached (max ${MAX_GROUPS})`);
       }
+      const name = assertGroupNameAvailable(draft.groups, payload.name);
       const now = this.clock.now();
       const group: Group = {
         groupId: payload.groupId,
-        name: payload.name,
+        name,
         order: draft.groups.length,
         isDefault: false,
         createdAt: now,
@@ -252,20 +291,22 @@ export class PortfolioCommandsImpl implements PortfolioCommands {
 
   renameGroup(payload: RenameGroupPayload): Promise<MutationResult<null>> {
     return this.storage.mutate(payload.expectedRevision, (draft) => {
-      for (let i = 0; i < draft.groups.length; i++) {
-        if (draft.groups[i].groupId === payload.groupId) {
-          const existing = draft.groups[i];
-          draft.groups[i] = {
-            groupId: existing.groupId,
-            name: payload.name,
-            order: existing.order,
-            isDefault: existing.isDefault,
-            createdAt: existing.createdAt,
-            updatedAt: this.clock.now()
-          };
-          break;
-        }
+      const index = draft.groups.findIndex((g) => g.groupId === payload.groupId);
+      // 原来找不到分组时静默返回 null——调用方得到「成功」，但什么都没改。
+      if (index < 0) {
+        throw validationError(`group not found: ${payload.groupId}`);
       }
+      // 排除自己：把「科技」改成「科技」不该被判为重名。
+      const name = assertGroupNameAvailable(draft.groups, payload.name, payload.groupId);
+      const existing = draft.groups[index];
+      draft.groups[index] = {
+        groupId: existing.groupId,
+        name,
+        order: existing.order,
+        isDefault: existing.isDefault,
+        createdAt: existing.createdAt,
+        updatedAt: this.clock.now()
+      };
       return null;
     });
   }

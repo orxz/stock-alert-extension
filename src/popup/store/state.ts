@@ -53,7 +53,7 @@ export interface ToastState {
 /**
  * 应用全局不可变状态（brief Step 3 逐字四区）。
  * async 区额外携带 quoteGeneration / searchGeneration 用于 stale 响应拒绝；
- * view 区额外携带 searchResults 驱动搜索对话框渲染。
+ * view 区额外携带 dialogSearch 驱动 add-stock 对话框的搜索渲染。
  */
 export interface AppState {
   readonly domain: Readonly<{
@@ -63,13 +63,18 @@ export interface AppState {
   }>;
   readonly view: Readonly<{
     currentGroupId: GroupId;
+    /** 工具栏列表过滤关键词（与对话框搜索独立）。 */
     searchKeyword: string;
     selectionMode: boolean;
     selectedCodes: readonly StockCode[];
-    searchResults: readonly StockSearchResult[];
     theme: 'dark' | 'light';
     /** 列显隐/顺序——纯展示偏好，不进 BoardConfig / schema v2 / RPC。 */
     columns: UiColumnPreferences;
+    /** 对话框内股票搜索（add-stock）：独立于工具栏过滤，避免互相干扰。 */
+    dialogSearch: Readonly<{
+      keyword: string;
+      results: readonly StockSearchResult[];
+    }>;
   }>;
   readonly async: Readonly<{
     bootstrap: AsyncState;
@@ -119,9 +124,9 @@ export function createInitialState(
       searchKeyword: '',
       selectionMode: false,
       selectedCodes: [],
-      searchResults: [],
       theme,
-      columns
+      columns,
+      dialogSearch: { keyword: '', results: [] }
     },
     async: {
       bootstrap: { status: 'idle' },

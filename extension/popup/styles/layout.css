@@ -1,7 +1,9 @@
 /* ============================================================================
    几何 —— 固定 420×560
    ============================================================================
-   52 (Header) + 38 (Tabs) + 48 (Toolbar) + 390 (Board) + 32 (Status) = 560。
+   44 (Header) + 38 (Tabs) + 40 (Toolbar) + 408 (Board) + 30 (Status) = 560。
+   Board 是 flex:1 的余量项——改动其余任何一条的高度，Board 会自动吸收，
+   但这行注释必须跟着改：它是这份纵向契约唯一的书面记录。
    Board 是**唯一**纵向滚动容器；body 与 stock-app 绝不滚动。
    这个文件只管尺寸与滚动，不管颜色与装饰。
    ========================================================================== */
@@ -66,7 +68,7 @@ stock-board::-webkit-scrollbar-thumb:hover {
 quote-status {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: var(--h-status);
   flex-shrink: 0;
   padding: 0 var(--sp-3);
   background: var(--ink-bar);
@@ -96,13 +98,14 @@ quote-status {
   min-height: var(--touch-target-min);
   min-width: 120px;
   padding: 0 var(--sp-5);
-  color: var(--accent-ink);
-  background: var(--accent-fill);
+  color: var(--text-1);
+  background: var(--ink-pop);
+  border: 1px solid var(--accent-line);
   font-size: var(--fs-body);
   font-weight: 600;
   border-radius: var(--r-md);
 }
 
 #btn-reload:hover {
-  opacity: 0.88;
+  border-color: var(--text-3);
 }

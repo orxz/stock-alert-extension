@@ -6,7 +6,9 @@
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { StockCardViewModel } from '../view-models.js';
+import type { ColumnKey } from '../ui-preferences.js';
 import { emitPopupEvent } from './events.js';
+import { applyTooltipFlip, tooltipNeedsFlip } from './detail-tooltip.js';
 
 /**
  * 纯函数：在有序代码列表中将 code 移动 delta 位，返回新数组。
@@ -46,13 +48,17 @@ export class StockCardElement extends HTMLElement {
   private _viewModel: StockCardViewModel | null = null;
   private _orderedCodes: readonly StockCode[] = [];
   private _groupId: GroupId = 'g_all' as GroupId;
+  /** 列设置 enabled 集合（null = 未设置，默认全部显示）。 */
+  private _columns: readonly ColumnKey[] | null = null;
 
   private nameEl: HTMLElement | null = null;
+  private codeEl: HTMLElement | null = null;
   private priceEl: HTMLElement | null = null;
   private changeEl: HTMLElement | null = null;
   private changePercentEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
   private staleEl: HTMLElement | null = null;
+  private amountEl: HTMLElement | null = null;
   private menuBtn: HTMLButtonElement | null = null;
 
   connectedCallback(): void {
@@ -97,6 +103,15 @@ export class StockCardElement extends HTMLElement {
     this._groupId = value;
   }
 
+  get columns(): readonly ColumnKey[] | null {
+    return this._columns;
+  }
+
+  set columns(value: readonly ColumnKey[] | null) {
+    this._columns = value;
+    if (this.isConnected) this.applyColumns();
+  }
+
   private buildSkeleton(): void {
     // 卡片可聚焦（tabindex=0）+ Enter/Space 切换 pin；容器用 role=group 而非
     // role=button，避免 axe nested-interactive（group 是容器角色，允许内部按钮）。
@@ -113,7 +128,12 @@ export class StockCardElement extends HTMLElement {
     nameEl.className = 'stock-card-name';
     nameEl.setAttribute('data-field', 'name');
     this.nameEl = nameEl;
-    headerDiv.append(nameEl);
+    // 代码副标题（等宽、弱色，与名称形成层次）。
+    const codeEl = document.createElement('span');
+    codeEl.className = 'stock-card-code';
+    codeEl.setAttribute('data-field', 'code');
+    this.codeEl = codeEl;
+    headerDiv.append(nameEl, codeEl);
 
     // Price area
     const priceDiv = document.createElement('div');
@@ -130,7 +150,7 @@ export class StockCardElement extends HTMLElement {
     this.changePercentEl = changePercentEl;
     priceDiv.append(priceEl, changeEl, changePercentEl);
 
-    // Status + stale
+    // Status + stale + amount（amount 受列设置控制，列设置默认开启）
     const statusDiv = document.createElement('div');
     statusDiv.className = 'stock-card-status';
     const statusEl = document.createElement('span');
@@ -139,7 +159,12 @@ export class StockCardElement extends HTMLElement {
     const staleEl = document.createElement('span');
     staleEl.className = 'stock-card-stale';
     this.staleEl = staleEl;
-    statusDiv.append(statusEl, staleEl);
+    // 成交额（列设置可显隐）——放状态行末尾，弱色等宽。
+    const amountEl = document.createElement('span');
+    amountEl.className = 'stock-card-amount';
+    amountEl.setAttribute('data-field', 'amount');
+    this.amountEl = amountEl;
+    statusDiv.append(statusEl, staleEl, amountEl);
 
     // Actions
     const actionsDiv = document.createElement('div');
@@ -158,8 +183,46 @@ export class StockCardElement extends HTMLElement {
 
     actionsDiv.append(menuBtn);
 
-    article.append(headerDiv, priceDiv, statusDiv, actionsDiv);
+    article.append(headerDiv, priceDiv, statusDiv, actionsDiv, this.buildDetailTooltip());
     this.append(article);
+  }
+
+  /** 悬停详情面板骨架：挂在卡片内，hover/focus 时由 CSS 浮出。 */
+  private buildDetailTooltip(): HTMLElement {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'stock-detail-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    const fields: ReadonlyArray<readonly [string, string]> = [
+      ['今开', 'open'],
+      ['最高', 'high'],
+      ['最低', 'low'],
+      ['昨收', 'prevClose'],
+      ['成交量', 'volume'],
+      ['成交额', 'amount'],
+      ['涨跌额', 'change'],
+      ['换手率', 'turnoverRate'],
+      ['振幅', 'amplitude'],
+      ['量比', 'volumeRatio'],
+      ['市盈率', 'pe'],
+      ['市净率', 'pb'],
+      ['总市值', 'totalMarketCap'],
+      ['流通市值', 'floatMarketCap'],
+      ['涨停', 'limitUp'],
+      ['跌停', 'limitDown']
+    ];
+    for (const [label, key] of fields) {
+      const item = document.createElement('div');
+      item.className = 'stock-detail-item';
+      const labelEl = document.createElement('span');
+      labelEl.className = 'stock-detail-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('span');
+      valueEl.className = 'stock-detail-value';
+      valueEl.setAttribute('data-field', key);
+      item.append(labelEl, valueEl);
+      tooltip.append(item);
+    }
+    return tooltip;
   }
 
   /** 切换置顶（Enter/Space 快捷键与菜单共用同一语义）。 */
@@ -203,6 +266,42 @@ export class StockCardElement extends HTMLElement {
         this.togglePin();
       }
     }, { signal });
+
+    // 悬停详情浮层翻转：卡片位于滚动容器可视区底部附近时向上展开，避免被裁剪。
+    // mouseover 冒泡（卡片内子元素间高频触发），用 lastHoveredCard 短路重复计算。
+    this.addEventListener('mouseover', (e) => {
+      const card = (e.target as HTMLElement).closest('stock-card') as HTMLElement | null;
+      if (card === this) this.refreshTooltipFlip();
+    }, { signal });
+    this.addEventListener('mouseleave', () => {
+      this.clearTooltipFlip();
+    }, { signal });
+    this.addEventListener('focusin', () => {
+      this.refreshTooltipFlip();
+    }, { signal });
+    this.addEventListener('focusout', () => {
+      this.clearTooltipFlip();
+    }, { signal });
+  }
+
+  /** 上次计算的翻转结论——mouseover 在卡片内高频触发，同一结论只应用一次。 */
+  private lastFlipApplied: boolean | null = null;
+
+  private refreshTooltipFlip(): void {
+    const scroller = this.closest('stock-board') as HTMLElement | null;
+    const tooltip = this.querySelector('.stock-detail-tooltip') as HTMLElement | null;
+    if (!scroller || !tooltip) return;
+    const shouldFlip = tooltipNeedsFlip(tooltip, scroller);
+    if (shouldFlip === this.lastFlipApplied) return;
+    this.lastFlipApplied = shouldFlip;
+    applyTooltipFlip(this, scroller);
+  }
+
+  /** 离开卡片/失焦时清理：翻转状态是悬停期装饰，卡片复用前必须复位。 */
+  private clearTooltipFlip(): void {
+    this.lastFlipApplied = null;
+    const tooltip = this.querySelector('.stock-detail-tooltip');
+    if (tooltip) tooltip.classList.remove('is-flipped');
   }
 
   private applyViewModel(vm: StockCardViewModel): void {
@@ -217,6 +316,9 @@ export class StockCardElement extends HTMLElement {
 
     if (this.nameEl) {
       this.nameEl.textContent = vm.name;
+    }
+    if (this.codeEl) {
+      this.codeEl.textContent = vm.code;
     }
     if (this.priceEl) {
       const old = this.priceEl.textContent;
@@ -246,6 +348,9 @@ export class StockCardElement extends HTMLElement {
       this.staleEl.classList.toggle('stock-card-stale', Boolean(vm.staleLabel));
       this.staleEl.toggleAttribute('data-stale', Boolean(vm.staleLabel));
     }
+    if (this.amountEl) {
+      this.amountEl.textContent = vm.displayAmount;
+    }
     if (this.menuBtn) {
       this.menuBtn.id = cardMenuId(vm.code);
       this.menuBtn.setAttribute('aria-label', `打开 ${vm.name} 操作菜单`);
@@ -255,5 +360,52 @@ export class StockCardElement extends HTMLElement {
     // 置顶状态进入可访问名称，而不是 aria-pressed——卡片在网格里的 role 是
     // listitem，aria-pressed 只允许用在 button 类角色上（axe: aria-allowed-attr）。
     this.setAttribute('data-pinned', String(vm.pinned));
+
+    // 列设置可能先于 viewModel 到达（board 每次 render 都会先推 columns）——
+    // 每次应用 viewModel 时同步应用显隐，保证顺序无关。
+    this.applyColumns();
+
+    // 悬停详情：16 个可读字段，文本由 view-model 保证（缺失 '--' / 掩码 '****'）。
+    const detailValue = (key: string): string => {
+      switch (key) {
+        case 'open': return vm.displayOpen;
+        case 'high': return vm.displayHigh;
+        case 'low': return vm.displayLow;
+        case 'prevClose': return vm.displayPrevClose;
+        case 'volume': return vm.displayVolume;
+        case 'amount': return vm.displayAmount;
+        case 'change': return vm.displayChange;
+        case 'turnoverRate': return vm.displayTurnoverRate;
+        case 'amplitude': return vm.displayAmplitude;
+        case 'volumeRatio': return vm.displayVolumeRatio;
+        case 'pe': return vm.displayPe;
+        case 'pb': return vm.displayPb;
+        case 'totalMarketCap': return vm.displayTotalMarketCap;
+        case 'floatMarketCap': return vm.displayFloatMarketCap;
+        case 'limitUp': return vm.displayLimitUp;
+        case 'limitDown': return vm.displayLimitDown;
+        default: return '';
+      }
+    };
+    for (const key of ['open', 'high', 'low', 'prevClose', 'volume', 'amount', 'change', 'turnoverRate', 'amplitude', 'volumeRatio', 'pe', 'pb', 'totalMarketCap', 'floatMarketCap', 'limitUp', 'limitDown']) {
+      const valueEl = this.querySelector(`.stock-detail-value[data-field="${key}"]`);
+      if (valueEl) valueEl.textContent = detailValue(key);
+    }
+  }
+
+  /**
+   * 按列设置显隐卡片字段：code/status/price/changePercent/amount 可配置；
+   * name 是锁定列（始终显示），change（涨跌额）不在列设置中（始终显示）。
+   * null（未设置）按全部显示处理。hidden 是原生属性，CSS 不得用更高优先级
+   * 的 display 覆盖它（board.css 的卡片样式只作用于可见元素）。
+   */
+  private applyColumns(): void {
+    const enabled = this._columns ? new Set<ColumnKey>(this._columns) : null;
+    const isOn = (key: ColumnKey): boolean => enabled === null || enabled.has(key);
+    if (this.codeEl) this.codeEl.hidden = !isOn('code');
+    if (this.statusEl) this.statusEl.hidden = !isOn('status');
+    if (this.priceEl) this.priceEl.hidden = !isOn('price');
+    if (this.changePercentEl) this.changePercentEl.hidden = !isOn('changePercent');
+    if (this.amountEl) this.amountEl.hidden = !isOn('amount');
   }
 }

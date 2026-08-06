@@ -1,11 +1,19 @@
 // src/popup/components/stock-header.ts
 // Task 5 — 顶部头部组件（A1 布局）。
-// 四个原生按钮（图标 + 文字标签）：主题切换（theme-change）、价格可见性（preferences-change）、
-// 多选模式（selection-mode-change）、添加股票（dialog-open-request）。
-// aria-pressed 反映多选/价格隐藏状态。主题按钮标签随当前主题变化（提示可切换到的目标主题）。
+// 三个原生按钮（图标 + 文字标签）：主题切换（theme-change）、价格可见性（preferences-change）、
+// 添加股票（dialog-open-request）。「管理持仓」已移到 group-tabs 右侧，不在此组件。
+// aria-pressed 反映价格隐藏状态。主题按钮标签随当前主题变化（提示可切换到的目标主题）。
 // 架构约束：仅 import domain types + view-models + events；per-connection AbortController。
 import type { HeaderViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
+
+/** 睁眼图标：眼睛轮廓 + 瞳孔圆。 */
+const EYE_OPEN_SVG =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>';
+
+/** 闭眼图标：眼睛轮廓 + 斜划线，无瞳孔。 */
+const EYE_CLOSED_SVG =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
 
 export class StockHeaderElement extends HTMLElement {
   private connection: AbortController | undefined;
@@ -15,7 +23,6 @@ export class StockHeaderElement extends HTMLElement {
   private titleEl: HTMLElement | null = null;
   private themeBtn: HTMLButtonElement | null = null;
   private priceBtn: HTMLButtonElement | null = null;
-  private multiselectBtn: HTMLButtonElement | null = null;
   private addBtn: HTMLButtonElement | null = null;
 
   connectedCallback(): void {
@@ -57,57 +64,41 @@ export class StockHeaderElement extends HTMLElement {
     // 1. 主题切换（半圆图标）
     const themeBtn = document.createElement('button');
     themeBtn.type = 'button';
-    themeBtn.className = 'header-btn header-btn--labeled';
+    themeBtn.className = 'header-btn';
     themeBtn.setAttribute('data-action', 'theme-toggle');
     themeBtn.setAttribute('aria-label', '切换到浅色主题');
     themeBtn.innerHTML =
       '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg><span class="header-btn-label">浅色</span>';
     this.themeBtn = themeBtn;
 
-    // 2. 价格可见性（眼睛图标）
+    // 2. 价格可见性（眼睛图标）——初始用睁眼，applyViewModel 按 priceHidden 切换。
     const priceBtn = document.createElement('button');
     priceBtn.type = 'button';
-    priceBtn.className = 'header-btn header-btn--labeled header-btn--toggle';
+    priceBtn.className = 'header-btn header-btn--toggle';
     priceBtn.setAttribute('data-action', 'price-visibility');
     priceBtn.setAttribute('aria-pressed', 'false');
     priceBtn.setAttribute('aria-label', '价格');
-    priceBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg><span class="header-btn-label">价格</span>';
+    priceBtn.innerHTML = EYE_OPEN_SVG + '<span class="header-btn-label">价格</span>';
     this.priceBtn = priceBtn;
 
-    // 3. 多选模式（勾选框图标）
-    const multiselectBtn = document.createElement('button');
-    multiselectBtn.type = 'button';
-    multiselectBtn.className = 'header-btn header-btn--labeled header-btn--toggle';
-    multiselectBtn.setAttribute('data-action', 'multiselect');
-    multiselectBtn.setAttribute('aria-pressed', 'false');
-    multiselectBtn.setAttribute('aria-label', '多选');
-    multiselectBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 12.2l2.6 2.6 4.6-5.2"/></svg><span class="header-btn-label">多选</span>';
-    this.multiselectBtn = multiselectBtn;
-
-    // 4. 添加股票（加号图标，主按钮）
+    // 3. 添加股票（主按钮，纯中文文案）。
+    // 四个字把动作说清楚，也不需要用户猜「+」加的是什么。
+    // aria-label 补全为「添加股票」。
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'header-btn header-btn--labeled header-btn--primary';
+    addBtn.className = 'header-btn header-btn--primary';
     addBtn.setAttribute('data-action', 'add-stock');
     addBtn.setAttribute('aria-label', '添加股票');
-    addBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="header-btn-label">添加</span>';
+    addBtn.textContent = '添加股票';
     this.addBtn = addBtn;
 
-    actions.append(themeBtn, priceBtn, multiselectBtn, addBtn);
+    actions.append(themeBtn, priceBtn, addBtn);
     this.append(title, actions);
   }
 
   private bindEvents(signal: AbortSignal): void {
     this.addBtn?.addEventListener('click', () => {
       emitPopupEvent(this, 'dialog-open-request', { kind: 'add-stock' });
-    }, { signal });
-
-    this.multiselectBtn?.addEventListener('click', () => {
-      const enabled = !(this._viewModel?.selectionMode ?? false);
-      emitPopupEvent(this, 'selection-mode-change', { enabled });
     }, { signal });
 
     this.priceBtn?.addEventListener('click', () => {
@@ -136,13 +127,23 @@ export class StockHeaderElement extends HTMLElement {
       if (span) span.textContent = label;
       this.themeBtn.setAttribute('aria-label', `切换到${target}主题`);
     }
-    if (this.multiselectBtn) {
-      this.multiselectBtn.setAttribute('aria-pressed', String(vm.selectionMode));
-      this.multiselectBtn.classList.toggle('is-active', vm.selectionMode);
-    }
     if (this.priceBtn) {
       this.priceBtn.setAttribute('aria-pressed', String(vm.priceHidden));
       this.priceBtn.classList.toggle('is-active', vm.priceHidden);
+      // 睁眼/闭眼图标随价格可见性切换——闭眼时带斜划线，更直观。
+      this.updatePriceIcon(vm.priceHidden);
+    }
+  }
+
+  /** 按 priceHidden 切换价格按钮的睁眼/闭眼 SVG。 */
+  private updatePriceIcon(priceHidden: boolean): void {
+    if (!this.priceBtn) return;
+    const svg = this.priceBtn.querySelector('svg');
+    const target = priceHidden ? EYE_CLOSED_SVG : EYE_OPEN_SVG;
+    if (!svg) {
+      this.priceBtn.innerHTML = target + '<span class="header-btn-label">价格</span>';
+    } else {
+      svg.outerHTML = target;
     }
   }
 }

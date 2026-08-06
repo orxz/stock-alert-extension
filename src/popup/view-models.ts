@@ -15,6 +15,7 @@ import type {
   StockSearchResult
 } from '../domain/index.js';
 import { DEFAULT_BOARD_CONFIG } from '../domain/portfolio.js';
+import type { ColumnKey } from './ui-preferences.js';
 
 /** 单只股票卡片视图模型。 */
 export interface StockCardViewModel {
@@ -32,6 +33,34 @@ export interface StockCardViewModel {
   readonly displayChange: string;
   /** 成交额展示文本（亿/万分级）；缺失时 '--'。 */
   readonly displayAmount: string;
+  /** 今开展示文本（价格隐藏时掩码；缺失 '--'）。 */
+  readonly displayOpen: string;
+  /** 当日最高展示文本（价格隐藏时掩码；缺失 '--'）。 */
+  readonly displayHigh: string;
+  /** 当日最低展示文本（价格隐藏时掩码；缺失 '--'）。 */
+  readonly displayLow: string;
+  /** 昨收展示文本（价格隐藏时掩码；缺失 '--'）。 */
+  readonly displayPrevClose: string;
+  /** 成交量展示文本（≥1 万手 → 「X.X万」；缺失 '--'）。 */
+  readonly displayVolume: string;
+  /** 换手率展示文本（百分比两位小数 + %）；缺失 '--'。 */
+  readonly displayTurnoverRate: string;
+  /** 振幅展示文本（百分比两位小数 + %）；缺失 '--'。 */
+  readonly displayAmplitude: string;
+  /** 量比展示文本（两位小数）；缺失 '--'。 */
+  readonly displayVolumeRatio: string;
+  /** 市盈率展示文本（两位小数）；缺失 '--'。 */
+  readonly displayPe: string;
+  /** 市净率展示文本（两位小数）；缺失 '--'。 */
+  readonly displayPb: string;
+  /** 总市值展示文本（元→亿/万亿分级）；缺失 '--'。 */
+  readonly displayTotalMarketCap: string;
+  /** 流通市值展示文本（元→亿/万亿分级）；缺失 '--'。 */
+  readonly displayFloatMarketCap: string;
+  /** 涨停价展示文本（价格隐藏时掩码；缺失 '--'）。 */
+  readonly displayLimitUp: string;
+  /** 跌停价展示文本（价格隐藏时掩码；缺失 '--'）。 */
+  readonly displayLimitDown: string;
 }
 
 /** 分组标签视图模型。 */
@@ -57,7 +86,6 @@ export interface ToolbarViewModel {
 export interface HeaderViewModel {
   readonly groupName: string;
   readonly stockCount: number;
-  readonly selectionMode: boolean;
   readonly priceHidden: boolean;
   readonly canAddStock: boolean;
   readonly theme: 'dark' | 'light';
@@ -67,6 +95,7 @@ export interface HeaderViewModel {
 export interface BatchToolbarViewModel {
   readonly visible: boolean;
   readonly selectedCount: number;
+  readonly totalCount: number;
   readonly selectedCodes: readonly StockCode[];
   readonly groupId: GroupId;
 }
@@ -76,8 +105,10 @@ export interface BoardViewModel {
   readonly viewMode: ViewMode;
   readonly groupId: GroupId;
   readonly stocks: readonly StockCardViewModel[];
-  /** 启用的列（已按显示顺序排列）——列表视图据此显隐列。 */
-  readonly columns: readonly string[];
+  /** 主列显示顺序（列设置面板重排后的完整主列排列）——列表视图据此排布列。 */
+  readonly columns: readonly ColumnKey[];
+  /** 启用的列集合——列表/卡片视图据此显隐字段。 */
+  readonly enabledColumns: readonly ColumnKey[];
   readonly loading: boolean;
   readonly error: string | null;
   readonly empty: boolean;
@@ -219,17 +250,54 @@ function formatPrice(price: number | null | undefined): string {
 }
 
 /**
- * 格式化成交额展示文本（亿/万分级）；与 domain formatting.ts 的 formatAmount 语义一致。
- * 非有限或非正→'--'；≥1 亿→「X.X亿」；≥1 万→「X.X万」；否则取整。
+ * 格式化成交额展示文本——主流场景单位最小为亿：
+ * ≥1 万亿 →「X.X万亿」；≥1 亿 →「X.X亿」；≥100 万 →「亿」两位小数（去尾零）；
+ * <100 万回退「X万」——低于 100 万时亿的两位小数仍会显示 0.00亿，读作零成交。
+ * 非有限或非正→'--'。
  */
 function formatAmountText(v: number): string {
   if (!Number.isFinite(v) || v <= 0) return '--';
-  if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}亿`;
-  if (v >= 10_000) return `${(v / 10_000).toFixed(1)}万`;
-  return v.toFixed(0);
+  if (v >= 1e12) return `${(v / 1e12).toFixed(2)}万亿`;
+  if (v >= 1e8) return `${(v / 1e8).toFixed(1)}亿`;
+  if (v >= 1e6) return `${Number((v / 1e8).toFixed(2))}亿`;
+  return `${(v / 1e4).toFixed(0)}万`;
 }
 
 const PRICE_MASK = '****';
+
+/** 百分比展示文本（两位小数 + %）；非有限→'--'。 */
+function formatPercentText(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '--';
+  return `${v.toFixed(2)}%`;
+}
+
+/** 倍数展示文本（两位小数）；非有限→'--'。 */
+function formatRatioText(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '--';
+  return v.toFixed(2);
+}
+
+/** 市值展示文本（元→万/亿/万亿分级）；非有限或非正→'--'。 */
+function formatCapText(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v) || v <= 0) return '--';
+  if (v >= 1e12) return `${(v / 1e12).toFixed(2)}万亿`;
+  if (v >= 1e8) return `${(v / 1e8).toFixed(1)}亿`;
+  return `${(v / 1e4).toFixed(1)}万`;
+}
+
+/** 详情面板价格文本：价格隐藏时掩码；非有限→'--'。 */
+function formatDetailPrice(v: number | null | undefined, priceHidden: boolean): string {
+  if (priceHidden) return PRICE_MASK;
+  if (v === null || v === undefined || !Number.isFinite(v)) return '--';
+  return v.toFixed(2);
+}
+
+/** 成交量（手）展示文本：≥1 万手 → 「X.X万」；否则原样取整；非正→'--'。 */
+function formatVolumeText(v: number): string {
+  if (!Number.isFinite(v) || v <= 0) return '--';
+  if (v >= 10_000) return `${(v / 10_000).toFixed(1)}万`;
+  return v.toFixed(0);
+}
 
 /** 将排序后的股票列表投影为 StockCardViewModel 列表。 */
 export function toStockCardViewModels(
@@ -245,6 +313,20 @@ export function toStockCardViewModels(
     const change = quote && Number.isFinite(quote.change) ? quote.change : null;
     const changePercent = quote && Number.isFinite(quote.changePercent) ? quote.changePercent : null;
     const amount = quote && Number.isFinite(quote.amount) ? quote.amount : null;
+    const open = quote && quote.open != null && Number.isFinite(quote.open) ? quote.open : null;
+    const high = quote && quote.high != null && Number.isFinite(quote.high) ? quote.high : null;
+    const low = quote && quote.low != null && Number.isFinite(quote.low) ? quote.low : null;
+    const prevClose = quote && quote.prevClose != null && Number.isFinite(quote.prevClose) ? quote.prevClose : null;
+    const volume = quote && quote.volume != null && Number.isFinite(quote.volume) ? quote.volume : null;
+    const turnoverRate = quote && quote.turnoverRate != null && Number.isFinite(quote.turnoverRate) ? quote.turnoverRate : null;
+    const amplitude = quote && quote.amplitude != null && Number.isFinite(quote.amplitude) ? quote.amplitude : null;
+    const volumeRatio = quote && quote.volumeRatio != null && Number.isFinite(quote.volumeRatio) ? quote.volumeRatio : null;
+    const pe = quote && quote.pe != null && Number.isFinite(quote.pe) ? quote.pe : null;
+    const pb = quote && quote.pb != null && Number.isFinite(quote.pb) ? quote.pb : null;
+    const totalMarketCap = quote && quote.totalMarketCap != null && Number.isFinite(quote.totalMarketCap) ? quote.totalMarketCap : null;
+    const floatMarketCap = quote && quote.floatMarketCap != null && Number.isFinite(quote.floatMarketCap) ? quote.floatMarketCap : null;
+    const limitUp = quote && quote.limitUp != null && Number.isFinite(quote.limitUp) ? quote.limitUp : null;
+    const limitDown = quote && quote.limitDown != null && Number.isFinite(quote.limitDown) ? quote.limitDown : null;
     const status = result?.status ?? 'missing';
     const displayPrice = config.priceHidden ? PRICE_MASK : price === null ? '--' : formatPrice(price);
     const displayChange = change === null ? '--' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}`;
@@ -260,7 +342,21 @@ export function toStockCardViewModels(
       staleLabel: status === 'cached' ? '已过期' : '',
       displayPrice,
       displayChange,
-      displayAmount
+      displayAmount,
+      displayOpen: formatDetailPrice(open, config.priceHidden),
+      displayHigh: formatDetailPrice(high, config.priceHidden),
+      displayLow: formatDetailPrice(low, config.priceHidden),
+      displayPrevClose: formatDetailPrice(prevClose, config.priceHidden),
+      displayVolume: volume === null ? '--' : formatVolumeText(volume),
+      displayTurnoverRate: formatPercentText(turnoverRate),
+      displayAmplitude: formatPercentText(amplitude),
+      displayVolumeRatio: formatRatioText(volumeRatio),
+      displayPe: formatRatioText(pe),
+      displayPb: formatRatioText(pb),
+      displayTotalMarketCap: formatCapText(totalMarketCap),
+      displayFloatMarketCap: formatCapText(floatMarketCap),
+      displayLimitUp: formatDetailPrice(limitUp, config.priceHidden),
+      displayLimitDown: formatDetailPrice(limitDown, config.priceHidden)
     };
   });
 }

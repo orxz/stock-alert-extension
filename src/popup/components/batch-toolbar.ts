@@ -10,6 +10,7 @@ export class BatchToolbarElement extends HTMLElement {
   private skeletonBuilt = false;
   private _viewModel: BatchToolbarViewModel | null = null;
   private countEl: HTMLElement | null = null;
+  private selectAllBtn: HTMLButtonElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -40,7 +41,8 @@ export class BatchToolbarElement extends HTMLElement {
   private buildSkeleton(): void {
     this.className = 'batch-toolbar';
     this.setAttribute('role', 'toolbar');
-    this.setAttribute('aria-label', '批量操作');
+    // 与入口按钮同名：读屏用户从「管理持仓」进来，落到的工具栏也该叫这个。
+    this.setAttribute('aria-label', '持仓管理');
 
     const countEl = document.createElement('span');
     countEl.className = 'batch-toolbar-count';
@@ -54,6 +56,14 @@ export class BatchToolbarElement extends HTMLElement {
     moveBtn.setAttribute('aria-label', '移动选中股票到其他分组');
     moveBtn.textContent = '移动';
 
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.type = 'button';
+    selectAllBtn.className = 'batch-toolbar-btn';
+    selectAllBtn.setAttribute('data-action', 'batch-select-all');
+    selectAllBtn.setAttribute('aria-label', '全选');
+    selectAllBtn.textContent = '全选';
+    this.selectAllBtn = selectAllBtn;
+
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'batch-toolbar-btn batch-toolbar-btn--danger';
@@ -65,10 +75,10 @@ export class BatchToolbarElement extends HTMLElement {
     cancelBtn.type = 'button';
     cancelBtn.className = 'batch-toolbar-btn';
     cancelBtn.setAttribute('data-action', 'batch-cancel');
-    cancelBtn.setAttribute('aria-label', '取消多选模式');
+    cancelBtn.setAttribute('aria-label', '退出持仓管理');
     cancelBtn.textContent = '取消';
 
-    this.append(countEl, moveBtn, removeBtn, cancelBtn);
+    this.append(countEl, selectAllBtn, moveBtn, removeBtn, cancelBtn);
   }
 
   private bindEvents(signal: AbortSignal): void {
@@ -83,6 +93,9 @@ export class BatchToolbarElement extends HTMLElement {
           break;
         case 'batch-remove':
           emitPopupEvent(this, 'dialog-open-request', { kind: 'confirm-remove' });
+          break;
+        case 'batch-select-all':
+          emitPopupEvent(this, 'batch-select-all', {});
           break;
         case 'batch-cancel':
           emitPopupEvent(this, 'selection-mode-change', { enabled: false });
@@ -99,6 +112,14 @@ export class BatchToolbarElement extends HTMLElement {
     }
     if (this.countEl) {
       this.countEl.textContent = `已选择 ${vm.selectedCount} 项`;
+    }
+    if (this.selectAllBtn) {
+      const allSelected = vm.totalCount > 0 && vm.selectedCount >= vm.totalCount;
+      const label = allSelected ? '取消全选' : '全选';
+      this.selectAllBtn.textContent = label;
+      // aria-label 优先于可见文本，只改 textContent 会让读屏永远念「全选」，
+      // 哪怕按钮此刻的作用是取消全选。
+      this.selectAllBtn.setAttribute('aria-label', label);
     }
   }
 }

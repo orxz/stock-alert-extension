@@ -13,6 +13,34 @@ export interface Quote {
   readonly change: number;
   readonly changePercent: number;
   readonly amount: number;
+  /** 今开（元）——部分 Provider 返回；缺失时 undefined。 */
+  readonly open?: number;
+  /** 当日最高（元）——部分 Provider 返回；缺失时 undefined。 */
+  readonly high?: number;
+  /** 当日最低（元）——部分 Provider 返回；缺失时 undefined。 */
+  readonly low?: number;
+  /** 昨收（元）——部分 Provider 返回；缺失时 undefined。 */
+  readonly prevClose?: number;
+  /** 成交量（手）——部分 Provider 返回；缺失时 undefined。 */
+  readonly volume?: number;
+  /** 换手率（%）——部分 Provider 返回；缺失时 undefined。 */
+  readonly turnoverRate?: number;
+  /** 振幅（%）——部分 Provider 返回；缺失时 undefined。 */
+  readonly amplitude?: number;
+  /** 量比——部分 Provider 返回；缺失时 undefined。 */
+  readonly volumeRatio?: number;
+  /** 市盈率（倍，动态）——部分 Provider 返回；缺失时 undefined。 */
+  readonly pe?: number;
+  /** 市净率（倍）——部分 Provider 返回；缺失时 undefined。 */
+  readonly pb?: number;
+  /** 总市值（元）——部分 Provider 返回（腾讯以亿上报，解析时统一为元）；缺失时 undefined。 */
+  readonly totalMarketCap?: number;
+  /** 流通市值（元）——部分 Provider 返回（腾讯以亿上报，解析时统一为元）；缺失时 undefined。 */
+  readonly floatMarketCap?: number;
+  /** 涨停价（元）——部分 Provider 返回；缺失时 undefined。 */
+  readonly limitUp?: number;
+  /** 跌停价（元）——部分 Provider 返回；缺失时 undefined。 */
+  readonly limitDown?: number;
 }
 
 /** 当前在用的行情源标识（主源 / 备源）。 */

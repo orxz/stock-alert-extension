@@ -284,7 +284,7 @@ test('icon buttons have accessible aria-labels', async () => {
     for (const selector of [
       '[data-action="add-stock"]',
       '[data-action="theme-toggle"]',
-      '[data-action="multiselect"]',
+      '[data-action="manage-holdings"]',
       '[data-action="price-visibility"]'
     ]) {
       const label = await launched.page.locator(selector).first().getAttribute('aria-label');
@@ -307,14 +307,47 @@ test('CSS design tokens are defined on :root', async () => {
       return {
         up: style.getPropertyValue('--up').trim(),
         down: style.getPropertyValue('--down').trim(),
-        secondary: style.getPropertyValue('--text2').trim(),
-        touchTarget: style.getPropertyValue('--touch-target-min').trim()
+        // --text2 是早已废弃的兼容别名（别名块本身零引用，已删除）；
+        // 这里断言真正的层级 token。
+        secondary: style.getPropertyValue('--text-2').trim(),
+        touchTarget: style.getPropertyValue('--touch-target-min').trim(),
+        // 状态层与 elevation 必须两套主题都定义——它们是本轮双主题统一的地基，
+        // 缺一个就会退回「换底色」的老路，置顶行又会失去 hover。
+        stateHover: style.getPropertyValue('--state-hover').trim(),
+        stateSelected: style.getPropertyValue('--state-selected').trim(),
+        elevLine: style.getPropertyValue('--elev-line').trim(),
+        rowH: style.getPropertyValue('--row-h').trim()
       };
     });
     expect(tokens.up).toBeTruthy();
     expect(tokens.down).toBeTruthy();
     expect(tokens.secondary).toBeTruthy();
     expect(tokens.touchTarget).toBe('44px');
+    expect(tokens.stateHover).toBeTruthy();
+    expect(tokens.stateSelected).toBeTruthy();
+    expect(tokens.elevLine).toBeTruthy();
+    // 行高契约：与 stock-table.ts 的 TABLE_ROW_EXTENT 必须一致。
+    expect(tokens.rowH).toBe('40px');
+
+    // 浅色主题必须定义同一套语义 token，且取值与深色不同——
+    // 深色叠白、浅色叠黑，投影强度也不一样。若某个 token 只在 :root 定义，
+    // 浅色会静默继承深色的值（叠白层在白底上等于不可见）。
+    const light = await launched.page.evaluate(() => {
+      document.documentElement.dataset.theme = 'light';
+      const style = getComputedStyle(document.documentElement);
+      const read = (n: string): string => style.getPropertyValue(n).trim();
+      return {
+        stateHover: read('--state-hover'),
+        stateSelected: read('--state-selected'),
+        elevLine: read('--elev-line'),
+        elevCard: read('--elev-card')
+      };
+    });
+    for (const [name, value] of Object.entries(light)) {
+      expect(value, `light theme must define ${name}`).toBeTruthy();
+    }
+    expect(light.stateHover).not.toBe(tokens.stateHover);
+    expect(light.elevLine).not.toBe(tokens.elevLine);
   } finally {
     await launched.close();
   }

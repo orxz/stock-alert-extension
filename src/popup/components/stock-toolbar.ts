@@ -112,7 +112,7 @@ export class StockToolbarElement extends HTMLElement {
     viewListBtn.className = 'toolbar-view-btn';
     viewListBtn.setAttribute('data-action', 'view-list');
     viewListBtn.setAttribute('aria-pressed', 'false');
-    viewListBtn.textContent = '列表视图';
+    viewListBtn.textContent = '列表';
     this.viewListBtn = viewListBtn;
 
     const viewGridBtn = document.createElement('button');
@@ -120,7 +120,7 @@ export class StockToolbarElement extends HTMLElement {
     viewGridBtn.className = 'toolbar-view-btn';
     viewGridBtn.setAttribute('data-action', 'view-grid');
     viewGridBtn.setAttribute('aria-pressed', 'false');
-    viewGridBtn.textContent = '网格视图';
+    viewGridBtn.textContent = '网格';
     this.viewGridBtn = viewGridBtn;
 
     viewGroup.append(viewListBtn, viewGridBtn);

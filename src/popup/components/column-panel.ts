@@ -7,8 +7,11 @@
 // per-connection AbortController。
 import type { ColumnPanelViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
-import { REQUIRED_COLUMNS, normalizeUiColumns } from '../ui-preferences.js';
+import { normalizeUiColumns } from '../ui-preferences.js';
 import type { ColumnKey } from '../ui-preferences.js';
+
+/** 名称列副标题键——不参与列重排，面板里只提供勾选（↑↓ 始终禁用）。 */
+const SUBLINE_KEYS: readonly string[] = ['code', 'status'];
 
 export class ColumnPanelElement extends HTMLElement {
   private connection: AbortController | undefined;
@@ -77,12 +80,8 @@ export class ColumnPanelElement extends HTMLElement {
 
   private handleToggle(colKey: string, checked: boolean): void {
     if (!this._viewModel) return;
-    // 必需列不可关闭——关掉名称/现价/涨跌幅，列表就不再是股票列表了。
-    if (!checked && (REQUIRED_COLUMNS as readonly string[]).includes(colKey)) {
-      const cb = this.querySelector(`input[data-column="${colKey}"]`) as HTMLInputElement | null;
-      if (cb) cb.checked = true;
-      return;
-    }
+    // 面板只展示可配置列（锁定列 name 不在这里，由 selectColumnPanel 过滤）——
+    // 任何列都可以自由取消，不再有「强制弹回」。
     const enabled = this._viewModel.columns
       .filter((c) => (c.key === colKey ? checked : c.enabled))
       .map((c) => c.key);
@@ -125,6 +124,9 @@ export class ColumnPanelElement extends HTMLElement {
       const li = document.createElement('li');
       li.className = 'column-panel-item';
       li.setAttribute('data-column-item', colKey);
+      // 副标题固定在名称格内，排序对它们无意义——禁用 ↑↓ 并弱化样式。
+      const isSubline = SUBLINE_KEYS.includes(colKey);
+      if (isSubline) li.classList.add('column-panel-item--subline');
 
       const label = document.createElement('label');
       label.className = 'column-panel-label';
@@ -147,7 +149,7 @@ export class ColumnPanelElement extends HTMLElement {
       upBtn.setAttribute('data-action', 'col-up');
       upBtn.setAttribute('aria-label', `上移 ${col.label}`);
       upBtn.textContent = '↑';
-      upBtn.disabled = i === 0;
+      upBtn.disabled = isSubline || i === 0;
 
       const downBtn = document.createElement('button');
       downBtn.type = 'button';
@@ -155,7 +157,12 @@ export class ColumnPanelElement extends HTMLElement {
       downBtn.setAttribute('data-action', 'col-down');
       downBtn.setAttribute('aria-label', `下移 ${col.label}`);
       downBtn.textContent = '↓';
-      downBtn.disabled = i === vm.columnOrder.length - 1;
+      // 最后一个主列的 ↓ 也不能用：跨入副标题区（code/status）的交换会被
+      // selectColumnPanel 重新投影弹回原位——变成「点了没反应」的无效控件。
+      downBtn.disabled =
+        isSubline ||
+        i === vm.columnOrder.length - 1 ||
+        SUBLINE_KEYS.includes(vm.columnOrder[i + 1] as string);
 
       li.append(label, upBtn, downBtn);
       this.listEl.append(li);

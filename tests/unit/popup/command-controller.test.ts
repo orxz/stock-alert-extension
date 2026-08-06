@@ -119,26 +119,49 @@ test('stale search response is rejected (later query wins)', async () => {
   const resultsB: readonly StockSearchResult[] = [{ code: CODE_B, name: 'B', pinyin: 'b', tags: [] }];
   rpc.queueSuccess('stock:search', resultsA as never);
   rpc.queueSuccess('stock:search', resultsB as never);
-  const p1 = controller.searchStocks('a'); // generation 1
-  const p2 = controller.searchStocks('b'); // generation 2（取代）
+  const p1 = controller.dialogSearchStocks('a'); // generation 1
+  const p2 = controller.dialogSearchStocks('b'); // generation 2（取代）
   await Promise.all([p1, p2]);
   assert.equal(store.getState().async.searchGeneration, 2);
-  assert.deepEqual(store.getState().view.searchResults, resultsB, '只接受最新 generation 的结果');
+  assert.deepEqual(store.getState().view.dialogSearch.results, resultsB, '只接受最新 generation 的结果');
+});
+
+test('clearing the dialog query invalidates in-flight search responses', async () => {
+  const { rpc, store, controller } = setup();
+  const results: readonly StockSearchResult[] = [{ code: CODE_A, name: 'A', pinyin: 'a', tags: [] }];
+  rpc.queueSuccess('stock:search', results as never);
+  const p = controller.dialogSearchStocks('茅台'); // RPC 在途（微任务序列）
+  await controller.dialogSearchStocks(''); // 清空输入
+  await p; // 在途响应此刻落地
+  // 空查询状态下不允许旧关键词的结果复活。
+  assert.equal(store.getState().view.dialogSearch.keyword, '');
+  assert.deepEqual(store.getState().view.dialogSearch.results, []);
+  assert.equal(store.getState().async.stockSearch.status, 'idle');
 });
 
 test('fresh search response is confirmed', async () => {
   const { rpc, store, controller } = setup();
   const results: readonly StockSearchResult[] = [{ code: CODE_A, name: 'A', pinyin: 'a', tags: [] }];
   rpc.queueSuccess('stock:search', results as never);
-  await controller.searchStocks('a');
-  assert.deepEqual(store.getState().view.searchResults, results);
+  await controller.dialogSearchStocks('a');
+  assert.deepEqual(store.getState().view.dialogSearch.results, results);
   assert.equal(store.getState().async.stockSearch.status, 'success');
+});
+
+// 对话框搜索绝不能污染工具栏的本地过滤词——两者是独立的两条路径。
+test('dialog search never writes the toolbar filter keyword', async () => {
+  const { rpc, store, controller } = setup();
+  store.dispatch({ type: 'view/searchKeyword', keyword: 'toolbar-filter' });
+  rpc.queueSuccess('stock:search', [{ code: CODE_A, name: 'A', pinyin: 'a', tags: [] }] as never);
+  await controller.dialogSearchStocks('茅台');
+  assert.equal(store.getState().view.searchKeyword, 'toolbar-filter');
+  assert.equal(store.getState().view.dialogSearch.keyword, '茅台');
 });
 
 test('search failure with matching generation dispatches failed', async () => {
   const { rpc, store, controller } = setup();
   rpc.queueError('stock:search', { code: 'SEARCH_UNAVAILABLE', message: '搜索不可用', retryable: true });
-  await controller.searchStocks('a');
+  await controller.dialogSearchStocks('a');
   assert.equal(store.getState().async.stockSearch.status, 'error');
   assert.equal(store.getState().async.stockSearch.error?.code, 'SEARCH_UNAVAILABLE');
 });

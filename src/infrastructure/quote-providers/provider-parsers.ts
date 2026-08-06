@@ -29,10 +29,20 @@ interface EastmoneyRow {
   f4?: unknown;  // 涨跌额
   f5?: unknown;  // 成交量
   f6?: unknown;  // 成交额
+  f7?: unknown;  // 振幅
+  f8?: unknown;  // 换手率
+  f9?: unknown;  // 市盈率（动态）
+  f10?: unknown; // 量比
   f15?: unknown; // 高
   f16?: unknown; // 低
   f17?: unknown; // 开
   f18?: unknown; // 昨收
+  f20?: unknown; // 总市值
+  f21?: unknown; // 流通市值
+  f23?: unknown; // 市净率
+  // 注意：ulist.np/get 上没有涨停/跌停字段。f51/f52 在该 endpoint 上装的是别的
+  // 量纲（实测 sh600519 f51=2715 亿、sz000001 f51=0），只有 stock/get 上才是
+  // 涨跌停价。详见 parseEastmoney 的说明与对应回归测试——涨跌停仅由腾讯源提供。
 }
 
 /**
@@ -49,6 +59,19 @@ function enrichQuote(raw: {
   change: number | null;
   changePercent: number | null;
   amount: number | null;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
+  turnoverRate?: number | null;
+  amplitude?: number | null;
+  volumeRatio?: number | null;
+  pe?: number | null;
+  pb?: number | null;
+  totalMarketCap?: number | null;
+  floatMarketCap?: number | null;
+  limitUp?: number | null;
+  limitDown?: number | null;
 }): Quote | null {
   const price = raw.price !== null && raw.price > 0 ? raw.price : null;
   if (price === null) return null;
@@ -68,13 +91,33 @@ function enrichQuote(raw: {
     price,
     change: change ?? 0,
     changePercent: changePercent ?? 0,
-    amount: raw.amount ?? 0
+    amount: raw.amount ?? 0,
+    // 详情字段只在源数据确实提供时保留——缺失时保持 undefined，
+    // 旧缓存与字段残缺的响应因此不会带出伪造的 0 值。
+    ...(raw.prevClose !== null && raw.prevClose !== undefined ? { prevClose: raw.prevClose } : null),
+    ...(raw.open !== null && raw.open !== undefined ? { open: raw.open } : null),
+    ...(raw.high !== null && raw.high !== undefined ? { high: raw.high } : null),
+    ...(raw.low !== null && raw.low !== undefined ? { low: raw.low } : null),
+    ...(raw.volume !== null && raw.volume !== undefined ? { volume: raw.volume } : null),
+    ...(raw.turnoverRate !== null && raw.turnoverRate !== undefined ? { turnoverRate: raw.turnoverRate } : null),
+    ...(raw.amplitude !== null && raw.amplitude !== undefined ? { amplitude: raw.amplitude } : null),
+    ...(raw.volumeRatio !== null && raw.volumeRatio !== undefined ? { volumeRatio: raw.volumeRatio } : null),
+    ...(raw.pe !== null && raw.pe !== undefined ? { pe: raw.pe } : null),
+    ...(raw.pb !== null && raw.pb !== undefined ? { pb: raw.pb } : null),
+    ...(raw.totalMarketCap !== null && raw.totalMarketCap !== undefined ? { totalMarketCap: raw.totalMarketCap } : null),
+    ...(raw.floatMarketCap !== null && raw.floatMarketCap !== undefined ? { floatMarketCap: raw.floatMarketCap } : null),
+    ...(raw.limitUp !== null && raw.limitUp !== undefined ? { limitUp: raw.limitUp } : null),
+    ...(raw.limitDown !== null && raw.limitDown !== undefined ? { limitDown: raw.limitDown } : null)
   };
 }
 
 /**
  * 解析 Eastmoney 行情 JSON：json.data.diff 数组 → Record<StockCode, Quote>。
  * fltt=2 返回浮点值（元/百分比），与 v1.3 一致直接使用；价格为 0 或非有限 → 丢弃。
+ *
+ * 涨停/跌停价缺席是有意的：批量接口 ulist.np/get 不提供该数据（f1–f300 实测全扫无匹配），
+ * 改用逐只 stock/get 会让 500 只自选股从 1 次请求变成 500 次。缺失即 undefined，
+ * 展示层按既有约定渲染 `--`；腾讯备源有真值时正常显示。
  */
 export function parseEastmoney(json: unknown): Readonly<Record<StockCode, Quote>> {
   const result = {} as Record<StockCode, Quote>;
@@ -95,7 +138,18 @@ export function parseEastmoney(json: unknown): Readonly<Record<StockCode, Quote>
       prevClose: num(row.f18),
       change: num(row.f4),
       changePercent: num(row.f3),
-      amount: num(row.f6)
+      amount: num(row.f6),
+      open: num(row.f17),
+      high: num(row.f15),
+      low: num(row.f16),
+      volume: num(row.f5),
+      turnoverRate: num(row.f8),
+      amplitude: num(row.f7),
+      volumeRatio: num(row.f10),
+      pe: num(row.f9),
+      pb: num(row.f23),
+      totalMarketCap: num(row.f20),
+      floatMarketCap: num(row.f21)
     });
     if (quote) result[code] = quote;
   }
@@ -118,6 +172,12 @@ function tencentAmount(fields: readonly string[]): number | null {
   }
   const wan = num(fields[37]);
   return wan === null ? null : wan * 10_000;
+}
+
+/** 取腾讯市值字段（亿元）并统一换算为元，与 Eastmoney f20/f21 口径一致。 */
+function tencentCap(fields: readonly string[], index: number): number | null {
+  const yi = num(fields[index]);
+  return yi === null ? null : yi * 100_000_000;
 }
 
 /**
@@ -144,7 +204,20 @@ export function parseTencent(text: string): Readonly<Record<StockCode, Quote>> {
       prevClose: num(fields[4]),
       change: num(fields[31]),
       changePercent: num(fields[32]),
-      amount: tencentAmount(fields)
+      amount: tencentAmount(fields),
+      open: num(fields[5]),
+      high: num(fields[33]),
+      low: num(fields[34]),
+      volume: num(fields[36]),
+      turnoverRate: num(fields[38]),
+      amplitude: num(fields[43]),
+      volumeRatio: num(fields[49]),
+      pe: num(fields[39]),
+      pb: num(fields[46]),
+      totalMarketCap: tencentCap(fields, 45),
+      floatMarketCap: tencentCap(fields, 44),
+      limitUp: num(fields[47]),
+      limitDown: num(fields[48])
     });
     if (quote) result[code] = quote;
   }

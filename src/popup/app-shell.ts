@@ -5,10 +5,11 @@
 // 渲染失败时安全降级到 fallback。destroy 幂等。
 import type { Store } from './store/store.js';
 import type { CommandController } from './commands/command-controller.js';
-import { selectAppViewModel } from './store/selectors.js';
+import { selectAppViewModel, selectVisibleStocks } from './store/selectors.js';
 import type { AppViewModel, DialogViewModel, LiveRegionViewModel, PopoverViewModel } from './view-models.js';
 import { normalizeUiColumns, saveUiColumns } from './ui-preferences.js';
 import type { WebStorageLike } from './ui-preferences.js';
+import { friendlyErrorMessage } from './error-messages.js';
 import type { PopupEventMap, DialogSubmitDetail } from './components/events.js';
 import type { DialogState } from './store/state.js';
 import type { GroupId, StockCode } from '../domain/index.js';
@@ -102,6 +103,24 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     if (popoverHost) popoverHost.addEventListener(type, listener, { signal: ac.signal });
   }
 
+  /** 仅监听 stock-app 内部的事件（排除 dialogHost/popoverHost）——用于工具栏搜索。 */
+  function onRoot<K extends keyof PopupEventMap>(type: K, handler: (detail: PopupEventMap[K]) => void): void {
+    const listener = ((event: Event) => {
+      const ce = event as CustomEvent<PopupEventMap[K]>;
+      if (ce.detail !== undefined) handler(ce.detail);
+    }) as EventListener;
+    root.addEventListener(type, listener, { signal: ac.signal });
+  }
+
+  /** 仅监听 dialog-host 内部的事件——用于对话框内搜索（独立于工具栏）。 */
+  function onDialog<K extends keyof PopupEventMap>(type: K, handler: (detail: PopupEventMap[K]) => void): void {
+    const listener = ((event: Event) => {
+      const ce = event as CustomEvent<PopupEventMap[K]>;
+      if (ce.detail !== undefined) handler(ce.detail);
+    }) as EventListener;
+    if (dialogHost) dialogHost.addEventListener(type, listener, { signal: ac.signal });
+  }
+
   // ===== 导航/视图事件 =====
 
   on('group-select', (d) => {
@@ -136,6 +155,17 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       ? codes.filter((c) => c !== d.code)
       : [...codes, d.code];
     store.dispatch({ type: 'view/selection', codes: newCodes });
+  });
+
+  on('batch-select-all', () => {
+    const state = store.getState();
+    if (!state.view.selectionMode) return;
+    const visibleStocks = selectVisibleStocks(state);
+    const allCodes = visibleStocks.map((vm) => vm.code);
+    const selectedSet = new Set(state.view.selectedCodes);
+    const allSelected = allCodes.length > 0 && allCodes.every((c) => selectedSet.has(c));
+    // 全选 → 选中所有可见；已全选 → 取消全选（清空）。
+    store.dispatch({ type: 'view/selection', codes: allSelected ? [] : allCodes });
   });
 
   // ===== 列设置弹层 =====
@@ -191,7 +221,7 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       if (refresh.status === 'error') {
         store.dispatch({
           type: 'overlay/toast',
-          toast: { message: refresh.error?.message ?? '刷新失败，已保留现有数据', kind: 'error' }
+          toast: { message: friendlyErrorMessage(refresh.error, '刷新失败，已保留现有数据'), kind: 'error' }
         });
         return;
       }
@@ -245,9 +275,15 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     });
   });
 
-  on('search-keyword-change', (d) => {
+  // 工具栏搜索：只监听 stock-app 内部（不包含对话框 combobox）。
+  onRoot('search-keyword-change', (d) => {
     store.dispatch({ type: 'view/searchKeyword', keyword: d.keyword });
-    void controller.searchStocks(d.keyword);
+  });
+
+  // 对话框内搜索：只监听 dialog-host 内部（stock-search-combobox 冒泡到这里）。
+  // 独立于工具栏——写入 dialogSearch，不影响后台列表过滤。
+  onDialog('search-keyword-change', (d) => {
+    void controller.dialogSearchStocks(d.keyword);
   });
 
   // ===== Dialog 事件路由 =====
@@ -256,9 +292,13 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     // 记录当前焦点元素 ID（用于关闭时恢复）。
     const activeId = document.activeElement?.id ?? null;
     store.dispatch({ type: 'overlay/focusReturn', id: activeId });
+    // 原子重置对话框搜索：清残留关键词/结果 + 归零 async + 递增 generation
+    // 作废上一次会话的在途响应（否则迟到结果会落进新开的对话框）。
+    store.dispatch({ type: 'search/dialogReset' });
     // 根据 kind 从当前 state 构造完整 DialogState 上下文。
+    // d.groupId 优先于 currentGroupId——右键/双击非激活标签时目标就是被点的那个分组。
     const state = store.getState();
-    const dialog = buildDialogState(d.kind, state);
+    const dialog = buildDialogState(d.kind, state, d.groupId);
     store.dispatch({ type: 'overlay/dialog', dialog });
   });
 
@@ -295,11 +335,14 @@ export function createAppShell(deps: AppShellDeps): AppShell {
  */
 function buildDialogState(
   kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove',
-  state: Readonly<{ view: Readonly<{ currentGroupId: GroupId; selectedCodes: readonly StockCode[] }>; domain: Readonly<{ userData: Readonly<{ groups: ReadonlyArray<{ groupId: GroupId; name: string }> }> }> }>
+  state: Readonly<{ view: Readonly<{ currentGroupId: GroupId; selectedCodes: readonly StockCode[] }>; domain: Readonly<{ userData: Readonly<{ groups: ReadonlyArray<{ groupId: GroupId; name: string }> }> }> }>,
+  targetGroupId?: GroupId
 ): DialogState {
   const currentGroupId = state.view.currentGroupId;
   const selectedCodes = state.view.selectedCodes;
-  const groupName = state.domain.userData.groups.find((g) => g.groupId === currentGroupId)?.name ?? '';
+  // 重命名的目标分组：调用方显式指定优先，否则回落当前分组。
+  const renameGroupId = targetGroupId ?? currentGroupId;
+  const groupName = state.domain.userData.groups.find((g) => g.groupId === renameGroupId)?.name ?? '';
 
   switch (kind) {
     case 'add-stock':
@@ -307,7 +350,7 @@ function buildDialogState(
     case 'create-group':
       return { kind: 'create-group' };
     case 'rename-group':
-      return { kind: 'rename-group', groupId: currentGroupId, currentName: groupName };
+      return { kind: 'rename-group', groupId: renameGroupId, currentName: groupName };
     case 'move-stocks':
       return { kind: 'move-stocks', codes: selectedCodes, fromGroupId: currentGroupId };
     case 'confirm-remove':

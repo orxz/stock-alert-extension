@@ -92,6 +92,10 @@ test('delete a custom group', async () => {
       const groups = await getStorage<Array<{ groupId: string }>>(launched.page, 'groups');
       return groups?.some((g) => g.groupId === 'g_tech');
     }).toBe(false);
+    // 删除的是当前激活分组——应自动回退到「全部」视图：
+    // 全部标签高亮，且列表显示全部股票（sh600519 原属于被删分组，删除后归入全部）。
+    await expect(launched.page.locator('[role="tab"][data-group-id="g_all"]')).toHaveAttribute('aria-selected', 'true');
+    await expect(launched.page.locator('tbody tr[data-key="sh600519"]')).toBeVisible();
   } finally {
     await launched.close();
   }

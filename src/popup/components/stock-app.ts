@@ -65,7 +65,7 @@ export class StockAppElement extends HTMLElement {
     // 使用 document.createElement 而非 new Element()——自定义元素必须通过 createElement
     // 创建（或由解析器升级），直接 new 会在未注册时抛 Illegal constructor。
 
-    // 顶部头部（添加/多选/价格按钮）
+    // 顶部头部（主题/价格/添加股票按钮）
     const header = create<StockHeaderElement>('stock-header');
     header.setAttribute('data-region', 'header');
     this.headerEl = header;
@@ -109,9 +109,16 @@ export class StockAppElement extends HTMLElement {
 
   private applyViewModel(vm: AppViewModel): void {
     if (this.headerEl) this.headerEl.viewModel = vm.header;
-    if (this.tabsEl) this.tabsEl.viewModel = vm.groupTabs;
+    if (this.tabsEl) {
+      this.tabsEl.viewModel = vm.groupTabs;
+      this.tabsEl.selectionMode = vm.batchToolbar.visible;
+    }
     if (this.toolbarEl) this.toolbarEl.viewModel = vm.toolbar;
-    if (this.boardEl) this.boardEl.viewModel = vm.board;
+    if (this.boardEl) {
+      this.boardEl.viewModel = vm.board;
+      this.boardEl.selectedCodes = vm.batchToolbar.selectedCodes;
+      this.boardEl.selectionMode = vm.batchToolbar.visible;
+    }
     if (this.batchEl) this.batchEl.viewModel = vm.batchToolbar;
     if (this.quoteStatusEl) this.quoteStatusEl.viewModel = vm.quoteStatus;
   }

@@ -21,10 +21,8 @@ export type AppAction =
   | { readonly type: 'quote/refresh/requested' }
   | { readonly type: 'quote/refresh/confirmed'; readonly snapshot: QuoteSnapshot; readonly generation: number }
   | { readonly type: 'quote/refresh/failed'; readonly error: ClientError; readonly generation: number }
-  // search
-  | { readonly type: 'search/keyword'; readonly keyword: string }
-  | { readonly type: 'search/requested'; readonly query: string; readonly generation: number }
-  | { readonly type: 'search/confirmed'; readonly results: readonly StockSearchResult[]; readonly generation: number }
+  // search（远程搜索只服务于 add-stock 对话框，见下方 dialog search；
+  //   工具栏那条是纯本地过滤，只写 view/searchKeyword，不发 RPC）
   | { readonly type: 'search/failed'; readonly error: ClientError; readonly generation: number }
   // mutation lifecycle
   | { readonly type: 'mutation/pending'; readonly key?: string }
@@ -40,6 +38,14 @@ export type AppAction =
   | { readonly type: 'view/clearSelection' }
   | { readonly type: 'view/theme'; readonly theme: 'dark' | 'light' }
   | { readonly type: 'view/columns'; readonly columns: UiColumnPreferences }
+  // dialog search（独立于工具栏过滤，避免对话框搜索时后台列表跳动）
+  | { readonly type: 'view/dialogSearchKeyword'; readonly keyword: string }
+  | { readonly type: 'view/dialogSearchResults'; readonly results: readonly StockSearchResult[] }
+  | { readonly type: 'search/dialogRequested'; readonly generation: number }
+  /** 对话框搜索成功落地（带 generation 做 stale 拒绝），并把 async 结算为 success。 */
+  | { readonly type: 'search/dialogConfirmed'; readonly results: readonly StockSearchResult[]; readonly generation: number }
+  /** 打开对话框时原子重置：清关键词/结果 + 归零 async + 递增 generation 作废在途响应。 */
+  | { readonly type: 'search/dialogReset' }
   // overlay
   | { readonly type: 'overlay/dialog'; readonly dialog: DialogState | null }
   | { readonly type: 'overlay/menu'; readonly menu: MenuState | null }

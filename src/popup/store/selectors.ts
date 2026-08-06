@@ -11,6 +11,7 @@ import {
   closedDialog,
   closedPopover
 } from '../view-models.js';
+import { friendlyErrorMessage } from '../error-messages.js';
 import type {
   AppViewModel,
   BoardViewModel,
@@ -77,13 +78,16 @@ export function selectBoard(state: AppState): BoardViewModel {
   const stocks = selectVisibleStocks(state);
   const loading = state.async.bootstrap.status === 'loading';
   const error = state.async.bootstrap.status === 'error'
-    ? (state.async.bootstrap.error?.message ?? '加载失败')
+    ? friendlyErrorMessage(state.async.bootstrap.error, '加载失败')
     : null;
+  // 列设置面板的 order 是含 code/status 副标题键的完整排列；主列顺序过滤掉它们。
+  const columnOrder = state.view.columns.order.filter((key) => key !== 'code' && key !== 'status');
   return {
     viewMode: config.viewMode,
     groupId: state.view.currentGroupId,
     stocks,
-    columns: state.view.columns.enabled,
+    columns: columnOrder,
+    enabledColumns: state.view.columns.enabled,
     loading,
     error,
     empty: !loading && !error && stocks.length === 0,
@@ -120,19 +124,24 @@ export function selectHeader(state: AppState): HeaderViewModel {
   return {
     groupName,
     stockCount,
-    selectionMode: state.view.selectionMode,
     priceHidden: config.priceHidden,
     canAddStock: true,
     theme: state.view.theme
   };
 }
 
-/** 批量工具栏视图模型：选中态。 */
+/** 批量工具栏视图模型：选中态 + 全选状态。 */
 export function selectBatchToolbar(state: AppState): BatchToolbarViewModel {
   const codes = state.view.selectedCodes;
+  // 只要个数，就别走 selectVisibleStocks——那条链是 filter → sort → 逐只构造
+  // 视图模型，selectBoard 已经跑过一遍，再跑一遍等于每次 dispatch 都把 500 只
+  // 股票投影两遍。filterStocks 是纯过滤，不排序不分配视图模型。
+  // 持仓管理关闭时连过滤都不需要（工具栏此时不可见）。
+  const totalCount = state.view.selectionMode ? filterStocks(state).length : 0;
   return {
     visible: state.view.selectionMode,
     selectedCount: codes.length,
+    totalCount,
     selectedCodes: codes,
     groupId: state.view.currentGroupId
   };
@@ -144,7 +153,7 @@ export function selectQuoteStatus(state: AppState): QuoteStatusViewModel {
   const message =
     status === 'loading' ? '刷新中…'
     : status === 'success' ? '已更新'
-    : status === 'error' ? (state.async.quoteRefresh.error?.message ?? '刷新失败')
+    : status === 'error' ? friendlyErrorMessage(state.async.quoteRefresh.error, '刷新失败')
     : '';
   const q = state.domain.quotes;
   const lastRefreshTime = q.succeededAt ? new Date(q.succeededAt).toLocaleTimeString('zh-CN') : '';
@@ -168,7 +177,7 @@ export function selectLiveRegion(state: AppState): LiveRegionViewModel {
 }
 
 /**
- * 对话框视图模型：从 overlay.dialog + async.mutations + view.searchResults 派生。
+ * 对话框视图模型：从 overlay.dialog + async.mutations + view.dialogSearch 派生。
  * dialog=null 时返回关闭态。
  */
 export function selectDialog(state: AppState): DialogViewModel {
@@ -180,7 +189,7 @@ export function selectDialog(state: AppState): DialogViewModel {
   const pending = mutationValues.some((m) => m.status === 'pending');
   const uncertain = mutationValues.some((m) => m.status === 'uncertain');
   const failedMutation = mutationValues.find((m) => m.status === 'failed');
-  const errorMessage = failedMutation?.error?.message ?? null;
+  const errorMessage = failedMutation ? friendlyErrorMessage(failedMutation.error, '操作失败') : null;
 
   // 可用分组列表（按 order 升序）。
   const allGroups: DialogGroupOption[] = state.domain.userData.groups
@@ -198,9 +207,10 @@ export function selectDialog(state: AppState): DialogViewModel {
     pending,
     uncertain,
     errorMessage,
-    searchResults: state.view.searchResults,
+    // 对话框搜索从独立的 dialogSearch 读取，不再共用工具栏的 searchResults/searchKeyword。
+    searchResults: state.view.dialogSearch.results,
     searchStatus: state.async.stockSearch.status,
-    searchKeyword: state.view.searchKeyword,
+    searchKeyword: state.view.dialogSearch.keyword,
     searchGeneration: state.async.searchGeneration,
     groups: []
   };
@@ -216,7 +226,10 @@ export function selectDialog(state: AppState): DialogViewModel {
         kind: 'rename-group',
         renameGroupId: dialog.groupId,
         renameCurrentName: dialog.currentName,
-        canDeleteGroup: dialog.groupId !== ALL_GROUP_ID
+        canDeleteGroup: dialog.groupId !== ALL_GROUP_ID,
+        // 分组列表用于输入时重名提前校验——不带的话 validateInput 的
+        // 判重恒为 false，「已有同名分组」提示完全失效。
+        groups: allGroups
       };
     case 'move-stocks':
       return {
@@ -246,13 +259,18 @@ export function selectDialog(state: AppState): DialogViewModel {
 export function selectColumnPanel(state: AppState): ColumnPanelViewModel {
   const { enabled, order } = state.view.columns;
   const enabledSet = new Set<string>(enabled);
+  // name 是锁定列：固定在列表最前且不进入面板（用户无法取消它，也就不该看到它）——
+  // 面板只展示可配置列：主列可排序 + code/status 副标题固定尾部只勾选。
+  const mainKeys = order.filter((key) => key !== 'name' && key !== 'code' && key !== 'status');
+  const sublineKeys = order.filter((key) => key === 'code' || key === 'status');
+  const displayKeys = [...mainKeys, ...sublineKeys];
   return {
-    columns: order.map((key) => ({
+    columns: displayKeys.map((key) => ({
       key,
       label: COLUMN_LABELS[key] ?? key,
       enabled: enabledSet.has(key)
     })),
-    columnOrder: [...order]
+    columnOrder: displayKeys
   };
 }
 

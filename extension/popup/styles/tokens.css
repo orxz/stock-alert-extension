@@ -42,10 +42,41 @@
   --gold: #f2b01e;         /* 置顶 */
   --gold-bg: rgba(242, 176, 30, 0.12);
 
-  /* ---- 交互（中性） ---- */
-  --accent-fill: var(--text-1);   /* 主按钮：反相高对比 */
-  --accent-ink: #080b11;          /* 主按钮上的文字 */
+  /* ---- 交互（中性） ----
+     主按钮不再用反相填充（暗色白按钮太突兀），改用浮层表面色 + 描边，
+     使其在任何主题下都与背景协调，靠对比度而非反转色成为主操作。
+     代价：填充色与所在栏的对比只有 1.19:1（浅色 1.04:1），按钮的「形状」
+     完全由描边承担，所以描边必须自己达到 WCAG 1.4.11 的 3:1——
+     不能再用 --line-strong（1.39:1）。 */
+  --accent-fill: var(--ink-pop);   /* 主按钮：浮层表面色 */
+  --accent-ink: var(--text-1);    /* 主按钮上的文字 */
+  --accent-line: var(--text-3);   /* 主按钮描边：唯一的形状边界，必须 >= 3:1 */
   --focus: #ffffff;
+
+  /* ---- 状态层（叠加，不是替换） ----
+     hover/选中一律用半透明层**叠**在元素原有底色之上，而不是换掉底色。
+
+     换掉底色有三个后果，这版全部踩过：
+       1. 置顶行的金色底（0-3-0）压过 :hover（0-2-0），置顶行根本没有 hover 反馈；
+       2. 「选中」和「hover」各自指定底色，很容易撞成同一个值（本轮就撞了）；
+       3. 每来一种新底色（置顶/选中/错误行）就要再配一套 hover 色，永远配不完。
+     叠加层没有这些问题：它在任意底色、任意主题上都产生同等幅度的明度变化，
+     两套主题因此天然一致——深色叠白、浅色叠黑，感知强度相同。 */
+  --state-hover: rgba(255, 255, 255, 0.055);
+  --state-selected: rgba(255, 255, 255, 0.11);
+  --state-mark: var(--text-1);    /* 选中标记条：唯一的高对比通道 */
+
+  /* ---- 高度契约 ----
+     560 纵向预算：44 + 38 + 40 + (Board 余量 408) + 30 = 560。
+     行高与表头高同时是虚拟滚动的契约，必须与 stock-table.ts 的
+     TABLE_ROW_EXTENT / TABLE_HEADER_EXTENT 严格一致，否则 spacer 高度
+     与真实行高错位，滚动条抖动、跳转定位偏移。 */
+  --h-header: 44px;
+  --h-tabs: 38px;
+  --h-toolbar: 40px;
+  --h-status: 30px;
+  --h-control: 28px;   /* Tabs/Toolbar 里的次级控件统一高度 */
+  --h-thead: 28px;     /* == TABLE_HEADER_EXTENT */
 
   /* ---- 间距节奏 ---- */
   --sp-0: 2px;
@@ -79,12 +110,21 @@
   --dur-theme: 120ms;
   --dur-fade: 120ms;
 
-  /* ---- 高度 ---- */
-  --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.55);
+  /* ---- 层次（elevation） ----
+     深色和浅色表达「浮起来」的方式根本不同，这里必须分别定义，不能共用一套值。
+
+     浅色：靠投影。深色：投影几乎无效——纯黑阴影叠在 #0e131c 上只有 1.006:1，
+     等于没画。所以深色靠**描边**（rim）承担边界，投影只做微弱的深度暗示。
+     两套主题因此在「能不能看出这是一块浮起来的面」上表现一致。
+     逐行列表不加任何 elevation——500 行的合成开销不可接受。 */
+  --elev-line: rgba(255, 255, 255, 0.14);  /* 浮起面的描边，深色下的主通道 */
+  --elev-card: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --elev-card-hover: 0 3px 10px rgba(0, 0, 0, 0.62);
+  --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.66);
 
   /* ---- 尺寸 ---- */
   --touch-target-min: 44px;
-  --row-h: 48px;
+  --row-h: 40px;       /* == TABLE_ROW_EXTENT */
 
   /* A 股单日涨跌停 ±10%：涨跌幅条的归一化基准。
      这是本地市场独有的常数，也是每个投资者的心智刻度。 */
@@ -95,7 +135,7 @@
   color-scheme: light;
 
   --ink-app: #f4f6fa;
-  --ink-bar: #ffffff;
+  --ink-bar: #fafbfd;
   --ink-row: #eef1f7;
   --ink-pop: #ffffff;
 
@@ -113,24 +153,19 @@
   --gold: #9a6510;
   --gold-bg: rgba(154, 101, 16, 0.1);
 
-  --accent-fill: #10151f;
-  --accent-ink: #ffffff;
+  --accent-fill: var(--ink-pop);
+  --accent-ink: var(--text-1);
+  --accent-line: var(--text-3);
   --focus: #10151f;
 
-  --shadow-pop: 0 10px 28px rgba(16, 24, 40, 0.18);
-}
+  /* 浅色叠黑，与深色叠白的感知强度对齐（黑字底更敏感，故取值略低）。 */
+  --state-hover: rgba(16, 24, 40, 0.05);
+  --state-selected: rgba(16, 24, 40, 0.095);
+  --state-mark: var(--text-1);
 
-/* 兼容旧变量名——仍有少量选择器引用，逐步收敛。 */
-:root {
-  --bg: var(--ink-app);
-  --surface: var(--ink-bar);
-  --surface2: var(--ink-row);
-  --surface3: var(--ink-pop);
-  --border: var(--line);
-  --border-strong: var(--line-strong);
-  --text: var(--text-1);
-  --text2: var(--text-2);
-  --text3: var(--text-3);
-  --brand: var(--accent-fill);
-  --shadow: var(--shadow-pop);
+  /* 浅色下投影是有效的主通道，描边退为辅助。 */
+  --elev-line: rgba(16, 24, 40, 0.12);
+  --elev-card: 0 1px 2px rgba(16, 24, 40, 0.08);
+  --elev-card-hover: 0 3px 10px rgba(16, 24, 40, 0.14);
+  --shadow-pop: 0 8px 30px rgba(16, 24, 40, 0.22);
 }

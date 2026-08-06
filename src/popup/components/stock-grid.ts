@@ -5,6 +5,7 @@
 // 架构约束：仅 import domain + view-models + events + keyed-update；per-connection AbortController。
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { StockCardViewModel } from '../view-models.js';
+import type { ColumnKey } from '../ui-preferences.js';
 import { updateKeyedChildren } from './keyed-update.js';
 import { emitPopupEvent } from './events.js';
 import { calculateVirtualWindow } from '../virtualization/virtual-window.js';
@@ -34,11 +35,16 @@ export class StockGridElement extends HTMLElement {
   private skeletonBuilt = false;
   private _viewModel: readonly StockCardViewModel[] = [];
   private _groupId: GroupId = 'g_all' as GroupId;
+  /** 列设置 enabled 集合（null = 未设置，卡片默认全部显示）。 */
+  private _columns: readonly ColumnKey[] | null = null;
   private container: HTMLElement | null = null;
   private topSpacer: HTMLElement | null = null;
   private bottomSpacer: HTMLElement | null = null;
   /** 视口由 stock-board（唯一滚动拥有者）推送。 */
   private _viewport: VirtualViewport = { scrollOffset: 0, viewportExtent: 390 };
+  private _selectedCodes: readonly StockCode[] = [];
+  /** 选中集的 Set 视图：逐卡片 includes() 在大列表上是 O(n·m)。 */
+  private _selectedSet: ReadonlySet<StockCode> = new Set();
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -79,12 +85,33 @@ export class StockGridElement extends HTMLElement {
     }
   }
 
+  get columns(): readonly ColumnKey[] | null {
+    return this._columns;
+  }
+
+  set columns(value: readonly ColumnKey[] | null) {
+    this._columns = value;
+    if (this.isConnected) this.render();
+  }
+
   get viewport(): VirtualViewport {
     return this._viewport;
   }
 
   set viewport(value: VirtualViewport) {
     this._viewport = value;
+    if (this.isConnected) this.render();
+  }
+
+  get selectedCodes(): readonly StockCode[] {
+    return this._selectedCodes;
+  }
+
+  set selectedCodes(value: readonly StockCode[]) {
+    // 同 stock-table：引用未变说明选中集没动，跳过整屏重渲染。
+    if (value === this._selectedCodes) return;
+    this._selectedCodes = value;
+    this._selectedSet = new Set(value);
     if (this.isConnected) this.render();
   }
 
@@ -165,15 +192,20 @@ export class StockGridElement extends HTMLElement {
   private createCard(vm: StockCardViewModel, orderedCodes: readonly StockCode[]): HTMLElement {
     const card = document.createElement('stock-card') as StockCardElement;
     card.groupId = this._groupId;
+    card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
+    // 与 updateCard 用同一种写法，避免两条路径长出不同的分支行为。
+    card.toggleAttribute('data-selected', this._selectedSet.has(vm.code));
     return card;
   }
 
   private updateCard(node: HTMLElement, vm: StockCardViewModel, orderedCodes: readonly StockCode[]): void {
     const card = node as unknown as StockCardElement;
     card.groupId = this._groupId;
+    card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
+    node.toggleAttribute('data-selected', this._selectedSet.has(vm.code));
   }
 }

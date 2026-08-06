@@ -1,19 +1,21 @@
 /* ============================================================================
    控制区 —— Header / 分组标签 / 工具栏 / 批量条 / 状态栏
    ============================================================================
-   固定几何：52 + 38 + 48 + (Board 390) + 32 = 560。
+   固定几何：44 + 38 + 40 + (Board 408) + 30 = 560。
    这四条都是**框架**，不是内容：它们必须安静，把注意力让给行情区。
-   因此全部使用中性灰阶，唯一的强调是「添加」的反相实心按钮。
+   因此全部使用中性灰阶；唯一的强调是「添加」按钮——它不再用反相实心，
+   而是浮层表面色 + --accent-line 描边（填充与栏底色只差 1.19:1，
+   按钮的形状完全由描边承担，所以描边不能低于 3:1）。
    ========================================================================== */
 
-/* ===== Header 52px ===== */
+/* ===== Header 44px ===== */
 
 stock-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
-  height: 52px;
+  height: var(--h-header);
   flex-shrink: 0;
   padding: 0 var(--sp-3);
   background: var(--ink-bar);
@@ -48,21 +50,36 @@ stock-header {
   flex-shrink: 0;
 }
 
+/* 视觉高度 32px、命中区 44px。
+   按钮原本就是 44px 高，塞进 44px 的 Header 里上下顶死，读起来像三块背景板
+   而不是三个按钮；压到 32px 之后 Header 才有「条」的感觉，按钮也才像按钮。
+   热区靠 ::before 补回 44px，一个像素都没少。 */
 .header-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  height: var(--touch-target-min);
-  min-width: var(--touch-target-min);
+  height: 32px;
+  min-width: 32px;
   padding: 0 var(--sp-2);
   font-size: var(--fs-meta);
   color: var(--text-2);
-  background: transparent;
+  background-color: transparent;
   border: 1px solid transparent;
   border-radius: var(--r-md);
   transition: color var(--dur-fade), background-color var(--dur-fade),
     border-color var(--dur-fade);
+}
+
+.header-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--h-header);
+  transform: translateY(-50%);
 }
 
 .header-btn svg {
@@ -71,38 +88,67 @@ stock-header {
   flex-shrink: 0;
 }
 
+/* 三态统一（Header / Tabs / Toolbar 共用同一套语汇）：
+     静止 → 透明
+     hover → --state-hover 叠加层 + --text-3 描边
+     开启 → --state-selected 叠加层 + --accent-line 描边 + 600 字重
+   hover 与开启用**不同强度的同一种通道**，两套主题下的层级关系因此一致，
+   也不会像之前那样出现「hover 与开启完全同形」。 */
 .header-btn:hover:not(:disabled) {
   color: var(--text-1);
-  background: var(--ink-row);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  border-color: var(--text-3);
 }
 
-/* 开关类按钮（主题 / 价格 / 多选）：描边 + 背景 + aria-pressed 三重反馈，
-   不依赖单一通道。 */
+/* 开关类按钮（主题 / 价格）：描边 + 叠加层 + 字重 + aria-pressed 四重反馈。 */
 .header-btn--toggle[aria-pressed='true'] {
   color: var(--text-1);
-  background: var(--ink-row);
-  border-color: var(--line-strong);
+  font-weight: 600;
+  background-image: linear-gradient(var(--state-selected), var(--state-selected));
+  border-color: var(--accent-line);
 }
 
-/* 唯一的实心按钮。靠对比度而非色相成为主操作。 */
+/* 唯一的主操作按钮：纯中文文案 + 描边 + 轻量填充。
+   高度压到 32px 而不是沿用 44px 的热区高度——44px 的实心块在 44px 高的
+   Header 里会顶满整条，看起来像一块背景板而不是一个按钮。 */
 .header-btn--primary {
-  color: var(--accent-ink);
-  background: var(--accent-fill);
+  height: 32px;
+  min-width: 0;
+  padding: 0 var(--sp-3);
+  color: var(--text-1);
+  background-color: var(--ink-pop);
+  /* 平铺主按钮的边界全靠描边，必须走 --accent-line（>=3:1），
+     --line-strong 只有 1.39:1，按钮会整个「消失」在栏底色里。 */
+  border-color: var(--accent-line);
+  box-shadow: var(--elev-card);
+  font-size: var(--fs-meta);
   font-weight: 600;
 }
 
-.header-btn--primary:hover:not(:disabled) {
-  color: var(--accent-ink);
-  background: var(--accent-fill);
-  opacity: 0.88;
+/* 热区补偿：视觉 32px，命中区仍是整条 Header 的 44px。 */
+.header-btn--primary::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--h-header);
+  transform: translateY(-50%);
 }
 
-/* ===== 分组标签 38px ===== */
+.header-btn--primary:hover:not(:disabled) {
+  border-color: var(--text-2);
+  box-shadow: var(--elev-card-hover);
+  color: var(--text-1);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+/* ===== 分组标签 + 二级操作 38px ===== */
 
 group-tabs {
   display: flex;
   align-items: stretch;
-  height: 38px;
+  height: var(--h-tabs);
   flex-shrink: 0;
   background: var(--ink-bar);
   border-bottom: 1px solid var(--line);
@@ -118,8 +164,8 @@ group-tabs {
 /* 原生横向滚动，不做无语义的左右箭头。 */
 .group-tabs-tablist {
   display: flex;
-  align-items: stretch;
-  gap: var(--sp-0);
+  align-items: center;
+  gap: var(--sp-1);
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -130,45 +176,126 @@ group-tabs {
   display: none;
 }
 
+/* 分组标签：胶囊样式，选中时整体高亮。 */
 .group-tab {
-  position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--sp-2);
-  font-size: var(--fs-body);
+  padding: 0 var(--sp-3);
+  height: var(--h-control);
+  font-size: var(--fs-meta);
   color: var(--text-3);
   background: transparent;
   white-space: nowrap;
-  transition: color var(--dur-fade);
+  border-radius: var(--r-md);
+  transition: color var(--dur-fade), background-color var(--dur-fade);
 }
 
 .group-tab:hover {
-  color: var(--text-2);
+  color: var(--text-1);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
-/* 当前分组：文字颜色 + 字重 + 底部指示线三者共同表达。 */
+/* 当前分组：实心胶囊 + 1px 描边环 + 字重。
+   底色通道本身只有 ~1.1:1，与 hover 的差距肉眼几乎不可辨——只靠它的话，
+   「鼠标划过某个未选中标签」看起来就等于「这个标签被选中了」。
+   所以必须有一条高对比通道：这里用描边环（--accent-line，4.6:1 起）。
+   不用下划线——胶囊只有 28px 高、栏是 38px，下划线会浮在栏中间不贴底，
+   既不像 tab 的下划线也不像胶囊的一部分。描边环则天然是胶囊的轮廓，
+   而且用 inset box-shadow 画，不占布局、不会让标签在选中时跳一下宽度。 */
 .group-tab[aria-selected='true'] {
   color: var(--text-1);
   font-weight: 600;
+  background-color: var(--ink-pop);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
-.group-tab[aria-selected='true']::after {
-  content: '';
-  position: absolute;
-  left: var(--sp-2);
-  right: var(--sp-2);
-  bottom: 0;
-  height: 2px;
-  background: var(--text-1);
-  border-radius: 1px 1px 0 0;
+/* 选中标签再被 hover：叠一层，但不改变描边——它已经是「当前」了。 */
+.group-tab[aria-selected='true']:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
-.group-tabs-actions {
+/* 分组管理区：紧贴 tablist（+新建 + ◀▶）。
+   分隔线放**左**边——它要隔开的是「分组标签」和「管理按钮」。
+   放右边时，「新建」紧挨着标签列表且同在分隔线内侧，读起来就像
+   一个叫「新建」的分组（两者的高度、字号、颜色、透明底色本来就一样）。 */
+.group-tabs-group-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+  padding-left: var(--sp-2);
+  padding-right: var(--sp-2);
+  border-left: 1px solid var(--line);
+}
+
+/* 重排按钮容器。 */
+.group-tabs-reorder {
   display: flex;
   align-items: center;
   gap: var(--sp-0);
+}
+
+/* 持仓管理按钮区：靠右。 */
+.group-tabs-right-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
   flex-shrink: 0;
   padding-right: var(--sp-2);
+  margin-left: auto;
+}
+
+/* Tabs 行按钮：图标 + 文字标签，与 Header 按钮风格一致。 */
+.tabs-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: var(--h-control);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-meta);
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  transition: color var(--dur-fade), background-color var(--dur-fade),
+    border-color var(--dur-fade);
+}
+
+/* 热区补偿：视觉高度 28px，但命中区域撑满整条标签栏（38px）。
+   「管理持仓」从 Header 的 44px 搬到这里，视觉上不可能再占 44px；
+   撑到 38px 是不与上下相邻控件重叠的前提下能给到的最大值
+   （44px 会溢出标签栏、抢走 Header 按钮的点击）。 */
+.tabs-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--h-tabs);
+  transform: translateY(-50%);
+}
+
+.tabs-btn svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.tabs-btn:hover:not(:disabled) {
+  color: var(--text-1);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  border-color: var(--text-3);
+}
+
+/* 持仓管理开启态：必须和 :hover 区分开——两者原本是同样的三条声明，
+   鼠标停在关闭状态的按钮上和真正开启完全同形。 */
+.tabs-btn--toggle[aria-pressed='true'] {
+  color: var(--text-1);
+  background-image: linear-gradient(var(--state-selected), var(--state-selected));
+  border-color: var(--accent-line);
+  font-weight: 600;
 }
 
 .group-tab-move-group {
@@ -176,32 +303,44 @@ group-tabs {
   gap: var(--sp-0);
 }
 
+/* 作者样式的 display 会盖掉 UA 的 [hidden]{display:none}——不写这条，
+   组件里的 node.hidden = true 根本藏不住（非激活分组的箭头照样占宽）。 */
+.group-tab-move-group[hidden] {
+  display: none;
+}
+
 .group-tab-move {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* 26px 是上一轮无障碍审查定下的最小热区，别再往下压。 */
   width: 26px;
   height: 26px;
-  font-size: var(--fs-meta);
   color: var(--text-3);
   background: transparent;
+  border: none;
   border-radius: var(--r-sm);
+}
+
+.group-tab-move svg {
+  width: 12px;
+  height: 12px;
 }
 
 .group-tab-move:hover:not(:disabled) {
   color: var(--text-1);
-  background: var(--ink-row);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .group-tab-move:disabled {
   opacity: 0.35;
 }
 
-/* ===== 工具栏 48px ===== */
+/* ===== 工具栏 40px ===== */
 
 stock-toolbar {
   display: block;
-  height: 48px;
+  height: var(--h-toolbar);
   flex-shrink: 0;
   background: var(--ink-bar);
   border-bottom: 1px solid var(--line);
@@ -220,84 +359,126 @@ stock-toolbar {
   min-width: 0;
 }
 
-/* 工具栏内的控件压到 32px——44px 触控目标留给 Header 与菜单项，
-   这里是次级操作，硬撑高度会挤掉行情区。 */
-.toolbar-search-input {
+/* 搜索框：工具栏的主交互入口。
+   用 input.toolbar-search-input 双选择器提升优先级，
+   绕过 base.css 全局的 44px min-height，
+   使搜索框与同行的排序/列设置控件高度一致（28px）。 */
+input.toolbar-search-input {
   width: 100%;
-  min-height: 32px;
-  height: 32px;
+  min-height: 0;
+  height: var(--h-control);
   padding: 0 var(--sp-2);
   font-size: var(--fs-meta);
   background: var(--ink-row);
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
 }
 
-.toolbar-search-input:focus-visible {
-  border-color: var(--line-strong);
+.toolbar-search-input::placeholder {
+  color: var(--text-3);
 }
 
-.toolbar-sort {
-  width: 98px;
-  min-height: 32px;
-  height: 32px;
-  padding: 0 var(--sp-2);
+input.toolbar-search-input:focus-visible {
+  border-color: var(--text-3);
+  background: var(--ink-pop);
+}
+
+select.toolbar-sort {
+  width: 84px;
+  min-height: 0;
+  height: var(--h-control);
+  padding: 0 var(--sp-1);
   font-size: var(--fs-meta);
   color: var(--text-2);
   background: var(--ink-row);
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+/* 描边控件的 hover 一律换到 --text-3：--line-strong 只有 1.39:1，
+   从 1.29 变到 1.39 肉眼分辨不出，等于没有 hover 反馈。 */
+.toolbar-sort:hover {
+  border-color: var(--text-3);
+  color: var(--text-1);
 }
 
 /* 视图分段控件：整体一个凹槽，选中项浮起。 */
 .toolbar-view-group {
   display: inline-flex;
-  gap: 2px;
+  gap: 0;
   padding: 2px;
   background: var(--ink-row);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
 }
 
 .toolbar-view-btn {
+  position: relative;
   min-width: 36px;
-  height: 28px;
+  height: 24px;
   padding: 0 var(--sp-2);
   font-size: var(--fs-meta);
   color: var(--text-3);
-  background: transparent;
+  background-color: transparent;
+  border: none;
   border-radius: var(--r-sm);
   transition: color var(--dur-fade), background-color var(--dur-fade);
 }
 
-.toolbar-view-btn:hover {
-  color: var(--text-2);
+/* 热区补偿：视觉 24px（凹槽内高只有这么多），命中区撑满工具栏。
+   24px 正好卡在 WCAG 2.5.8 的下限上，不留余量。 */
+.toolbar-view-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--h-toolbar);
+  transform: translateY(-50%);
 }
 
+.toolbar-view-btn:hover {
+  color: var(--text-1);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+/* 选中的分段必须真的「浮起来」：
+   原来只把底色换成 --ink-pop，在深色下与凹槽底色只差 1.1:1，看不出选中。
+   现在用 表面色 + 描边环 + 投影 三件套，两套主题都成立。 */
 .toolbar-view-btn[aria-pressed='true'] {
   color: var(--text-1);
-  background: var(--ink-pop);
+  font-weight: 600;
+  background-color: var(--ink-bar);
+  box-shadow: var(--elev-card), inset 0 0 0 1px var(--elev-line);
 }
 
 .toolbar-btn {
   min-width: 32px;
-  height: 32px;
+  height: var(--h-control);
   padding: 0 var(--sp-2);
   font-size: var(--fs-meta);
   color: var(--text-2);
-  background: transparent;
-  border: 1px solid transparent;
+  background-color: var(--ink-row);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
+  cursor: pointer;
+  transition: color var(--dur-fade), background-color var(--dur-fade),
+    border-color var(--dur-fade);
 }
 
 .toolbar-btn:hover:not(:disabled) {
   color: var(--text-1);
-  background: var(--ink-row);
+  border-color: var(--text-3);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
+/* 面板已展开：与 hover 必须可区分——描边走 --accent-line，并加重字重。 */
 .toolbar-btn[aria-expanded='true'] {
   color: var(--text-1);
-  background: var(--ink-row);
-  border-color: var(--line-strong);
+  font-weight: 600;
+  border-color: var(--accent-line);
+  background-image: linear-gradient(var(--state-selected), var(--state-selected));
 }
 
 /* ===== 批量操作条 ===== */
@@ -307,7 +488,7 @@ batch-toolbar {
   align-items: center;
   gap: var(--sp-2);
   flex-shrink: 0;
-  height: 40px;
+  height: var(--h-toolbar);
   padding: 0 var(--sp-3);
   background: var(--ink-row);
   border-bottom: 1px solid var(--line);
@@ -332,7 +513,7 @@ batch-toolbar[hidden] {
 }
 
 .batch-toolbar-btn {
-  height: 30px;
+  height: var(--h-status);
   padding: 0 var(--sp-3);
   font-size: var(--fs-meta);
   color: var(--text-1);
@@ -354,7 +535,7 @@ batch-toolbar[hidden] {
   background: var(--up-bg);
 }
 
-/* ===== 状态栏 32px ===== */
+/* ===== 状态栏 30px ===== */
 
 .quote-status {
   display: flex;

@@ -29,7 +29,8 @@ export interface VirtualWindowResult {
 }
 
 /** 视口高度兜底值（Popup 看板区固定 390px）。 */
-const FALLBACK_VIEWPORT_EXTENT = 390;
+// 与 stock-board 的兜底一致：560 - 44 - 38 - 40 - 30 = 408。
+const FALLBACK_VIEWPORT_EXTENT = 408;
 
 /**
  * 计算虚拟窗口。

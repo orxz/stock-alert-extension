@@ -109,14 +109,14 @@ test('search input emits empty keyword when cleared', () => {
 test('view button emits a final preference value', () => {
   const { spy } = setup(mkToolbar({ viewMode: 'grid' }));
   spy.reset();
-  clickButton('列表视图');
+  clickButton('列表');
   assert.deepEqual(spy.lastEvent('view-mode-change')?.detail, { viewMode: 'list' });
 });
 
 test('clicking grid view button emits view-mode-change with grid', () => {
   const { spy } = setup(mkToolbar({ viewMode: 'list' }));
   spy.reset();
-  clickButton('网格视图');
+  clickButton('网格');
   assert.deepEqual(spy.lastEvent('view-mode-change')?.detail, { viewMode: 'grid' });
 });
 

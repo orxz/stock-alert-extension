@@ -19,8 +19,12 @@ export interface UiColumnPreferences {
 /** localStorage 键名。 */
 export const UI_COLUMNS_STORAGE_KEY = 'uiColumns:v1';
 
-/** 始终启用的列——关掉它们，列表就不再是股票列表了。 */
-export const REQUIRED_COLUMNS = ['name', 'price', 'changePercent'] as const;
+/**
+ * 锁定列——只有名称。名称是列表的语义锚点（详情 tooltip 的挂载点、
+ * code/status 副标题的容器），固定显示在列表最前，且不进入列设置面板；
+ * 其余列（含现价/涨跌幅）均可自由显隐，取消不再被强制弹回。
+ */
+export const REQUIRED_COLUMNS = ['name'] as const;
 
 /** 默认列偏好。 */
 export const DEFAULT_UI_COLUMNS: UiColumnPreferences = Object.freeze({
@@ -49,7 +53,9 @@ function sanitizeList(value: unknown): ColumnKey[] {
 /**
  * 规范化列偏好：
  * - 版本号不是 1 → 整体退回默认值（未知版本不做猜测）。
- * - enabled：去重、丢弃未知列、强制并入必需列，并按 order 排列。
+ * - name 是锁定列：永远存在且位于首位——面板提交的 order 不含它
+ *   （面板不显示锁定列），旧数据可能把它排在别处，统一纠正后再校验。
+ * - enabled：去重、丢弃未知列、强制并入锁定列，并按 order 排列。
  * - order：只有当它是全部已知列的完整排列时才采纳；否则退回默认顺序，
  *   避免残缺顺序导致某些列永远排不出来。
  */
@@ -58,6 +64,9 @@ export function normalizeUiColumns(value: unknown): UiColumnPreferences {
   if (!raw || typeof raw !== 'object' || raw.version !== 1) return DEFAULT_UI_COLUMNS;
 
   const sanitizedOrder = sanitizeList(raw.order);
+  const nameIdx = sanitizedOrder.indexOf('name');
+  if (nameIdx > 0) sanitizedOrder.splice(nameIdx, 1);
+  if (nameIdx !== 0) sanitizedOrder.unshift('name');
   const order: readonly ColumnKey[] =
     sanitizedOrder.length === KNOWN_COLUMNS.length ? sanitizedOrder : DEFAULT_UI_COLUMNS.order;
 

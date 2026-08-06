@@ -24,6 +24,20 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
     displayPrice: '100.50',
     displayChange: '+2.30',
     displayAmount: '1.2亿',
+    displayOpen: '99.00',
+    displayHigh: '101.00',
+    displayLow: '98.00',
+    displayPrevClose: '99.50',
+    displayVolume: '2.9万',
+    displayTurnoverRate: '0.20%',
+    displayAmplitude: '1.33%',
+    displayVolumeRatio: '0.52',
+    displayPe: '19.78',
+    displayPb: '7.02',
+    displayTotalMarketCap: '1.64万亿',
+    displayFloatMarketCap: '1.64万亿',
+    displayLimitUp: '1650.00',
+    displayLimitDown: '1350.00',
     ...overrides
   };
 }
@@ -32,7 +46,7 @@ const ORDERED_CODES: StockCode[] = ['sh600519' as StockCode, 'sz000001' as Stock
 const GROUP_ID = 'g_all' as GroupId;
 
 function setup(vm?: StockCardViewModel): {
-  el: HTMLElement & { viewModel: StockCardViewModel; orderedCodes: StockCode[]; groupId: GroupId };
+  el: HTMLElement & { viewModel: StockCardViewModel; orderedCodes: StockCode[]; groupId: GroupId; columns: string[] | null };
   spy: PopupEventSpy;
 } {
   resetDom();
@@ -44,6 +58,7 @@ function setup(vm?: StockCardViewModel): {
     viewModel: StockCardViewModel;
     orderedCodes: StockCode[];
     groupId: GroupId;
+    columns: string[] | null;
   };
   container.append(el);
   el.orderedCodes = ORDERED_CODES;
@@ -163,6 +178,49 @@ test('all buttons meet 44px minimum touch target via CSS class', () => {
   }
 });
 
+test('card renders stock-detail-tooltip with sixteen detail values', () => {
+  setup(card('sh600519', {
+    displayOpen: '99.00',
+    displayHigh: '101.00',
+    displayLow: '98.00',
+    displayPrevClose: '99.50',
+    displayVolume: '2.9万',
+    displayAmount: '37.5亿',
+    displayChange: '+18.00',
+    displayTurnoverRate: '0.20%',
+    displayAmplitude: '1.33%',
+    displayVolumeRatio: '0.52',
+    displayPe: '19.78',
+    displayPb: '7.02',
+    displayTotalMarketCap: '1.64万亿',
+    displayFloatMarketCap: '1.64万亿',
+    displayLimitUp: '1650.00',
+    displayLimitDown: '1350.00'
+  }));
+  const cardEl = document.querySelector('stock-card[data-key="sh600519"]') as HTMLElement;
+  const tooltip = cardEl.querySelector('.stock-detail-tooltip');
+  assert.ok(tooltip, 'card contains a detail tooltip');
+  const value = (key: string): string | null =>
+    tooltip?.querySelector(`.stock-detail-value[data-field="${key}"]`)?.textContent ?? null;
+  assert.equal(value('open'), '99.00');
+  assert.equal(value('high'), '101.00');
+  assert.equal(value('low'), '98.00');
+  assert.equal(value('prevClose'), '99.50');
+  assert.equal(value('volume'), '2.9万');
+  assert.equal(value('amount'), '37.5亿');
+  assert.equal(value('change'), '+18.00');
+  assert.equal(value('turnoverRate'), '0.20%');
+  assert.equal(value('amplitude'), '1.33%');
+  assert.equal(value('volumeRatio'), '0.52');
+  assert.equal(value('pe'), '19.78');
+  assert.equal(value('pb'), '7.02');
+  assert.equal(value('totalMarketCap'), '1.64万亿');
+  assert.equal(value('floatMarketCap'), '1.64万亿');
+  assert.equal(value('limitUp'), '1650.00');
+  assert.equal(value('limitDown'), '1350.00');
+  assert.equal(tooltip?.querySelectorAll('.stock-detail-item').length, 16, 'tooltip should have 16 items');
+});
+
 test('updating viewModel re-renders price and status', () => {
   const { el } = setup(card('sh600519', { displayPrice: '100.00', status: 'fresh' }));
   el.viewModel = card('sh600519', { displayPrice: '200.00', status: 'cached', staleLabel: '已过期' });
@@ -178,4 +236,77 @@ test('reconnecting the card does not duplicate listeners', () => {
   spy.reset();
   clickAction('stock-menu');
   assert.equal(spy.eventCount('stock-menu-open-request'), 1);
+});
+
+test('hovering the card triggers tooltip flip detection without errors', () => {
+  const { el } = setup(card('sh600519'));
+  assert.doesNotThrow(() => {
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    el.dispatchEvent(new Event('focusin', { bubbles: true }));
+    el.dispatchEvent(new Event('focusout', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }));
+  });
+});
+
+// ===== 列设置在卡片视图的显隐 =====
+
+test('card renders amount field with displayAmount text', () => {
+  setup(card('sh600519'));
+  const amountEl = document.querySelector('stock-card [data-field="amount"]');
+  assert.ok(amountEl, 'card should render an amount field');
+  assert.equal(amountEl?.textContent, '1.2亿');
+});
+
+test('card hides code/status/amount when columns exclude them', () => {
+  const { el } = setup(card('sh600519'));
+  el.columns = ['name', 'price', 'changePercent'];
+  const codeEl = el.querySelector('[data-field="code"]') as HTMLElement;
+  const statusEl = el.querySelector('.stock-card-status-label') as HTMLElement;
+  const amountEl = el.querySelector('[data-field="amount"]') as HTMLElement;
+  assert.equal(codeEl.hidden, true, 'code should hide');
+  assert.equal(statusEl.hidden, true, 'status should hide');
+  assert.equal(amountEl.hidden, true, 'amount should hide');
+});
+
+test('card shows all configurable fields when columns unset', () => {
+  const { el } = setup(card('sh600519'));
+  const codeEl = el.querySelector('[data-field="code"]') as HTMLElement;
+  const statusEl = el.querySelector('.stock-card-status-label') as HTMLElement;
+  const amountEl = el.querySelector('[data-field="amount"]') as HTMLElement;
+  assert.equal(codeEl.hidden, false);
+  assert.equal(statusEl.hidden, false);
+  assert.equal(amountEl.hidden, false);
+});
+
+test('card restores hidden fields when columns re-enabled', () => {
+  const { el } = setup(card('sh600519'));
+  el.columns = ['name', 'price', 'changePercent'];
+  el.columns = ['name', 'price', 'changePercent', 'code', 'status', 'amount'];
+  const codeEl = el.querySelector('[data-field="code"]') as HTMLElement;
+  const statusEl = el.querySelector('.stock-card-status-label') as HTMLElement;
+  const amountEl = el.querySelector('[data-field="amount"]') as HTMLElement;
+  assert.equal(codeEl.hidden, false);
+  assert.equal(statusEl.hidden, false);
+  assert.equal(amountEl.hidden, false);
+});
+
+test('card hides price/changePercent when columns exclude them', () => {
+  const { el } = setup(card('sh600519'));
+  el.columns = ['name', 'amount', 'code', 'status'];
+  const priceEl = el.querySelector('[data-field="price"]') as HTMLElement;
+  const pctEl = el.querySelector('.stock-card-change-percent') as HTMLElement;
+  assert.equal(priceEl.hidden, true, 'price should hide');
+  assert.equal(pctEl.hidden, true, 'changePercent should hide');
+  // 锁定列 name 与不受列设置控制的涨跌额（change）保持可见。
+  assert.equal(el.querySelector('[data-field="name"]')?.hasAttribute('hidden'), false);
+});
+
+test('card restores price/changePercent when columns re-enabled', () => {
+  const { el } = setup(card('sh600519'));
+  el.columns = ['name', 'amount', 'code', 'status'];
+  el.columns = ['name', 'price', 'changePercent', 'amount', 'code', 'status'];
+  const priceEl = el.querySelector('[data-field="price"]') as HTMLElement;
+  const pctEl = el.querySelector('.stock-card-change-percent') as HTMLElement;
+  assert.equal(priceEl.hidden, false);
+  assert.equal(pctEl.hidden, false);
 });

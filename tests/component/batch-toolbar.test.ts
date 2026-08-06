@@ -14,6 +14,7 @@ function batch(overrides: Partial<BatchToolbarViewModel> = {}): BatchToolbarView
   return {
     visible: true,
     selectedCount: 2,
+    totalCount: 5,
     selectedCodes: ['sh600519' as StockCode, 'sz000001' as StockCode],
     groupId: 'g_all' as GroupId,
     ...overrides
@@ -119,4 +120,30 @@ test('reconnecting does not duplicate listeners', () => {
   spy.reset();
   clickAction('batch-cancel');
   assert.equal(spy.eventCount('selection-mode-change'), 1);
+});
+
+// ===== 全选 / 取消全选 =====
+
+test('clicking select-all emits batch-select-all', () => {
+  const { spy } = setup(batch());
+  spy.reset();
+  clickAction('batch-select-all');
+  assert.equal(spy.eventCount('batch-select-all'), 1);
+});
+
+test('select-all flips to 取消全选 once everything is selected', () => {
+  const { el } = setup(batch({ selectedCount: 2, totalCount: 5 }));
+  const btn = document.querySelector('button[data-action="batch-select-all"]') as HTMLButtonElement;
+  assert.equal(btn.textContent, '全选');
+  el.viewModel = batch({ selectedCount: 5, totalCount: 5 });
+  assert.equal(btn.textContent, '取消全选');
+});
+
+// aria-label 优先于可见文本：只改 textContent 会让读屏永远念「全选」。
+test('select-all accessible name tracks the visible label', () => {
+  const { el } = setup(batch({ selectedCount: 2, totalCount: 5 }));
+  const btn = document.querySelector('button[data-action="batch-select-all"]') as HTMLButtonElement;
+  assert.equal(btn.getAttribute('aria-label'), '全选');
+  el.viewModel = batch({ selectedCount: 5, totalCount: 5 });
+  assert.equal(btn.getAttribute('aria-label'), '取消全选');
 });

@@ -22,6 +22,7 @@ const ALL_EVENT_TYPES = [
   'stock-search-select',
   'quote-refresh-request',
   'stock-toggle-select',
+  'batch-select-all',
   'virtual-focus-request',
   'column-settings-change',
   'popover-close-request',

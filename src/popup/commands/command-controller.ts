@@ -3,7 +3,7 @@
 // - 写命令：从 Store 取 expectedRevision，经 MutationReconciler 执行（uncertain 对账）。
 // - gesture key：相同 method + 关键参数的 in-flight 命令合并为同一 promise（去重）。
 // - createGroup：客户端生成 `g_${crypto.randomUUID()}` 作为 groupId。
-// - searchStocks / refreshQuotes：单调递增 generation，拒绝 stale 响应。
+// - dialogSearchStocks / refreshQuotes：单调递增 generation，拒绝 stale 响应。
 // - bootstrap：dispatch requested → rpc.call → dispatch confirmed/failed。
 // 只 import domain/protocol + popup 内部（rpc-client / store / commands）。
 import type {
@@ -178,15 +178,28 @@ export class CommandController {
 
   // ===== 读命令（不走 reconciler；用 generation 拒绝 stale 响应）=====
 
-  /** 搜索股票：单调递增 searchGeneration，仅最新 query 的响应被接受。 */
-  async searchStocks(query: string): Promise<void> {
-    // reducer 的 search/requested 将 state.searchGeneration 设为 action.generation。
+  /**
+   * 对话框内股票搜索（add-stock）——popup 里唯一的远程搜索入口。
+   * 工具栏那条是纯本地过滤（只写 view/searchKeyword），不发 RPC。
+   * 写入 view/dialogSearch 而非 view/searchKeyword——避免后台列表跳动。
+   * 复用同一个 searchGeneration 做 stale 拒绝。
+   */
+  async dialogSearchStocks(query: string): Promise<void> {
+    this.store.dispatch({ type: 'view/dialogSearchKeyword', keyword: query });
+    if (!query.trim()) {
+      // 清空查询同样要作废在途响应：dialogReset 原子重置 keyword/results、
+      // 归零 async 并递增 generation——否则迟到的旧关键词结果会落进空查询状态。
+      this.store.dispatch({ type: 'search/dialogReset' });
+      return;
+    }
     const generation = this.store.getState().async.searchGeneration + 1;
-    this.store.dispatch({ type: 'search/requested', query, generation });
+    // 用 dialogRequested 而非 search/requested——后者会写 view.searchKeyword 污染工具栏。
+    this.store.dispatch({ type: 'search/dialogRequested', generation });
     try {
       const results = (await this.rpc.call('stock:search', { query })) as readonly StockSearchResult[];
-      if (generation !== this.store.getState().async.searchGeneration) return; // stale
-      this.store.dispatch({ type: 'search/confirmed', results, generation });
+      // stale 判定交给 reducer（dialogConfirmed 带 generation），避免两处判定漂移；
+      // 同时结算 async.stockSearch，否则 combobox 会一直停在 loading/aria-busy。
+      this.store.dispatch({ type: 'search/dialogConfirmed', results, generation });
     } catch (error) {
       if (generation !== this.store.getState().async.searchGeneration) return; // stale
       this.store.dispatch({ type: 'search/failed', error: toSafeClientError(error), generation });

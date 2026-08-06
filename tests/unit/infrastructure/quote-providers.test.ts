@@ -96,6 +96,78 @@ test('Eastmoney skips rows without f12', () => {
   assert.ok(result.sh600519);
 });
 
+test('Eastmoney keeps open/high/low/prevClose/volume fields', () => {
+  const result = parseEastmoney({ data: { diff: [
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2, f4: 18, f5: 28566, f15: 1510, f16: 1490, f17: 1495, f18: 1482 }
+  ] } });
+  assert.equal(result.sh600519?.open, 1495);
+  assert.equal(result.sh600519?.high, 1510);
+  assert.equal(result.sh600519?.low, 1490);
+  assert.equal(result.sh600519?.prevClose, 1482);
+  assert.equal(result.sh600519?.volume, 28566);
+});
+
+test('Eastmoney omits detail fields when the endpoint omits them', () => {
+  const result = parseEastmoney({ data: { diff: [
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500 }
+  ] } });
+  assert.equal(result.sh600519?.open, undefined);
+  assert.equal(result.sh600519?.high, undefined);
+  assert.equal(result.sh600519?.low, undefined);
+  assert.equal(result.sh600519?.prevClose, undefined);
+  assert.equal(result.sh600519?.volume, undefined);
+});
+
+test('Eastmoney keeps ratio/cap detail fields', () => {
+  const result = parseEastmoney({ data: { diff: [
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500, f3: 1.2, f4: 18, f7: 1.33, f8: 0.2, f9: 19.78, f10: 0.52, f20: 1635794000000, f21: 1635794000000, f23: 7.02 }
+  ] } });
+  assert.equal(result.sh600519?.turnoverRate, 0.2);
+  assert.equal(result.sh600519?.amplitude, 1.33);
+  assert.equal(result.sh600519?.volumeRatio, 0.52);
+  assert.equal(result.sh600519?.pe, 19.78);
+  assert.equal(result.sh600519?.pb, 7.02);
+  assert.equal(result.sh600519?.totalMarketCap, 1635794000000);
+  assert.equal(result.sh600519?.floatMarketCap, 1635794000000);
+});
+
+/**
+ * 回归：ulist.np/get 上的 f51/f52 不是涨停价/跌停价。
+ *
+ * 实测 push2delay.eastmoney.com/api/qt/ulist.np/get?fltt=2（2026-08-06）：
+ *   sh600519 现价 1308.55 / 昨收 1306.45 → f51=271524528742.4、f52=22132684069.8
+ *   sz000001 → f51=0.0、f52=10879000000.0
+ * 同日 stock/get 上 f51/f52 确为涨停/跌停（143710/117581 = 1437.10/1175.81），
+ * 腾讯 [47]/[48] 也给出同一真值——字段含义随 endpoint 变化，批量接口这两个槽位
+ * 装的是别的量纲。照搬会把 2715 亿当成涨停价渲染成「271524528742.40」。
+ * 该 endpoint 的 f1–f300 全量扫描均无真实涨跌停字段，故主源不提供该数据。
+ */
+test('Eastmoney never maps f51/f52 to limit prices (they are not limit prices on ulist.np)', () => {
+  const result = parseEastmoney({ data: { diff: [
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1308.55, f18: 1306.45, f51: 271524528742.4, f52: 22132684069.8 },
+    { f12: '000001', f13: 0, f14: '平安银行', f2: 11.27, f18: 11.25, f51: 0.0, f52: 10879000000.0 }
+  ] } });
+  assert.equal(result.sh600519?.limitUp, undefined, 'f51 不是涨停价，绝不能透出');
+  assert.equal(result.sh600519?.limitDown, undefined, 'f52 不是跌停价，绝不能透出');
+  assert.equal(result.sz000001?.limitUp, undefined);
+  assert.equal(result.sz000001?.limitDown, undefined);
+});
+
+test('Eastmoney omits ratio/cap fields when the endpoint omits them', () => {
+  const result = parseEastmoney({ data: { diff: [
+    { f12: '600519', f13: 1, f14: '贵州茅台', f2: 1500 }
+  ] } });
+  assert.equal(result.sh600519?.turnoverRate, undefined);
+  assert.equal(result.sh600519?.amplitude, undefined);
+  assert.equal(result.sh600519?.volumeRatio, undefined);
+  assert.equal(result.sh600519?.pe, undefined);
+  assert.equal(result.sh600519?.pb, undefined);
+  assert.equal(result.sh600519?.totalMarketCap, undefined);
+  assert.equal(result.sh600519?.floatMarketCap, undefined);
+  assert.equal(result.sh600519?.limitUp, undefined);
+  assert.equal(result.sh600519?.limitDown, undefined);
+});
+
 // ===== parseTencent =====
 
 /**
@@ -170,6 +242,51 @@ test('Tencent returns empty for unmatched text and the none-match sentinel', () 
   assert.deepEqual(parseTencent('no match here'), {});
   // 未知代码时腾讯返回 v_pv_none_match="1"——字段数不足，必须跳过。
   assert.deepEqual(parseTencent('v_pv_none_match="1";'), {});
+});
+
+test('Tencent keeps open/high/low/prevClose/volume fields', () => {
+  const result = parseTencent(tencentLine('sh600519'));
+  assert.equal(result.sh600519?.open, 1328.36);
+  assert.equal(result.sh600519?.high, 1333.8);
+  assert.equal(result.sh600519?.low, 1303.5);
+  assert.equal(result.sh600519?.prevClose, 1328.36);
+  assert.equal(result.sh600519?.volume, 28566);
+});
+
+test('Tencent omits detail fields when the endpoint omits them', () => {
+  const result = parseTencent(tencentLine('sh600519', { 5: '', 33: '', 34: '', 36: '' }));
+  assert.equal(result.sh600519?.open, undefined);
+  assert.equal(result.sh600519?.high, undefined);
+  assert.equal(result.sh600519?.low, undefined);
+  assert.equal(result.sh600519?.volume, undefined);
+});
+
+test('Tencent keeps ratio/cap/limit detail fields (cap converted to yuan)', () => {
+  const result = parseTencent(tencentLine('sh600519', {
+    38: '0.20', 39: '19.78', 43: '1.10', 44: '16357.94', 45: '16357.94', 46: '7.02', 47: '1437.10', 48: '1175.81', 49: '0.52'
+  }));
+  assert.equal(result.sh600519?.turnoverRate, 0.2);
+  assert.equal(result.sh600519?.amplitude, 1.1);
+  assert.equal(result.sh600519?.volumeRatio, 0.52);
+  assert.equal(result.sh600519?.pe, 19.78);
+  assert.equal(result.sh600519?.pb, 7.02);
+  assert.equal(result.sh600519?.totalMarketCap, 1635794000000);
+  assert.equal(result.sh600519?.floatMarketCap, 1635794000000);
+  assert.equal(result.sh600519?.limitUp, 1437.1);
+  assert.equal(result.sh600519?.limitDown, 1175.81);
+});
+
+test('Tencent omits ratio/cap/limit fields when the endpoint omits them', () => {
+  const result = parseTencent(tencentLine('sh600519', { 38: '', 39: '', 43: '', 44: '', 45: '', 46: '', 47: '', 48: '', 49: '' }));
+  assert.equal(result.sh600519?.turnoverRate, undefined);
+  assert.equal(result.sh600519?.amplitude, undefined);
+  assert.equal(result.sh600519?.volumeRatio, undefined);
+  assert.equal(result.sh600519?.pe, undefined);
+  assert.equal(result.sh600519?.pb, undefined);
+  assert.equal(result.sh600519?.totalMarketCap, undefined);
+  assert.equal(result.sh600519?.floatMarketCap, undefined);
+  assert.equal(result.sh600519?.limitUp, undefined);
+  assert.equal(result.sh600519?.limitDown, undefined);
 });
 
 // ===== parseEastmoneySearch =====

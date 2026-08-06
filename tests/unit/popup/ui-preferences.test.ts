@@ -36,7 +36,8 @@ test('normalizes corrupt, duplicate, and unknown columns', () => {
     }),
     {
       version: 1,
-      enabled: ['name', 'price', 'changePercent', 'amount'],
+      // 只有 name 是锁定列会被强制并入；price/changePercent 是普通可配置列。
+      enabled: ['name', 'amount'],
       order: ['name', 'price', 'changePercent', 'amount', 'code', 'status']
     }
   );
@@ -52,19 +53,31 @@ test('non-object input falls back to defaults', () => {
   }
 });
 
-test('required columns cannot be disabled', () => {
+test('only the locked name column cannot be disabled', () => {
   const result = normalizeUiColumns({ version: 1, enabled: ['code'], order: DEFAULT_UI_COLUMNS.order });
-  for (const required of ['name', 'price', 'changePercent']) {
-    assert.ok(result.enabled.includes(required as never), `${required} forced back on`);
-  }
+  assert.ok(result.enabled.includes('name'), 'name forced back on');
+  // price/changePercent/amount/code/status 均可自由取消。
+  assert.ok(!result.enabled.includes('price'));
+  assert.ok(!result.enabled.includes('changePercent'));
+  assert.ok(!result.enabled.includes('amount'));
 });
 
-test('a complete custom order is preserved', () => {
+test('the locked name column is pinned to the first position', () => {
   const custom = ['amount', 'name', 'price', 'changePercent', 'status', 'code'] as const;
   const result = normalizeUiColumns({ version: 1, enabled: [...custom], order: [...custom] });
-  assert.deepEqual(result.order, [...custom]);
-  // enabled 跟随 order 排列，保证渲染顺序与配置顺序一致。
-  assert.deepEqual(result.enabled, [...custom]);
+  // name 锁定在首位，其余列相对顺序保留。
+  assert.deepEqual(result.order, ['name', 'amount', 'price', 'changePercent', 'status', 'code']);
+  assert.deepEqual(result.enabled, ['name', 'amount', 'price', 'changePercent', 'status', 'code']);
+});
+
+test('an order missing the locked name column gets it prepended', () => {
+  const result = normalizeUiColumns({
+    version: 1,
+    enabled: ['price', 'changePercent', 'amount', 'code', 'status'],
+    order: ['price', 'changePercent', 'amount', 'code', 'status']
+  });
+  assert.deepEqual(result.order, ['name', 'price', 'changePercent', 'amount', 'code', 'status']);
+  assert.deepEqual(result.enabled, ['name', 'price', 'changePercent', 'amount', 'code', 'status']);
 });
 
 test('enabled is always ordered by the column order', () => {
@@ -73,7 +86,8 @@ test('enabled is always ordered by the column order', () => {
     enabled: ['amount', 'name'],
     order: DEFAULT_UI_COLUMNS.order
   });
-  assert.deepEqual(result.enabled, ['name', 'price', 'changePercent', 'amount']);
+  // name 锁定前置；amount 跟随 order 中它的位置。
+  assert.deepEqual(result.enabled, ['name', 'amount']);
 });
 
 test('load returns defaults for missing, corrupt, and unreadable storage', () => {

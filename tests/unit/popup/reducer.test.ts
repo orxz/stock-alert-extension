@@ -128,6 +128,121 @@ test('reducer replaces authoritative mutation state without mutating input', () 
   assert.equal(next.domain.revision, result.revision);
 });
 
+// ===== currentGroupId 不变量：当前分组被删除后回退「全部」 =====
+
+test('mutation/confirmed falls back to g_all when the current group was deleted', () => {
+  const base = createInitialState();
+  const before: AppState = {
+    ...base,
+    view: { ...base.view, currentGroupId: G1, selectedCodes: ['sh600519' as StockCode] }
+  };
+  // 删除 g1 后的 userData：groups 只剩 g_all。
+  const result = mkMutationResult();
+  const next = reducer(before, { type: 'mutation/confirmed', result });
+  assert.equal(next.view.currentGroupId, G_ALL);
+  assert.deepEqual(next.view.selectedCodes, [], 'selection must clear with the group switch');
+});
+
+test('mutation/confirmed keeps the current group when it still exists', () => {
+  const base = createInitialState();
+  const before: AppState = { ...base, view: { ...base.view, currentGroupId: G1 } };
+  const result: MutationResult<unknown> = {
+    value: null,
+    userData: {
+      schemaVersion: 2,
+      groups: [
+        { groupId: G_ALL, name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 },
+        { groupId: G1, name: '自选', order: 1, isDefault: false, createdAt: 0, updatedAt: 0 }
+      ],
+      watchlist: [],
+      boardConfig: {}
+    },
+    revision: REV2
+  };
+  const next = reducer(before, { type: 'mutation/confirmed', result });
+  assert.equal(next.view.currentGroupId, G1);
+});
+
+test('mutation/confirmed drops selected codes that left the current group', () => {
+  const base = createInitialState();
+  const before: AppState = {
+    ...base,
+    view: {
+      ...base.view,
+      currentGroupId: G1,
+      selectedCodes: ['sh600519' as StockCode, 'sz000001' as StockCode]
+    }
+  };
+  // moveStocks 后：sh600519 已移出 g1（groupIds 为空），sz000001 仍在 g1。
+  const result: MutationResult<unknown> = {
+    value: null,
+    userData: {
+      schemaVersion: 2,
+      groups: [
+        { groupId: G_ALL, name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 },
+        { groupId: G1, name: '自选', order: 1, isDefault: false, createdAt: 0, updatedAt: 0 }
+      ],
+      watchlist: [
+        mkStock('sh600519', '贵州茅台', { groupIds: [] }),
+        mkStock('sz000001', '平安银行', { groupIds: [G1] })
+      ],
+      boardConfig: {}
+    },
+    revision: REV2
+  };
+  const next = reducer(before, { type: 'mutation/confirmed', result });
+  assert.deepEqual(next.view.selectedCodes, ['sz000001' as StockCode], '被移出当前分组的选中项必须剔除');
+});
+
+test('bootstrap/confirmed falls back to g_all when the current group no longer exists', () => {
+  const base = createInitialState();
+  const before: AppState = { ...base, view: { ...base.view, currentGroupId: G1 } };
+  const result = {
+    version: '2.0.0' as const,
+    userData: {
+      schemaVersion: 2 as const,
+      groups: [{ groupId: G_ALL, name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 }],
+      watchlist: [],
+      boardConfig: {}
+    },
+    revision: REV1,
+    quoteSnapshot: emptySnapshot()
+  };
+  const next = reducer(before, { type: 'bootstrap/confirmed', result });
+  assert.equal(next.view.currentGroupId, G_ALL);
+});
+
+test('bootstrap/confirmed drops selected codes that no longer exist', () => {
+  // 对账路径：批量删除超时 → uncertain → doReconcile 走 app:bootstrap 装权威快照。
+  // 这条路径同样替换 userData，「选中集 ⊆ 可见集」不变量必须在此也成立——
+  // 否则被删掉的股票仍计入批量工具栏，用户看到「已选 2」却只剩 1 只。
+  const base = createInitialState();
+  const before: AppState = {
+    ...base,
+    view: {
+      ...base.view,
+      currentGroupId: G1,
+      selectedCodes: ['sh600519' as StockCode, 'sz000001' as StockCode]
+    }
+  };
+  const result = {
+    version: '2.0.0' as const,
+    userData: {
+      schemaVersion: 2 as const,
+      groups: [
+        { groupId: G_ALL, name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 },
+        { groupId: G1, name: '自选', order: 1, isDefault: false, createdAt: 0, updatedAt: 0 }
+      ],
+      watchlist: [mkStock('sz000001', '平安银行', { groupIds: [G1] })],
+      boardConfig: {}
+    },
+    revision: REV1,
+    quoteSnapshot: emptySnapshot()
+  };
+  const next = reducer(before, { type: 'bootstrap/confirmed', result });
+  assert.deepEqual(next.view.selectedCodes, ['sz000001' as StockCode], '已删除的选中项必须剔除');
+});
+
 // ===== bootstrap =====
 
 test('bootstrap/requested sets bootstrap async to loading', () => {
@@ -201,46 +316,21 @@ test('quote/refresh/failed is rejected when generation is stale', () => {
 
 // ===== search + generation =====
 
-test('search/keyword updates view.searchKeyword', () => {
+test('view/searchKeyword updates the toolbar filter keyword', () => {
   const before = createInitialState();
-  const next = reducer(before, { type: 'search/keyword', keyword: '茅台' });
+  const next = reducer(before, { type: 'view/searchKeyword', keyword: '茅台' });
   assert.equal(next.view.searchKeyword, '茅台');
 });
 
-test('search/requested increments searchGeneration, sets query and loading', () => {
-  const before = createInitialState();
-  const next = reducer(before, { type: 'search/requested', query: '茅台', generation: 1 });
-  assert.equal(next.async.stockSearch.status, 'loading');
-  assert.equal(next.async.searchGeneration, 1);
-});
-
-test('search/confirmed replaces view.searchResults when generation matches', () => {
-  let state = reducer(createInitialState(), { type: 'search/requested', query: '茅', generation: 1 });
-  const results: StockSearchResult[] = [
-    { code: 'sh600519' as StockCode, name: '贵州茅台', pinyin: 'gzmt', tags: [] }
-  ];
-  state = reducer(state, { type: 'search/confirmed', results, generation: 1 });
-  assert.equal(state.async.stockSearch.status, 'success');
-  assert.equal(state.view.searchResults.length, 1);
-});
-
-test('search/confirmed is rejected when generation is stale', () => {
-  let state = reducer(createInitialState(), { type: 'search/requested', query: '茅', generation: 1 });
-  state = reducer(state, { type: 'search/requested', query: '茅台', generation: 2 });
-  const results: StockSearchResult[] = [];
-  const next = reducer(state, { type: 'search/confirmed', results, generation: 1 });
-  assert.equal(next, state); // stale
-});
-
 test('search/failed sets error when generation matches', () => {
-  let state = reducer(createInitialState(), { type: 'search/requested', query: '茅', generation: 1 });
+  let state = reducer(createInitialState(), { type: 'search/dialogRequested', generation: 1 });
   state = reducer(state, { type: 'search/failed', error: ERR, generation: 1 });
   assert.equal(state.async.stockSearch.status, 'error');
 });
 
 test('search/failed is rejected when generation is stale', () => {
-  let state = reducer(createInitialState(), { type: 'search/requested', query: '茅', generation: 1 });
-  state = reducer(state, { type: 'search/requested', query: '茅台', generation: 2 });
+  let state = reducer(createInitialState(), { type: 'search/dialogRequested', generation: 1 });
+  state = reducer(state, { type: 'search/dialogRequested', generation: 2 });
   const next = reducer(state, { type: 'search/failed', error: ERR, generation: 1 });
   assert.equal(next, state);
 });
@@ -289,6 +379,84 @@ test('view/currentGroup updates currentGroupId', () => {
 test('view/searchKeyword updates searchKeyword', () => {
   const next = reducer(createInitialState(), { type: 'view/searchKeyword', keyword: 'abc' });
   assert.equal(next.view.searchKeyword, 'abc');
+});
+
+test('view/dialogSearchKeyword updates dialogSearch.keyword', () => {
+  const next = reducer(createInitialState(), { type: 'view/dialogSearchKeyword', keyword: 'sh600' });
+  assert.equal(next.view.dialogSearch.keyword, 'sh600');
+});
+
+test('view/dialogSearchResults updates dialogSearch.results', () => {
+  const results = [{ code: 'sh600519' as StockCode, name: '贵州茅台' }];
+  const next = reducer(createInitialState(), { type: 'view/dialogSearchResults', results });
+  assert.deepEqual([...next.view.dialogSearch.results], results);
+});
+
+test('search/dialogRequested updates generation without polluting searchKeyword', () => {
+  const before = reducer(createInitialState(), { type: 'view/searchKeyword', keyword: 'toolbar-query' });
+  const next = reducer(before, { type: 'search/dialogRequested', generation: 5 });
+  assert.equal(next.async.searchGeneration, 5);
+  assert.equal(next.async.stockSearch.status, 'loading');
+  // 关键不变量：dialogRequested 绝不写 view.searchKeyword。
+  assert.equal(next.view.searchKeyword, 'toolbar-query');
+});
+
+// 对话框搜索必须能「结算」——只写结果不结算 async 会让 combobox 永远 loading。
+test('search/dialogConfirmed lands results and settles stockSearch to success', () => {
+  const requested = reducer(createInitialState(), { type: 'search/dialogRequested', generation: 3 });
+  assert.equal(requested.async.stockSearch.status, 'loading');
+  const results = [{ code: 'sh600519' as StockCode, name: '贵州茅台' }];
+  const next = reducer(requested, { type: 'search/dialogConfirmed', results, generation: 3 });
+  assert.deepEqual([...next.view.dialogSearch.results], results);
+  assert.equal(next.async.stockSearch.status, 'success');
+});
+
+test('search/dialogConfirmed with a stale generation is rejected entirely', () => {
+  const requested = reducer(createInitialState(), { type: 'search/dialogRequested', generation: 7 });
+  const stale = [{ code: 'sz000001' as StockCode, name: '平安银行' }];
+  const next = reducer(requested, { type: 'search/dialogConfirmed', results: stale, generation: 6 });
+  assert.equal(next, requested, '过期响应必须原样返回上一个 state');
+  assert.equal(next.view.dialogSearch.results.length, 0);
+});
+
+test('view/dialogSearchResults clearing also settles stockSearch out of loading', () => {
+  const requested = reducer(createInitialState(), { type: 'search/dialogRequested', generation: 2 });
+  const next = reducer(requested, { type: 'view/dialogSearchResults', results: [] });
+  assert.equal(next.async.stockSearch.status, 'idle');
+});
+
+test('search/dialogReset clears dialog search and invalidates in-flight responses', () => {
+  const typed = reducer(createInitialState(), { type: 'view/dialogSearchKeyword', keyword: '茅台' });
+  const requested = reducer(typed, { type: 'search/dialogRequested', generation: 4 });
+  const next = reducer(requested, { type: 'search/dialogReset' });
+  assert.equal(next.view.dialogSearch.keyword, '');
+  assert.equal(next.view.dialogSearch.results.length, 0);
+  assert.equal(next.async.stockSearch.status, 'idle');
+  // generation 必须前进，否则上一次会话的迟到响应会落进新开的对话框。
+  assert.equal(next.async.searchGeneration, 5);
+  const late = reducer(next, {
+    type: 'search/dialogConfirmed',
+    results: [{ code: 'sh600519' as StockCode, name: '贵州茅台' }],
+    generation: 4
+  });
+  assert.equal(late.view.dialogSearch.results.length, 0, '重置前的在途响应必须被丢弃');
+});
+
+// 选中集不能活过它引用的那批行：否则「全选 500 → 过滤到 3 行 → 移除」会删掉 500 只。
+test('view/searchKeyword clears the selection', () => {
+  const codes = ['sh600519' as StockCode, 'sz000001' as StockCode];
+  const selected = reducer(createInitialState(), { type: 'view/selection', codes });
+  const next = reducer(selected, { type: 'view/searchKeyword', keyword: '茅台' });
+  assert.equal(next.view.selectedCodes.length, 0);
+  assert.equal(next.view.searchKeyword, '茅台');
+});
+
+test('view/currentGroup clears the selection', () => {
+  const codes = ['sh600519' as StockCode];
+  const selected = reducer(createInitialState(), { type: 'view/selection', codes });
+  const next = reducer(selected, { type: 'view/currentGroup', groupId: 'g_watch' as GroupId });
+  assert.equal(next.view.selectedCodes.length, 0);
+  assert.equal(next.view.currentGroupId, 'g_watch');
 });
 
 test('view/selection updates selectedCodes', () => {

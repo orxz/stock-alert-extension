@@ -204,22 +204,68 @@ test('primary interactive elements meet 44px touch target', async () => {
     seed: baseSeed({ watchlist: [stock('sh600519')] })
   });
   try {
-    // 触控目标：主交互按钮（header A1 按钮 40px+，card 操作按钮）。
-    // 紧凑控件（table pin/up/down、toolbar 分段按钮、group-tab）通过键盘可达性覆盖。
+    // Header 按钮的**视觉**高度是 32px（44px 会把 44px 高的 Header 顶满，
+    // 看起来像背景板而不是按钮），命中区靠 ::before 补到整条 Header 的 44px。
+    // 所以这里不能量 boundingBox——那只量得到绘制盒。改为验证真实命中：
+    // 在 Header 顶边和底边取点，看 elementFromPoint 是否落在这个按钮上。
     const primarySelectors = [
       'stock-header [data-action="add-stock"]',
       'stock-header [data-action="theme-toggle"]'
     ];
     for (const selector of primarySelectors) {
       const el = launched.page.locator(selector).first();
-      const count = await el.count();
-      if (count === 0) continue;
+      if ((await el.count()) === 0) continue;
       const box = await el.boundingBox();
       if (!box) continue;
-      // header 带标签按钮在 420px 宽约束下用 34px 紧凑高度；主操作（列表行/卡片按钮）达 44px。
-      const minSize = 40;
-      if (box.width < minSize || box.height < minSize) {
-        throw new Error(`${selector} too small: ${box.width}x${box.height} < ${minSize}px`);
+      // 绘制盒本身仍要守住 WCAG 2.5.8 的 24px 下限。
+      if (box.width < 24 || box.height < 24) {
+        throw new Error(`${selector} paint box too small: ${box.width}x${box.height}`);
+      }
+      const hits = await launched.page.evaluate((sel) => {
+        const btn = document.querySelector(sel) as HTMLElement | null;
+        const header = document.querySelector('stock-header') as HTMLElement | null;
+        if (!btn || !header) return null;
+        const b = btn.getBoundingClientRect();
+        const h = header.getBoundingClientRect();
+        const cx = b.left + b.width / 2;
+        const owns = (x: number, y: number): boolean => {
+          const hit = document.elementFromPoint(x, y);
+          return hit !== null && (hit === btn || btn.contains(hit));
+        };
+        // Header 上下边缘各内缩 2px 取点。
+        return { top: owns(cx, h.top + 2), bottom: owns(cx, h.bottom - 2) };
+      }, selector);
+      if (hits && (!hits.top || !hits.bottom)) {
+        throw new Error(
+          `${selector} hit area does not span the header: top=${hits.top} bottom=${hits.bottom}`
+        );
+      }
+    }
+
+    // 次级控件：搬进 38px 标签栏 / 40px 工具栏后不可能再占 44px，
+    // 但必须守住 WCAG 2.5.8 的 24px 下限。
+    // 这条断言必须跟着控件走——「多选」从 Header 搬到 Tabs 时，
+    // 上面那份 header 作用域的名单就再也覆盖不到它了。
+    const secondarySelectors = [
+      'group-tabs [data-action="manage-holdings"]',
+      'group-tabs [data-action="add-group"]',
+      'stock-toolbar [data-action="view-list"]',
+      'stock-toolbar [data-action="view-grid"]'
+    ];
+    for (const selector of secondarySelectors) {
+      const el = launched.page.locator(selector).first();
+      // 选择器落空必须报错而不是跳过：控件一旦改名（如「多选」→「管理持仓」
+      // 的 data-action 重命名），静默 continue 会让它悄悄退出 WCAG 尺寸检查，
+      // 门禁照样全绿——这正是本项目反复被咬的那类恒真断言。
+      if ((await el.count()) === 0) {
+        throw new Error(`${selector} matched nothing — 控件被改名或删除，这条尺寸断言已失效`);
+      }
+      const box = await el.boundingBox();
+      if (!box) {
+        throw new Error(`${selector} has no box — 控件不可见，无法验证触达尺寸`);
+      }
+      if (box.width < 24 || box.height < 24) {
+        throw new Error(`${selector} below WCAG 2.5.8 floor: ${box.width}x${box.height} < 24px`);
       }
     }
   } finally {

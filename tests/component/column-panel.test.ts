@@ -11,12 +11,12 @@ import { definePopupElements } from '../../src/popup/components/define-elements.
 import type { ColumnPanelViewModel, ColumnConfig } from '../../src/popup/view-models.js';
 
 // 必须是真实的可配置列键——normalizeUiColumns 会丢弃未知列。
+// name 是锁定列（列表最前、不进面板），面板只展示可配置列。
 const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { key: 'code', label: '代码', enabled: true },
-  { key: 'name', label: '名称', enabled: true },
   { key: 'price', label: '现价', enabled: true },
-  { key: 'amount', label: '成交额', enabled: true },
   { key: 'changePercent', label: '涨跌幅', enabled: true },
+  { key: 'amount', label: '成交额', enabled: true },
+  { key: 'code', label: '代码', enabled: true },
   { key: 'status', label: '状态', enabled: true }
 ];
 
@@ -94,17 +94,21 @@ test('re-checking a column adds it back', () => {
   assert.ok(detail!.columns.enabled.includes('amount'));
 });
 
-test('required columns cannot be unchecked', () => {
-  // 规则从「至少留一列」收紧为「名称/现价/涨跌幅必留」——
-  // 只剩「状态」一列的列表不再是股票列表。
-  for (const required of ['name', 'price', 'changePercent']) {
-    const { spy } = setup(panel());
-    spy.reset();
-    toggleCheckbox(required);
-    assert.equal(spy.eventCount('column-settings-change'), 0, `${required} must not emit`);
-    const cb = document.querySelector(`input[data-column="${required}"]`) as HTMLInputElement;
-    assert.equal(cb.checked, true, `${required} stays checked`);
-  }
+test('the locked name column is not rendered in the panel', () => {
+  setup(panel());
+  assert.equal(document.querySelectorAll('.column-panel-item').length, 5);
+  assert.equal(document.querySelector('input[data-column="name"]'), null, 'name must not appear in the panel');
+});
+
+test('price can be unchecked without being forced back', () => {
+  const { spy } = setup(panel());
+  spy.reset();
+  toggleCheckbox('price');
+  const detail = spy.lastEvent('column-settings-change')?.detail;
+  assert.ok(detail, 'unchecking price must emit');
+  assert.ok(!detail!.columns.enabled.includes('price'), 'price stays off');
+  const cb = document.querySelector('input[data-column="price"]') as HTMLInputElement;
+  assert.equal(cb.checked, false, 'checkbox stays unchecked');
 });
 
 test('emitted column set is complete and duplicate-free', () => {
@@ -115,57 +119,61 @@ test('emitted column set is complete and duplicate-free', () => {
   const cols = detail!.columns.enabled;
   // No duplicates
   assert.equal(new Set(cols).size, cols.length);
-  // All are valid column keys
+  // All are valid column keys（含锁定列 name——normalize 强制前置）
+  const allKeys = ['name', ...DEFAULT_COLUMNS.map((c) => c.key)];
   for (const c of cols) {
-    assert.ok(DEFAULT_COLUMNS.some((dc) => dc.key === c));
+    assert.ok(allKeys.includes(c));
   }
 });
 
 test('move up button emits columnOrder with the column moved up', () => {
   const { spy } = setup(panel());
   spy.reset();
-  // Move 'price' (index 2) up → swaps with 'name' (index 1)
-  const item = document.querySelector('[data-column-item="price"]');
+  // Move 'amount' (index 2) up → swaps with 'changePercent' (index 1)
+  const item = document.querySelector('[data-column-item="amount"]');
   const upBtn = item?.querySelector('button[data-action="col-up"]') as HTMLButtonElement | null;
   if (upBtn) {
     upBtn.click();
     const detail = spy.lastEvent('column-settings-change')?.detail;
     assert.ok(detail);
-    const order = detail!.columns.order;
-    const idx = order.indexOf('price');
-    // After moving up, price should be at idx 1, and name at idx 2
-    assert.equal(order[idx + 1], 'name'); // name should now be after price
+    const order = detail!.columns.order as string[];
+    assert.equal(order[0], 'name', 'locked name column stays pinned first');
+    const idx = order.indexOf('amount');
+    assert.equal(order[idx - 1], 'price');
+    assert.equal(order[idx + 1], 'changePercent', 'amount swapped with changePercent');
   }
 });
 
 test('move down button emits columnOrder with the column moved down', () => {
   const { spy } = setup(panel());
   spy.reset();
-  // Move 'name' (index 1) down → swaps with 'price' (index 2)
-  const item = document.querySelector('[data-column-item="name"]');
+  // Move 'price' (index 0) down → swaps with 'changePercent' (index 1)
+  const item = document.querySelector('[data-column-item="price"]');
   const downBtn = item?.querySelector('button[data-action="col-down"]') as HTMLButtonElement | null;
   if (downBtn) {
     downBtn.click();
     const detail = spy.lastEvent('column-settings-change')?.detail;
     assert.ok(detail);
-    const order = detail!.columns.order;
-    const idx = order.indexOf('name');
-    // After moving down, name should be at idx 2, and price at idx 1
-    assert.equal(order[idx - 1], 'price'); // price should now be before name
+    const order = detail!.columns.order as string[];
+    assert.equal(order[0], 'name', 'locked name column stays pinned first');
+    assert.equal(order[1], 'changePercent');
+    assert.equal(order[2], 'price');
   }
 });
 
 test('columnOrder is complete and duplicate-free', () => {
   const { spy } = setup(panel());
   spy.reset();
-  const item = document.querySelector('[data-column-item="price"]');
+  const item = document.querySelector('[data-column-item="amount"]');
   const upBtn = item?.querySelector('button[data-action="col-up"]') as HTMLButtonElement | null;
   if (upBtn) {
     upBtn.click();
     const order = spy.lastEvent('column-settings-change')?.detail.columns.order;
     assert.ok(order);
     assert.equal(new Set(order!).size, order!.length);
-    assert.equal(order!.length, DEFAULT_COLUMNS.length);
+    // 锁定列前置后仍是完整 6 列排列。
+    assert.equal(order!.length, DEFAULT_COLUMNS.length + 1);
+    assert.equal(order![0], 'name');
   }
 });
 
@@ -209,16 +217,25 @@ test('last column move-down is disabled', () => {
   assert.equal(downBtn.disabled, true);
 });
 
+test('the last main column cannot move down into the subline zone', () => {
+  // 工厂顺序 [price, changePercent, amount, code, status]：amount 是最后一个主列，
+  // 它的 ↓ 若可用会与 code 交换——但副标题不参与重排，交换结果瞬间弹回原位。
+  setup(panel());
+  const item = document.querySelector('[data-column-item="amount"]');
+  const downBtn = item?.querySelector('button[data-action="col-down"]') as HTMLButtonElement | null;
+  assert.equal(downBtn?.disabled, true, '主列不得跨入副标题区');
+});
+
 test('updating viewModel re-renders checkbox states', () => {
   const { el } = setup(panel());
   el.viewModel = panel({
-    columns: DEFAULT_COLUMNS.map((c) => ({ ...c, enabled: c.key === 'name' })),
+    columns: DEFAULT_COLUMNS.map((c) => ({ ...c, enabled: c.key === 'price' })),
     columnOrder: DEFAULT_COLUMNS.map((c) => c.key)
   });
-  const nameCb = document.querySelector('input[data-column="name"]') as HTMLInputElement;
   const priceCb = document.querySelector('input[data-column="price"]') as HTMLInputElement;
-  assert.equal(nameCb.checked, true);
-  assert.equal(priceCb.checked, false);
+  const amountCb = document.querySelector('input[data-column="amount"]') as HTMLInputElement;
+  assert.equal(priceCb.checked, true);
+  assert.equal(amountCb.checked, false);
 });
 
 test('reconnecting does not duplicate listeners', () => {
@@ -228,4 +245,35 @@ test('reconnecting does not duplicate listeners', () => {
   spy.reset();
   toggleCheckbox('code');
   assert.equal(spy.eventCount('column-settings-change'), 1);
+});
+
+test('subline columns (code/status) have ordering buttons disabled', () => {
+  setup(panel());
+  for (const key of ['code', 'status']) {
+    const item = document.querySelector(`[data-column-item="${key}"]`);
+    const upBtn = item?.querySelector('button[data-action="col-up"]') as HTMLButtonElement | null;
+    const downBtn = item?.querySelector('button[data-action="col-down"]') as HTMLButtonElement | null;
+    assert.equal(upBtn?.disabled, true, `${key} move-up should be disabled`);
+    assert.equal(downBtn?.disabled, true, `${key} move-down should be disabled`);
+  }
+});
+
+test('subline columns are marked with the subline class', () => {
+  setup(panel());
+  for (const key of ['code', 'status']) {
+    const item = document.querySelector(`[data-column-item="${key}"]`);
+    assert.ok(item?.classList.contains('column-panel-item--subline'), `${key} should be subline`);
+  }
+  const nameItem = document.querySelector('[data-column-item="name"]');
+  assert.ok(!nameItem?.classList.contains('column-panel-item--subline'));
+});
+
+test('disabled subline ordering buttons emit no changes', () => {
+  const { spy } = setup(panel());
+  spy.reset();
+  // 浏览器对 disabled 按钮不派发 click；即使被派发，组件也应防御性地忽略。
+  const item = document.querySelector('[data-column-item="code"]');
+  const upBtn = item?.querySelector('button[data-action="col-up"]') as HTMLButtonElement | null;
+  upBtn?.click();
+  assert.equal(spy.eventCount('column-settings-change'), 0);
 });

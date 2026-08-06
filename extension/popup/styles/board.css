@@ -30,7 +30,7 @@ stock-table[hidden] {
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 28px;
+  height: var(--h-thead);
   padding: 0 var(--sp-2);
   font-size: var(--fs-micro);
   font-weight: 400;
@@ -70,12 +70,18 @@ stock-table[hidden] {
 }
 
 .stock-table-row {
+  /* 行高即虚拟滚动契约，必须走 --row-h（对应 TABLE_ROW_EXTENT）。 */
   height: var(--row-h);
   border-bottom: 1px solid var(--line);
 }
 
+/* 行的两套视觉是**正交**的，分别占用不同的 CSS 属性，因此永远不会互相覆盖：
+     语义（置顶）→ background-color + 金色标记
+     状态（hover / 选中）→ background-image 叠加层 + 白色标记
+   这样置顶行也有 hover、选中行仍看得出置顶，任意组合都成立，
+   而且不需要任何特异性技巧来排先后。 */
 .stock-table-row:hover {
-  background: var(--ink-row);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .stock-table-cell {
@@ -88,38 +94,61 @@ stock-table[hidden] {
   text-overflow: ellipsis;
 }
 
-/* 股票列：名称 + 副标题（代码 · 状态）。占据剩余全部宽度。 */
+/* 股票列：名称 + 代码同一行内联，紧凑布局。宽度由 colgroup 固定（100px）。 */
 .stock-table-cell--name {
   text-align: left;
   width: auto;
   padding-left: var(--sp-3);
+  /* 悬停详情面板的定位上下文；截断已由内部 name-wrap 承担，td 无需再裁。 */
+  position: relative;
+  overflow: visible;
+}
+
+/* 名称单元格：**两行**——名称一行，代码 · 状态一行。
+   一行塞不下。名称列在 420px 面板里只有约 105px 内容宽，而「代码 + 状态」
+   本身就要 80px 左右；挤在同一行时名称会被压到 0，用户只看得见代码，
+   看不见这只股票叫什么——最重要的字段反而先消失。
+   40px 的行高（13px 名称 + 10px 副标题 ≈ 30px）本来就装得下两行。 */
+.stock-table-name-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .stock-table-name {
-  display: block;
+  min-width: 0;
   font-family: var(--font-sans);
-  font-size: var(--fs-body);
+  font-size: var(--fs-num);
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 副标题行：代码不收缩（它是定长标识），状态先被截断。 */
 .stock-table-subline {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--sp-1);
   min-width: 0;
+  overflow: hidden;
   font-size: var(--fs-micro);
   line-height: 1.3;
   color: var(--text-3);
-  /* 副标题自己控制截断——不继承单元格的 ellipsis，否则「实时」会被切成「实」 */
-  overflow: hidden;
   white-space: nowrap;
 }
 
+.stock-table-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .stock-table-code {
+  flex-shrink: 0; /* 代码是定长标识，截断它没有意义——先截状态 */
   font-family: var(--font-mono);
   letter-spacing: -0.01em;
 }
@@ -128,6 +157,10 @@ stock-table[hidden] {
 .stock-table-status[hidden] {
   display: none;
 }
+
+/* 名称与代码之间的间距由 .stock-table-name-wrap 的 gap 负责。
+   原来那条 ::after（content:' ' + margin-right）既与 gap 重复，
+   也不像注释说的那样「两者都可见时才出现」——它只看名称是否为空。 */
 
 /* 副标题里的两项之间用中点分隔——只在两者都可见时出现。 */
 .stock-table-code:not([hidden]) + .stock-table-status:not([hidden])::before {
@@ -140,19 +173,52 @@ stock-table[hidden] {
   color: var(--gold);
 }
 
-/* 列宽：挂在 [data-column] 上以同时命中 thead 的 th 与 tbody 的 td。
+/* 列宽由 <colgroup> 定义——table-layout:fixed 下这才是唯一可靠的入口。
    按最坏情况定宽——四位数价格（贵州茅台 1685.00）与涨停幅度（+10.02%）
-   必须完整显示，价格被截成「1685.…」等于没显示。 */
-.stock-table [data-column='price'] {
+   必须完整显示，价格被截成「1685.…」等于没显示。
+   名称列固定 100px（420px 面板中实际渲染约 121px）：宽了会挤掉数字列、
+   窄了「代码·状态」副标题会截断——100px 下名称可显示约 6 个汉字。 */
+.stock-table col[data-col='select'] {
+  width: 30px;
+}
+
+.stock-table col[data-col='name'] {
+  width: 100px;
+}
+
+.stock-table col[data-col='price'] {
   width: 80px;
 }
 
-.stock-table [data-column='changePercent'] {
+.stock-table col[data-col='changePercent'] {
   width: 76px;
 }
 
-.stock-table [data-column='amount'] {
+.stock-table col[data-col='amount'] {
   width: 54px;
+}
+
+.stock-table col[data-col='actions'] {
+  width: 36px;
+}
+
+/* 被关掉的列必须真正让出宽度，而不是变成 auto 去分剩余空间。 */
+.stock-table col[data-off] {
+  width: 0;
+}
+
+/* 隐藏的单元格必须**留在行里**，只是宽度归零。
+   UA 的 [hidden]{display:none} 会把单元格整个从行中摘掉，于是它后面的所有
+   单元格集体左移一列，落到别的列宽上——关掉「成交额」会让现价跑到涨跌幅的
+   列宽里，整张表错位。这里改回 table-cell + visibility:hidden：
+   列的对应关系保持 1:1，内容既不可见也不进无障碍树。 */
+.stock-table th[data-column][hidden],
+.stock-table td[data-column][hidden] {
+  display: table-cell;
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 /* 数字列收紧内边距，把像素让给数字本身。 */
@@ -166,6 +232,15 @@ stock-table[hidden] {
 .stock-table-cell--price {
   font-size: var(--fs-price);
   font-weight: 600;
+}
+
+/* 现价也跟随涨跌染色——与卡片一致，红涨绿跌。 */
+.stock-table-cell--price.is-up {
+  color: var(--up);
+}
+
+.stock-table-cell--price.is-down {
+  color: var(--down);
 }
 
 /* ---- 签名：涨跌幅幅度条 ----
@@ -182,8 +257,8 @@ stock-table[hidden] {
   content: '';
   position: absolute;
   z-index: -1;
-  top: 9px;
-  bottom: 9px;
+  top: 7px;
+  bottom: 7px;
   right: var(--sp-1);
   width: calc(var(--pct, 0) * (100% - 2 * var(--sp-1)));
   background: var(--bar);
@@ -193,10 +268,12 @@ stock-table[hidden] {
 
 .stock-table-cell--change-percent.is-up {
   --bar: var(--up-bg);
+  color: var(--up);
 }
 
 .stock-table-cell--change-percent.is-down {
   --bar: var(--down-bg);
+  color: var(--down);
 }
 
 /* 涨跌停：当天最该被看见的信号——条形填满并描边。 */
@@ -216,10 +293,58 @@ stock-table[hidden] {
   padding-right: var(--sp-2);
 }
 
-/* 置顶行：左侧 3px 金边 + 极弱底色，不做整行高亮。 */
+/* 选择列：只在持仓管理模式下出现。
+   必须显式给宽度（隐藏时归零）。table-layout:fixed 会把「剩余宽度」在所有
+   **未指定宽度**的列之间平分，而选择列即使所有单元格 display:none，
+   仍因 spacer 行的 colSpan 而作为一列存在——于是它和名称列对半分掉剩余的
+   174px，名称列平白只剩 87px，股票名被挤没。 */
+.stock-table [data-column='select'] {
+  width: 30px;
+  padding: 0 0 0 var(--sp-2);
+  text-align: left;
+}
+
+.stock-table [data-column='select'][hidden] {
+  width: 0;
+  padding: 0;
+}
+
+.stock-table-select-box {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* 置顶行：左侧 3px 金边 + 极弱底色，不做整行高亮。
+   必须用 background-color 而不是 background 简写——简写会把状态层的
+   background-image 一并重置掉，而这条规则特异性更高，置顶行会因此
+   彻底失去 hover / 选中反馈。 */
 .stock-table-row:has(.stock-row-menu-trigger.is-pinned) {
-  background: var(--gold-bg);
+  background-color: var(--gold-bg);
   box-shadow: inset 3px 0 0 var(--gold);
+}
+
+/* 选中行：更重的叠加层 + 左侧标记条。
+   标记条是选中态唯一的高对比通道（叠加层本身只有 ~1.1:1），
+   也是「已选中」与「鼠标经过」的区分所在——只靠底色两者会同形。 */
+.stock-table-row[data-selected] {
+  background-image: linear-gradient(var(--state-selected), var(--state-selected));
+  box-shadow: inset 3px 0 0 var(--state-mark);
+}
+
+/* 选中行再被 hover：两层相叠，仍然比单独 hover 更重，层级不会倒挂。 */
+.stock-table-row[data-selected]:hover {
+  background-image:
+    linear-gradient(var(--state-hover), var(--state-hover)),
+    linear-gradient(var(--state-selected), var(--state-selected));
+}
+
+/* 既置顶又选中：两条标记并列（外白内金），两种状态都不丢失。
+   底色不用写——置顶的 background-color 与选中的 background-image 各占一属性。 */
+.stock-table-row[data-selected]:has(.stock-row-menu-trigger.is-pinned) {
+  box-shadow: inset 3px 0 0 var(--state-mark), inset 6px 0 0 var(--gold);
 }
 
 /* spacer 行不参与任何视觉 */
@@ -262,19 +387,42 @@ stock-card {
   gap: var(--sp-1);
   height: 118px;
   padding: var(--sp-2) var(--sp-3);
-  background: var(--ink-bar);
-  border: 1px solid var(--line);
+  background-color: var(--ink-bar);
+  /* 浮起面的边界：深色下描边是主通道（投影几乎不可见），浅色下反过来。
+     两条一起写，两套主题就都有一条能看见的边界。 */
+  border: 1px solid var(--elev-line);
   border-radius: var(--r-md);
+  box-shadow: var(--elev-card);
+  transition: border-color var(--dur-fade), box-shadow var(--dur-fade);
+  /* 悬停详情面板的定位上下文。 */
+  position: relative;
 }
 
+/* hover 必须真的有反馈：原来 hover 的 border-color 与静止态同值，
+   等于只换了个在深色下 1.0:1 的阴影——暗色主题里完全没有反应。 */
 stock-card:hover .stock-card {
-  border-color: var(--line-strong);
+  border-color: var(--text-3);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  box-shadow: var(--elev-card-hover);
 }
 
-/* 置顶卡片：金边 + 极弱底色。 */
+/* 置顶卡片：金边 + 极弱底色（语义层，占 background-color）。 */
 stock-card[data-pinned='true'] .stock-card {
   border-color: var(--gold);
-  background: var(--gold-bg);
+  background-color: var(--gold-bg);
+}
+
+/* 选中卡片：叠加层 + 高对比描边（状态层，占 background-image）。
+   与置顶各占一个属性，因此不再需要靠声明顺序抢覆盖。 */
+stock-card[data-selected] .stock-card {
+  border-color: var(--state-mark);
+  background-image: linear-gradient(var(--state-selected), var(--state-selected));
+}
+
+/* 既置顶又选中：金底由置顶那条自动保留（各占一个属性），
+   这里只需要把描边判给选中——它是当前更要紧的临时态。 */
+stock-card[data-selected][data-pinned='true'] .stock-card {
+  border-color: var(--state-mark);
 }
 
 .stock-card-header {
@@ -292,6 +440,14 @@ stock-card[data-pinned='true'] .stock-card {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.stock-card-code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .stock-card-price-area {
@@ -319,6 +475,18 @@ stock-card[data-pinned='true'] .stock-card {
   gap: var(--sp-1);
   font-size: var(--fs-micro);
   color: var(--text-3);
+}
+
+/* 成交额：状态行右侧，弱色等宽（列设置可显隐）。 */
+.stock-card-amount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+}
+
+/* hidden 属性在卡片内一律不显示——列设置关掉字段时，不能被行内 display 覆盖。 */
+.stock-card [hidden] {
+  display: none;
 }
 
 .stock-card-status-label {
@@ -400,13 +568,15 @@ stock-card[data-pinned='true'] .stock-card {
   padding: 0 var(--sp-4);
   font-size: var(--fs-body);
   font-weight: 600;
-  color: var(--accent-ink);
-  background: var(--accent-fill);
+  color: var(--text-1);
+  background: var(--ink-pop);
+  border: 1px solid var(--accent-line);
   border-radius: var(--r-md);
+  box-shadow: var(--elev-card);
 }
 
 .board-empty-cta:hover {
-  opacity: 0.88;
+  border-color: var(--text-3);
 }
 
 .board-empty,
@@ -424,4 +594,74 @@ stock-card[data-pinned='true'] .stock-card {
 /* 可恢复错误保留已有数据，用金色而非危险红——数据还在，只是没更新上。 */
 .board-error {
   color: var(--gold);
+}
+
+/* ===== 悬停详情面板 =====
+   列表行 / 网格卡片名称区挂一个纯 CSS 触发的详情浮层：
+   今开 / 最高 / 最低 / 昨收 / 成交量。无 JS 状态、无点击路径。
+   表格行 hover（或行内按钮聚焦）与卡片 hover/focus 时浮出。*/
+
+.stock-detail-tooltip {
+  display: none;
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 148px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--ink-pop);
+  border: 1px solid var(--elev-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  /* 双栏：每栏一个 label+value 项，16 项 → 8 行，控制浮层高度。 */
+  grid-template-columns: repeat(2, minmax(116px, auto));
+  gap: var(--sp-1) var(--sp-4);
+}
+
+.stock-detail-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* 把 tooltip 正上方的 4px 间隙虚拟归属给 tooltip——指针滑过间隙时
+   hover 不闪断（间隙若属于行，pointer 一离开行 tooltip 就消失）。*/
+.stock-detail-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 6px;
+}
+
+/* 翻转：行/卡片位于滚动容器可视区底部时，浮层向上展开（组件按可视区底部判定加 class）。 */
+.stock-detail-tooltip.is-flipped {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.stock-detail-tooltip.is-flipped::before {
+  top: auto;
+  bottom: -6px;
+}
+
+.stock-table-row:hover .stock-detail-tooltip,
+.stock-table-row:focus-within .stock-detail-tooltip,
+stock-card:hover .stock-detail-tooltip,
+stock-card:focus .stock-detail-tooltip,
+stock-card:focus-within .stock-detail-tooltip {
+  display: grid;
+}
+
+.stock-detail-label {
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+}
+
+.stock-detail-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-1);
+  text-align: right;
 }
