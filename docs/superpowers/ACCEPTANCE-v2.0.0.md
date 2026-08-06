@@ -1,72 +1,192 @@
-# v2.0.0 升级验收报告
+# v2.0.0 验收报告
 
-- **日期：** 2026-08-04
-- **分支：** `feature/v2.0.0-foundation-rebuild` @ `3cb7fd9`
-- **结论：** ✅ **通过** —— 14 项发布检查清单 + 17 条 spec §16 验收要求全部满足；过程中发现并修复 1 处测试侧断言缺陷（非产品回归）。
+- **日期：** 2026-08-06
+- **分支：** `feature/v2.0.1-quote-reliability-and-perf`
+- **范围：** 架构升级 + 视觉升级的全量深度审查
+- **产品决策：** 版本号定为 2.0.0；**不提供回退到 v1.3 的路径**（相关验证资产已移除）
 
----
-
-## 一、Plan Final Verification Checklist（14 项）
-
-| # | 检查项 | 结果 | 证据 |
-|---|--------|------|------|
-| 1 | `git status` 干净（发布打包前） | ⚠️ 有未提交改动 | 见「未提交改动」节：1 处测试修复 + 3 张 store 截图（capture 产物）。提交后即干净 |
-| 2 | `npm ci` 从锁定 lockfile 退出 0 | ✅ | 196 包，0 漏洞，exit 0 |
-| 3 | `npm run check` 退出 0 + 负向架构/import 夹具可证伪 | ✅ | tsc / lint / architecture / build / runtime-imports / manifest 全绿 |
-| 4 | `test:contracts` 冻结 v1.3 契约 | ✅ | 2/2 通过 |
-| 5 | `test:unit` + `test:critical-coverage` + `test:component` 覆盖门槛 | ✅ | 全局 90/85/90；关键文件 100% lines/statements，funcs≥91%、branches≥87%；unit 全过，critical 673/673，component 180/180 |
-| 6 | `test:e2e` 覆盖 v1.3 行为 + 缺失流程（`build/extension`） | ✅ | 64/64 通过（SW 重启、缓存、双源失败、损坏缓存、冲突、uncertain 对账、键盘等） |
-| 7 | `test:a11y` 零 axe critical/serious + 键盘/焦点/目标/对比/缩放 | ✅ | 13/13 通过 |
-| 8 | `test:performance` p95 预算 + 8s 行情 deadline | ✅ | bootstrap p95 94.7ms≤250；interactive≤500；domUpdate 7.8ms≤100；8s deadline 通过 |
-| 9 | `verify-rollback` v1.3→v2→v1.3 回读→v2 再升级 | ✅ | v1.3 ZIP SHA `aed997fb…` 校验通过；v0/v1/v2 迁移 round-trip；回读+再升级；CONFLICT 保护 OK |
-| 10 | `verify-deterministic-build` 两次 ZIP 哈希一致 | ✅ | 两次均 `048a55dd…`（94 条目） |
-| 11 | `npm audit --audit-level=high` 退出 0 | ✅ | 0 漏洞 |
-| 12 | `package:extension` + `check:bundle` 仅 v2 zip 且 ≤500KB | ✅ | `dist/stock-alert-extension-v2.0.0.zip` 110KB（<200KB 提醒 / <500KB 硬限）；`v1.3.0.zip` 为回滚保留件 |
-| 13 | `rg` 无 v1 全局/经典脚本/CJS 运行时导出/bare import/路径别名/反向层 import/假行情/v1 适配 | ✅ | 全部 none；唯一 legacy 命中为 `watchlist_legacy`（v0→v2 迁移字段，spec §7.3 允许） |
-| 14 | 干净 profile 安装 + 用户流 smoke + 回滚演练 + ZIP SHA + 发布证据 入 `RELEASE-v2.0.0.md` | ✅ | `RELEASE-v2.0.0.md` 含日期/标签/SHA/capture 证据/回滚步骤/v1.3 SHA；`capture:store` 截图已生成 |
+> 本报告取代 2026-08-04 那份基于 `3cb7fd9` 的旧验收。旧报告结论为「✅ 通过 /
+> 无产品级回归」，但当时最重要的用户功能——**取到行情**——在生产中是坏的，
+> 且所有门禁都是绿的。原因见 §3。
 
 ---
 
-## 二、Spec §16 验收要求（17 条）
+## 一、门禁结果
 
-| # | 要求 | 结果 | 证据 |
-|---|------|------|------|
-| 1 | 运行时 JS 全 TS，输出原生 ESM | ✅ | check:types(ESM) + check:runtime-imports OK |
-| 2 | Runtime 零三方依赖、无框架/打包器 | ✅ | rg 无 bare import；package 仅 devDeps |
-| 3 | 无 State/Render/Actions 全局单例或依赖加载顺序的模块 | ✅ | architecture 拒绝反向/循环；build 仅 ESM；无 classic script |
-| 4 | 架构检查无循环依赖/反向跨层 import | ✅ | check:architecture OK（70 files） |
-| 5 | Popup 组件仅接收 VM、发语义事件，不访问 Bridge/Repository | ✅ | component 测试 + 架构层约束；AppShell 为组合根 |
-| 6 | Reducer 是 AppState 唯一写入口 | ✅ | reducer.ts 100% 覆盖；组件仅发事件 |
-| 7 | Popup 远端行情/搜索全经 SW | ✅ | 架构层：搜索/行情只发生在 SW |
-| 8 | RPC v2 类型/校验/requestId/超时/结构化错误完整 | ✅ | protocol registry + validators 100%；e2e 覆盖 exactly-once / uncertain 对账 |
-| 9 | schema v2 / 迁移备份 / g_all / revision / 唯一 Coordinator 串行临界区 / 缓存不变量 | ✅ | verify-rollback + storage 单测（100% lines） |
-| 10 | v1.0–v1.3 数据快照无损加载；v2 数据可被 v1.3.0 回读 | ✅ | verify-rollback + contracts v1.3 readback |
-| 11 | SW 重启不丢数据/伪成功/错误行情态 | ✅ | e2e「popup remains usable after SW restart」+ backoff 持久化 session |
-| 12 | 所有鼠标操作有键盘等价；Dialog/异步重渲染焦点正确 | ✅ | a11y 键盘/Tab/Escape/焦点恢复 13 项全过 |
-| 13 | axe 无 critical/serious；对比度/触控目标达标 | ✅ | a11y 7 状态 axe 零 critical/serious + 对比/44px/zoom |
-| 14 | 静态检查/覆盖率/单元/组件/E2E 全过 | ✅ | `npm run ci` 全绿 |
-| 15 | 不新增权限/远端代码/模拟行情 | ✅ | manifest 校验；rg 无假行情；permissions 未变 |
-| 16 | 构建产物确定/完整/体积内；远端 CI + Release 全绿 | ✅ | deterministic build + check:bundle + release 各子项全绿 |
-| 17 | v2 无 v1 运行时兼容代码；冻结 v1.3.0 回滚/再升级验收 | ✅ | rg 无 v1 适配；verify-rollback 全流程通过 |
+全部在本次审查的最终提交上实测；`npm run release:verify` 端到端退出 0。
+
+| 门禁 | 结果 |
+|------|------|
+| `check`（types / lint / architecture / build / runtime-imports / manifest） | ✅ 架构边界 72 文件无反向依赖与循环 |
+| `test:unit` + `test:critical-coverage` | ✅ 768 通过；全局 90/85/90/90，关键文件 95/85/91/95 |
+| `test:component` | ✅ 231 通过 |
+| `test:e2e` | ✅ 75 通过（离线受控，不依赖第三方网络） |
+| `test:a11y` | ✅ 14 通过，深浅双主题 axe 零 critical/serious |
+| `test:performance` | ✅ p95 bootstrap 41.3ms / domUpdate 32.9ms；节点 18 行 / 16 卡 |
+| `npm audit --audit-level=high` | ✅ 0 漏洞 |
+| `verify-deterministic-build` | ✅ 两次一致 `f9216373…`（102 条目） |
+| `package:extension` + `check:bundle` | ✅ ZIP 140KB（<500KB 硬限） |
+| `test:live`（实网，**不进 ci**） | ✅ 按需运行 |
 
 ---
 
-## 三、修复的缺陷（1 处，测试侧，非产品回归）
+## 二、审查方法
 
-- **文件：** `tests/e2e/failure-injection.spec.ts` —「popup remains usable after SW restart」
-- **问题：** 断言期望名称 `贵州茅台`，但 seed 用 `stock('sh600519')`（fixture 中 `name='股票0'`），且 `offline:true` 无行情缓存 → 名称不可得。产品行为正确（渲染出 `股票0 / sh600519 / 缺失` 且 SW 重启后 popup 仍可用），属测试断言与 seed 不一致（疑似从 `portfolio.spec` 复制断言未同步 seed）。
-- **修复：** 断言改为 `股票0`。修复后该用例通过，全量 E2E 64/64 绿。
+不采信「测试全绿即无缺陷」。本次审查对每一条关键路径做了**独立实证**：
 
----
-
-## 四、未提交改动（打包前需处理）
-
-- `M tests/e2e/failure-injection.spec.ts` — 上述测试修复（建议提交）
-- `M store-assets/screenshot1-list.png` / `screenshot2-grid.png` / `screenshot3-add.png` — `capture:store` 生成的商店素材（发布流程产物，可一并提交）
-- 提交后 `git status` 即干净，满足清单第 1 项。
+- 用 `curl` 与扩展 Service Worker 内的探针分别验证两个行情源的真实可达性；
+- 用 Playwright 在真实扩展里驱动 RPC、注入失败、量化节点数与耗时；
+- 对深色主题遍历 computed style，枚举所有浅色表面（而不是只看被举报的那一处）；
+- 逐状态截图人工复核（列表 / 网格 / 对话框 / 列设置 / 操作菜单 × 深浅主题）；
+- 对每个怀疑点先写**失败的**回归测试，再改代码。
 
 ---
 
-## 五、结论
+## 三、发现并修复的产品缺陷
 
-v2.0.0 升级验收 **通过**。所有 14 项发布检查清单与 17 条 spec 验收要求均满足或已通过修复达成。唯一遗留为上述未提交改动，提交后即可进入发布打包（`npm run release:verify` 各子门禁在本会话已逐一实测全绿）。**无产品级回归。**
+按严重度排列。每条都有对应的回归测试。
+
+### P0 — 行情链路实际是单源，主源常被超时切断
+
+- **备源永久失效**：`hq.sinajs.cn` 自 2022 起强制校验 `Referer`，而 `Referer`
+  是 fetch 的 forbidden header，MV3 Service Worker 无法设置（注入需
+  `declarativeNetRequest` 权限）。在扩展 SW 内实测**固定返回 403**——
+  「双源降级」这条写进 AGENTS.md 的不变量从未成立。
+- **主源预算不足**：`push2.eastmoney.com` 走 302 跳到 `push2delay`，冷连接实测
+  TLS 握手 2.5–6.0s、总耗时 3.45–6.97s，而 provider 超时是 4s。首次刷新经常
+  失败，失败又把退避推进到 30s，用户看到 `--` 且自动重试被压制。
+- **为什么门禁没抓到**：全部单测 mock 传输层；唯一的实网用例断言
+  `toContain('实时')`，而状态栏常驻渲染 `实时 ${count}`——该断言**恒真**，
+  立刻通过后与网络赛跑。
+- **修复**：备源换腾讯 `qt.gtimg.cn`（实测 0.5s、4/4 成功，沪深北三市正确解析）。
+  同一断言改为 `/实时 [1-9]/` 后，从「30 秒拿不到非零实时计数」变为 4.5 秒通过。
+
+### P1 — 失败的刷新播报「已更新」
+
+`app-shell` 依据 `domain.quotes.counts.fresh` 判断成败，但 reducer 的
+`quote/refresh/failed` 不重置 `domain.quotes`——残留的上一次成功快照让失败的
+刷新播报成功。违反项目自身的「不伪成功」不变量。改为依据
+`async.quoteRefresh.status`，并区分 stale 响应（交由后发起者播报）。
+
+### P1 — 「列设置」是死按钮
+
+工具栏发出 `column-panel-open-request`，而 `app-shell` 用一行注释显式忽略它。
+`ColumnPanelElement` 已实现、已注册、有 236 行组件测试——用户点下去毫无反应。
+现已接线：带版本校验的 `uiColumns:v1` 持久化 + popover 宿主 + 4 个真实扩展 E2E。
+
+### P1 — 对账失败时写命令永久卡在 uncertain
+
+写命令超时进入 uncertain 后会调 `app:bootstrap` 对账；这一步失败（SW 重建 /
+再次超时）时错误直接从 `execute()` 抛出。所有调用点都是无 catch 的
+`void controller.xxx()`，于是变成**未处理拒绝**，mutation 永远停在 uncertain。
+改为落到 failed 终态；关键约束：拿不到权威快照时**绝不盲重试**写命令。
+
+### P2 — single-flight 忽略请求的股票集合
+
+旧实现只认「有没有在跑」，请求 `[X]` 的运行会把快照回给请求 `[X,Y]` 的调用方，
+`Y` 从未被抓取却渲染成「缺失」。Popup 与后台 scheduler 各传自己的 watchlist
+快照，刚加完股票时必然不一致。改为按 (排序后 code 集合 + force) 归并。
+
+### P2 — provider 传输失败被空 catch 吞掉
+
+这正是「备源永久 403」能瞒过全部单测与验收的原因。改为发射 `provider-failed`
+诊断事件，带 provider 归因与失败原因。
+
+### P2 — keyed 更新无条件重插节点
+
+`updateKeyedChildren` 对每个节点无条件 `insertBefore`，而 DOM 规范下重新插入
+已在树中的节点等于「先移除再插入」——**焦点丢失**、CSS 动画重启、每次刷新
+N 次无谓结构变更。`stock-table` 里那段「保存 focusedKey → 渲染 → 手动 focus
+回去」正是在绕这个坑，现已删除。
+
+### P2 — bootstrap 存储读放大
+
+冷启动 4 次存储操作，其中 `doReconcile` 重复 `loadUserData`（第二次 sanitize），
+并用 `get(null)` 全库扫描把 500 条缓存的**值**全部反序列化——它只需要键名。
+改为复用已加载数据 + `chrome.storage.local.getKeys()`（Chrome 130+，低版本回退）。
+
+### P3 — 其他
+
+- 三份 `BoardConfig` 默认值，其中 scheduler 那份已漂移成 `sortDirection: 'desc'`；
+  收敛到 domain 唯一导出。
+- 离线 E2E 的拦截列表漏掉新域名会让「离线」用例悄悄打真网；改为与
+  `host_permissions` 对齐的单一列表。
+- 虚拟滚动后聚焦「窗口里第一个节点」而非目标股票（我在本次虚拟化中引入，
+  由新增测试抓出）。
+
+---
+
+## 四、性能
+
+500 只自选股 / 20 分组：
+
+| 指标 | 改造前 | 改造后 | 门槛 |
+|------|--------|--------|------|
+| domUpdate p95 | 77.4ms | **32.9ms** | ≤80ms（对外上限 100ms） |
+| bootstrap p95 | 44.1ms | **41.3ms** | ≤200ms（原 250ms，已收紧） |
+| 列表挂载节点 | 500 行 | **18 行** | ≤27 |
+| 网格挂载节点 | 500 卡 | **16 卡** | ≤24 |
+
+手段：纯函数虚拟窗口 + 帧合并调度、只挂载激活视图（此前隐藏视图也完整渲染，
+DOM 工作量翻倍）、字段级 diff、消除无谓 DOM 移动。
+
+性能门禁同时断言**节点上限**——只测耗时不够，机器够快时全量渲染也能压线通过。
+
+---
+
+## 五、视觉升级
+
+原样式层是 967 行逐次叠加的 `components.css`：每个组件各自决定要不要上色，
+谁忘了谁就掉回浏览器默认值（深色主题下添加表单白底黑字即由此而来）。
+
+重建为 **tokens → base → 分域组件**（1694 行，7 文件）：
+
+- `base.css` 用属性选择器接管表单默认值，新控件不需要「记得套 class」就已正确；
+  加 `color-scheme` 让原生控件（滚动条 / select 下拉 / 复选框 / 自动填充）跟随主题。
+- **界面 chrome 完全无彩色**：屏幕上只有红（涨）/ 绿（跌）/ 金（置顶）三种色相，
+  全部承载数据语义；主按钮靠反相高对比表达主次。
+- 数字等宽 + `tabular-nums`，名称中文无衬线——价格列逐位对齐，纵向扫描才成立。
+- 签名元素：涨跌幅列的幅度条按 **A 股 ±10% 涨跌停**归一化，触及涨跌停时填满描边。
+
+**信息架构才是真正的可读性问题**：上一版把七列平铺进 420px，每列不到 50px，
+全部截断成「贵…」「+10…」。改为四列（股票 / 现价 / 涨跌幅 / 成交额）+ 操作列，
+代码与行情状态降为股票列副标题，仍由列设置控制显隐。
+
+---
+
+## 六、安全面
+
+| 项 | 结果 |
+|----|------|
+| `permissions` | `storage`, `alarms` —— 无 tabs / cookies / `<all_urls>` |
+| `host_permissions` | 3 个域名，与源码中出站请求点**完全一致** |
+| CSP | `script-src 'self'; object-src 'self'`，无远程代码 |
+| `web_accessible_resources` / `externally_connectable` | 均未声明 |
+| `innerHTML` | 仅静态 SVG 字面量，无用户数据插值，无注入面 |
+| 出站数据 | 仅股票代码；自选股名称/分组名不外发 |
+| 本地存储 | `uiTheme` / `uiColumns:v1` 仅展示偏好 |
+| 依赖 | 0 漏洞 |
+
+---
+
+## 七、遗留与后续
+
+- **迁移保留**：`migrateToV2`（v0/v1/v1.2.1 → v2）保留。它是老用户升级路径，
+  不是回退方案——删掉等于现有用户升级后自选股全丢。
+- **CI 门禁比本地 `ci` 薄**：`.github/workflows/ci.yml` 只跑 check / unit /
+  e2e / performance / package / bundle，未跑 component 与 a11y。属既有状况，
+  本次未扩大改动范围；建议后续补齐。
+- **实网用例不进门禁**：`test:live` 依赖第三方端点可达性，境外 runner 上会随
+  网络状况随机变红，改为按需运行。
+- **薄适配器无单测**：`chrome-action-presenter` / `chrome-alarm-adapter` /
+  `console-diagnostic-sink` 仅由 E2E 间接覆盖。
+
+---
+
+## 八、结论
+
+**通过。** 12 个提交，覆盖 1 个 P0、3 个 P1、4 个 P2 与若干 P3 缺陷，
+性能与视觉两条线均达成目标，安全面无扩大。
+
+与旧验收报告最大的差别：这一版的「绿」经过了独立实证，而不是只依赖既有断言。
+上一版恰恰是被一条恒真断言掩盖了产品最核心的功能失效。
