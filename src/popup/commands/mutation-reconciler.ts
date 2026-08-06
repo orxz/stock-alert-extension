@@ -61,7 +61,19 @@ export class MutationReconciler {
       }
       // 第一次 uncertain：bootstrap 对账
       this.store.dispatch({ type: 'mutation/uncertain', key });
-      const bootstrap = await this.rpc.call('app:bootstrap', {});
+
+      // 对账本身也可能失败（SW 正在重建、再次超时）。这一步没有兜底的话，
+      // 错误会直接从 execute() 抛出——所有调用点都是 `void controller.x(...)`，
+      // 于是变成未处理拒绝，且 mutation 永远停在 uncertain，用户既看不到
+      // 结果也无法重试。必须落到终态。
+      let bootstrap;
+      try {
+        bootstrap = await this.rpc.call('app:bootstrap', {});
+      } catch (bootstrapError) {
+        // 拿不到权威快照 → 绝不盲重试写命令（可能造成重复提交）。
+        // 标记 failed 并保留可重试语义，交给用户决定。
+        return this.fail(key, bootstrapError);
+      }
       this.store.dispatch({ type: 'bootstrap/confirmed', result: bootstrap });
       if (isDesiredStateSatisfied(method, payload, bootstrap.userData)) {
         // 远端已达成期望态 → reconciled（bootstrap 已安装权威快照，无需重试）

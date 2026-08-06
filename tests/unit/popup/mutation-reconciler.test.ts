@@ -199,3 +199,49 @@ test('toSafeClientError handles RpcUncertainError gracefully as UNKNOWN', () => 
   // RpcUncertainError 有 code='RPC_UNCERTAIN' 但无 retryable → 回退为 UNKNOWN（retryable 缺失）
   assert.deepEqual(safe, { code: 'UNKNOWN', message: '未知错误', retryable: false });
 });
+
+// ===== 对账过程本身失败 =====
+
+test('a failing reconcile bootstrap does not escape as an unhandled rejection', async () => {
+  // 场景：写命令超时进入 uncertain，紧接着用于对账的 app:bootstrap 也失败
+  // （SW 正在重建 / 再次超时）。此前这个错误会直接从 execute() 抛出——
+  // 所有调用点都是 `void controller.x(...)`，于是变成未处理拒绝，
+  // 且 mutation 永远停在 uncertain。
+  const { store } = setup();
+  const rpc = new FakeRpcClient();
+  const reconciler = new MutationReconciler(rpc, store);
+
+  rpc.queueTimeout('group:rename');
+  rpc.queueError('app:bootstrap', { code: 'INTERNAL', message: 'service worker unavailable', retryable: true });
+
+  await assert.doesNotReject(
+    reconciler.execute('group:rename', { expectedRevision: REV_OLD, groupId: G1, name: 'X' } as never, 'k-boot')
+  );
+
+  // 必须落到一个**终态**，让 UI 能展示并允许用户重试。
+  const status = mutationStatus(store.getState(), 'k-boot');
+  assert.equal(status?.status, 'failed');
+  assert.ok(status?.error, '错误信息可见');
+  // 没有拿到权威快照，就绝不能盲目重试写命令。
+  assert.equal(rpc.count('group:rename'), 1, '未在对账失败后盲重试');
+});
+
+test('a reconcile bootstrap that goes uncertain also settles instead of hanging', async () => {
+  const { store } = setup();
+  const rpc = new FakeRpcClient();
+  const reconciler = new MutationReconciler(rpc, store);
+
+  rpc.queueTimeout('group:rename');
+  rpc.queueTimeout('app:bootstrap');
+
+  await assert.doesNotReject(
+    reconciler.execute('group:rename', { expectedRevision: REV_OLD, groupId: G1, name: 'X' } as never, 'k-boot2')
+  );
+
+  const status = mutationStatus(store.getState(), 'k-boot2');
+  assert.ok(
+    status?.status === 'uncertain' || status?.status === 'failed',
+    `settled state expected, got ${status?.status}`
+  );
+  assert.equal(rpc.count('group:rename'), 1, '未盲重试');
+});
