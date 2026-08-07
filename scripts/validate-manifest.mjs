@@ -84,6 +84,12 @@ export async function validateManifest(manifest, rootDir) {
     errors.push('manifest must not reference importScripts (v1 classic script)');
   }
 
+  // 8. 不含范围外浏览器专有字段：browser_specific_settings 是 Firefox 专有（需 AMO），
+  //    本项目跨浏览器范围仅 Chromium 系（Chrome/Edge/Brave/Opera/Vivaldi），manifest 零改动。
+  if (manifest.browser_specific_settings) {
+    errors.push('manifest must not include browser_specific_settings (Firefox-only; out of Chromium scope)');
+  }
+
   return errors;
 }
 

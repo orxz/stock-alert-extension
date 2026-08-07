@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### 新增
+- **跨浏览器支持（Edge + Chromium 系）**：评估确认 Edge / Brave / Opera / Vivaldi 均为 Chromium 内核，当前扩展所用 MV3 API（runtime / storage.local+session+onChanged / alarms / action，权限仅 storage + alarms）零代码改动即可运行。新增 `tests/e2e/cross-browser.spec.ts` 跨浏览器冒烟（bootstrap → seed 渲染 → 切分组 view 不变量 → 增删股票写回）；`launchBuiltExtension` 参数化 `channel`（`E2E_CHANNEL` 环境变量驱动，默认 chromium）；Playwright 新增 `edge` project（msedge channel）；CI 安装 msedge 并跑跨浏览器冒烟守护 Chromium 系分叉；`validate-manifest.mjs` 断言 manifest 不含 `browser_specific_settings`（Firefox 专有，范围外）；上架流程文档见 `docs/multi-browser-publishing.md`
+
 ### 变更
 - **默认视图改为网格**：`DEFAULT_BOARD_CONFIG.viewMode` 由 `list` 改为 `grid`——全新用户打开即一屏卡片。深色主题本就是默认（`popup/main.ts` 只在 `localStorage.uiTheme === 'light'` 时转浅色，不跟随系统），本次一并由 E2E「fresh profile」用例锁死「深色 + 网格」这一首屏契约
 - 已保存过视图偏好的用户不受影响：`boardConfig` 有该分组条目时读用户自己的选择，默认值只用于缺失时回退
