@@ -1,6 +1,6 @@
 # 股票提醒助手 — 自选股分组与看板
 
-[![Version](https://img.shields.io/badge/version-v2.0.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.0.0)
+[![Version](https://img.shields.io/badge/version-v2.0.1-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.0.1)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](extension/manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -12,24 +12,24 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 ## 核心功能
 
-- **多分组看板** — 最多 20 个自定义分组，拖拽排序；「全部」为计算视图，股票加入任意分组后始终可见
-- **可信行情** — 东方财富主源 + 新浪备源，失败保留 7 天本地缓存；实时 / 缓存（旧 HH:MM）/ 缺失（`--`）三态明确
+- **多分组看板** — 最多 19 个自定义分组（+「全部」默认视图），拖拽排序；股票加入任意分组后始终可见
+- **可信行情** — 东方财富主源 + 腾讯备源，失败保留 7 天本地缓存；实时 / 缓存（旧 HH:MM）/ 缺失（`--`）三态明确
 - **双视图 + 排序** — 网格卡片 / 数据列表，按涨跌幅、价格、成交额、自选时间排序，置顶与手动拖拽互不干扰
 - **排序联动角标** — 工具栏图标实时显示排序第一只股票的涨跌幅（红涨绿跌，缓存灰显），悬停查看前 5 只
 - **智能搜索** — 代码 / 拼音 / 中文名称联想补全，API 失败时自动降级本地搜索
-- **实用细节** — 自定义 12 列、价格隐藏（投屏友好）、盘中 10 秒 / 盘外 5 分钟自适应刷新、虚拟滚动
+- **实用细节** — 自定义 5 列、价格隐藏（投屏友好）、盘中 10 秒 / 盘外 5 分钟自适应刷新、虚拟滚动
 
 ## 安装
 
 ### Chrome 商店（推荐）
 
 <a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
-  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v2.0.0-blue?logo=google-chrome" alt="Chrome Web Store">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v2.0.1-blue?logo=google-chrome" alt="Chrome Web Store">
 </a>
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v2.0.0.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v2.0.1.zip` 并解压
 2. 打开 `chrome://extensions`，启用「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压目录
 
@@ -69,6 +69,7 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 | 版本 | 要点 |
 |------|------|
+| **v2.0.1** | 列设置修复（排序/卡片视图生效/取消弹回）、详情面板丰富（5→16 项双栏）、「多选」改名「管理持仓」、成交额以亿为主、行情字段扩展（换手率/振幅/量比/市盈率/市净率/市值/涨跌停）；实网核对修正东财 f51/f52 非涨跌停，备源改为腾讯 |
 | **v2.0.0** | 基础架构重建：TypeScript + 原生 ESM + Light DOM Web Components；单一 StorageCoordinator 串行临界区 + 内容 revision 乐观并发；版本化 RPC v2（requestId / expectedRevision / 结构化错误）；可重试初始化屏障 + 持久化退避；不可变 Store + 语义 Commands + uncertain 对账；架构边界 / 无障碍 / 性能 / 容量门禁 |
 | **v1.2.1** | 「全部」改计算视图；schema v2 自动迁移（含备份）；行情三态如实标注；缓存灰显角标；串行写入防数据丢失；E2E + CI 质量门禁；移除 Demo 模拟价格 |
 | v1.2.0 | 底部状态栏（更新时间 + 手动刷新）；角标按排序联动；tooltip 显示排序后前 5 只 |
@@ -83,7 +84,7 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 | 优先级 | 来源 | 说明 |
 |:--:|------|------|
 | 1 | 东方财富 `push2.eastmoney.com` | 主源，JSON，实时行情 |
-| 2 | 新浪财经 `hq.sinajs.cn` | 备源，GBK 编码 |
+| 2 | 腾讯 `qt.gtimg.cn` | 备源 |
 | 3 | 本地缓存 `quoteCache:*` | 双源失败时保留 7 天，过期或损坏显示 `--` |
 
 ## 隐私
@@ -118,7 +119,13 @@ npm run release:verify  # 发布验证（含回滚 + 确定性构建）
 | `build/extension/` | tsc 输出 + 静态资源复制的可加载扩展（gitignored） |
 
 
-更多技术细节见 [docs/项目架构.md](docs/项目架构.md) 与 `docs/module-*.md` 模块笔记。
+更多技术细节见 [docs/项目架构.md](docs/项目架构.md) 与 `docs/module-*.md` 模块笔记；完整文档索引见 [docs/README.md](docs/README.md)。
+
+## 贡献与安全
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — 开发环境、提交流程、测试体系、门禁命令
+- [SECURITY.md](SECURITY.md) — 安全漏洞报告渠道与响应时效
+- 开发规范唯一权威见 [AGENTS.md](AGENTS.md)（Qoder / 通用 Agent 入口）、[CLAUDE.md](CLAUDE.md)（Claude Code 入口）
 
 ## 许可证
 

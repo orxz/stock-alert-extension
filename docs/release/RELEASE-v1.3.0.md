@@ -68,9 +68,9 @@ shasum -a 256 stock-alert-extension-v1.3.0.zip
 
 ## 完整更新日志
 
-详见 [CHANGELOG.md](CHANGELOG.md) 或 [GitHub Releases](https://github.com/orxz/stock-alert-extension/releases)。
+详见 [CHANGELOG.md](../../CHANGELOG.md) 或 [GitHub Releases](https://github.com/orxz/stock-alert-extension/releases)。
 
 ## 商店素材
 
-- 商店描述：`store-assets/store-description-v1.3.0.txt`
-- 商店截图：`store-assets/screenshot1-list.png` / `screenshot2-grid.png` / `screenshot3-add.png`
+- 商店描述：`../../store-assets/store-description-v1.3.0.txt`
+- 商店截图：`../../store-assets/screenshot1-list.png` / `../../store-assets/screenshot2-grid.png` / `../../store-assets/screenshot3-add.png`

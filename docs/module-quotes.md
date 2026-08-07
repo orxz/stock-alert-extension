@@ -1,8 +1,10 @@
 # QuoteService — 行情数据层
 
+> 本文档描述**模块落地细节**（provider 实现 / 字段映射 / API 契约 / 陷阱）。整体架构概览见 [项目架构.md](项目架构.md)；开发规范唯一权威见根目录 [AGENTS.md](../AGENTS.md)。
+
 ## overview
 
-v2.0.0 行情数据层按 Domain → Protocol → Application → Infrastructure 分层组织。Application 层的 `QuoteService`（`src/application/quotes/quote-service.ts`）是唯一编排者，负责批量、并发、超时、deadline、双源降级、缓存策略、退避与诊断；底层 HTTP 传输/解析被隔离在 Infrastructure 层的两个可注入 Provider（东财主源 + 新浪备源），通过 `QuoteProvider` 端口对接。Provider 是纯传输/解析适配器，不做缓存、不做 UI、不持有状态。支持沪深主板、科创板、创业板、北交所全市场股票。
+v2.0.1 行情数据层按 Domain → Protocol → Application → Infrastructure 分层组织。Application 层的 `QuoteService`（`src/application/quotes/quote-service.ts`）是唯一编排者，负责批量、并发、超时、deadline、双源降级、缓存策略、退避与诊断；底层 HTTP 传输/解析被隔离在 Infrastructure 层的两个可注入 Provider（东财主源 + 腾讯备源），通过 `QuoteProvider` 端口对接。Provider 是纯传输/解析适配器，不做缓存、不做 UI、不持有状态。支持沪深主板、科创板、创业板、北交所全市场股票。
 
 ## architecture_design
 
@@ -10,14 +12,16 @@ v2.0.0 行情数据层按 Domain → Protocol → Application → Infrastructure
 
 ```
 Application
-├── ports/quote-provider.ts        QuoteProvider 端口（eastmoney | sina）
+├── ports/quote-provider.ts        QuoteProvider 端口（eastmoney | tencent）
 ├── ports/cancellation.ts          CancellationToken / CancellationSource（纯 ES2022）
 ├── ports/session-state.ts         SessionStatePort + QuoteBackoffState
 ├── ports/clock.ts / diagnostics.ts 注入的时钟与诊断 sink
 └── quotes/quote-service.ts        QuoteService 编排核心
 Infrastructure
 ├── quote-providers/eastmoney-quote-provider.ts   东财传输适配器（注入 fetch）
-├── quote-providers/sina-quote-provider.ts        新浪传输适配器（GBK 解码）
+├── quote-providers/tencent-quote-provider.ts     腾讯传输适配器（GBK 解码）
+├── quote-providers/eastmoney-search-provider.ts  东财搜索适配器
+├── quote-providers/local-stock-catalog.ts        本地股票目录（搜索降级）
 ├── quote-providers/provider-parsers.ts           纯解析器（无 fetch 依赖）
 └── chrome/chrome-session-state.ts                SessionStatePort 的 chrome.storage.session 实现
 ```
@@ -26,7 +30,7 @@ Infrastructure
 
 ```ts
 interface QuoteProvider {
-  readonly name: 'eastmoney' | 'sina';
+  readonly name: 'eastmoney' | 'tencent';
   fetch(codes: readonly StockCode[], cancellation: CancellationToken)
     : Promise<Readonly<Record<StockCode, Quote>>>;
 }
@@ -52,7 +56,7 @@ interface CancellationSource { readonly token: CancellationToken; cancel(): void
 
 ### QuoteService 编排
 
-`QuoteService` 构造器注入六要素：`primary`（东财）、`fallback`（新浪）、`cache`（`read`/`write`/`delete`）、`clock`、`session`（`SessionStatePort`）、`sink`（`DiagnosticSink`）。
+`QuoteService` 构造器注入六要素：`primary`（东财）、`fallback`（腾讯）、`cache`（`read`/`write`/`delete`）、`clock`、`session`（`SessionStatePort`）、`sink`（`DiagnosticSink`）。
 
 ```
 QuoteService
@@ -107,9 +111,9 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 
 ## tech_stack
 
-- 东方财富 push2 API：`https://push2.eastmoney.com/api/qt/ulist.np/get`（JSON/UTF-8，`fltt=2` 价格需 ÷100 还原）
+- 东方财富 push2 API：`https://push2.eastmoney.com/api/qt/ulist.np/get`（JSON/UTF-8，`fltt=2` 返回浮点值，无需缩放）
 - 东方财富搜索 API：`https://searchapi.eastmoney.com/api/suggest/get`（由 `EastmoneySearchProvider` 实现）
-- 新浪财经：`https://hq.sinajs.cn/list=`（GBK 编码，`TextDecoder('gbk')`）
+- 腾讯行情：`https://qt.gtimg.cn/q=`（GBK 编码，`TextDecoder('gbk')`，代码自带市场前缀逗号分隔）
 - 无第三方库依赖；Provider 接收注入的 `fetch`，测试可替换为确定性实现
 - 取消信号：`CancellationToken`（纯 ES2022）→ Provider 内桥接 `AbortController`
 
@@ -118,26 +122,36 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 ### 东方财富 push2 行情 API
 
 **请求**：`GET https://push2.eastmoney.com/api/qt/ulist.np/get`
-- 参数：`fltt=2&fields=f2,f3,f4,f5,f6,f12,f13,f14,f15,f16,f17,f18&secids=1.600519,0.000001`
+- 参数：`fltt=2&fields=f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23&secids=1.600519,0.000001`
 - secids 格式：`{market}.{code}`，映射（`EastmoneyQuoteProvider.toSecids`）：`sh → 1.`、`bj/sz → 0.`
-- 响应：`json.data.diff[]`，由 `parseEastmoney` 规范化；价格类字段 `÷100` 缩放。
+- 响应：`json.data.diff[]`，由 `parseEastmoney` 规范化。
+- **`fltt=2` 返回浮点值（元/百分比），无需 ÷100 缩放**——这是 v2 相对 v1.3 的一个澄清，旧文档曾误写为需要缩放。
 
-**字段映射**（`provider-parsers.ts`）：
+**字段映射**（`provider-parsers.ts` 的 `EastmoneyRow`）：
 
 | 字段 | 含义 |
 |------|------|
-| f2 | 现价（÷100） |
-| f3 | 涨跌幅（÷100） |
-| f4 | 涨跌额（÷100） |
+| f2 | 现价 |
+| f3 | 涨跌幅（%） |
+| f4 | 涨跌额（元） |
 | f5 | 成交量 |
 | f6 | 成交额 |
+| f7 | 振幅（%） |
+| f8 | 换手率（%） |
+| f9 | 市盈率（动态） |
+| f10 | 量比 |
 | f12 | 股票代码（纯数字） |
 | f13 | 市场标识（0=SZ/BJ, 1=SH） |
 | f14 | 股票名称 |
 | f15 | 最高 |
 | f16 | 最低 |
 | f17 | 今开 |
-| f18 | 昨收（÷100） |
+| f18 | 昨收 |
+| f20 | 总市值 |
+| f21 | 流通市值 |
+| f23 | 市净率 |
+
+> **涨停/跌停价缺席是有意的**：批量接口 `ulist.np/get` 不提供该数据（f1–f300 实测全扫无匹配），改用逐只 `stock/get` 会让 500 只自选股从 1 次请求变成 500 次。主源缺失即 `undefined` → 展示 `--`；腾讯备源有真值时正常显示。
 
 **关键**：f13 字段必须在 fields 参数中显式请求，否则 API 不会返回该字段。
 
@@ -158,11 +172,39 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 
 注意：科创板 `Classify='23'`（非 `'AStock'`），北交所 `Classify='NEEQ'`。仅用 `Classify === 'AStock'` 过滤会完全遗漏这两类，故白名单以 `SecurityType ∈ {1,2,25,27}` 为主，无 SecurityType 时回退 `Classify==='AStock'`。
 
-### 新浪财经行情 API
+### 腾讯行情 API（TencentQuoteProvider，v2.0.1 起为备源）
 
-**请求**：`GET https://hq.sinajs.cn/list=sh600519,sz000001`
-- 响应：GBK 文本，逐行 `hq_str_<code>="..."`；字段逗号分隔：`[0]=名称 [1]=开 [2]=昨收 [3]=现价 [4]=高 [5]=低 [8]=成交量 [9]=成交额`。
-- 由 `parseSina` 解析；`price<=0` 或非有限 → 跳过。
+**请求**：`GET https://qt.gtimg.cn/q=sh600519,sz000001,bj430047`
+- URL 直接拼接带市场前缀的代码（逗号分隔），无需 secids 转换。
+- 响应：GBK 文本，逐行 `v_<code>="..."`；字段以 `~` 分隔（88 个槽位）。
+- 由 `parseTencent` 解析；`price<=0` 或非有限 → 丢弃（停牌/盘前）。
+
+**字段映射**（`provider-parsers.ts` 的 `parseTencent`）：
+
+| 槽位 | 含义 |
+|------|------|
+| [1] | 股票名称 |
+| [3] | 现价 |
+| [4] | 昨收 |
+| [5] | 今开 |
+| [31] | 涨跌额 |
+| [32] | 涨跌幅（%） |
+| [33] | 最高 |
+| [34] | 最低 |
+| [36] | 成交量 |
+| [38] | 换手率（%） |
+| [39] | 市盈率（动态） |
+| [43] | 振幅（%） |
+| [44] | 流通市值（亿，parser 层 ×1e8 换算为元） |
+| [45] | 总市值（亿，parser 层 ×1e8 换算为元） |
+| [46] | 市净率 |
+| [47] | 涨停价 |
+| [48] | 跌停价 |
+| [49] | 量比 |
+
+> 市值统一为**元**口径：腾讯以「亿」上报，`tencentCap` 在 parser 层 ×1e8 换算，与东财（元）一致。
+
+**备源选型理由**（v2.0.1 替换新浪）：原备源 `hq.sinajs.cn` 自 2022 起强制校验 `Referer`，而 `Referer` 属于 fetch forbidden header，MV3 Service Worker 无法设置（注入需 `declarativeNetRequest` 权限，与「不新增权限」冲突）——实测扩展内固定返回 403，双源降级形同虚设。腾讯 `qt.gtimg.cn` 无此限制，实测成功率高，故替换为备源。
 
 ## gotchas_and_constraints
 
@@ -170,15 +212,15 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 
 东财 push2 的 fields 参数必须包含 `f13`，否则响应不返回市场标识，无法区分深市（sz）与北交所（bj）。`parseEastmoney` 用 `f13===1?'sh':/^[489]\d{5}$/.test(code)?'bj':'sz'` 兜底——**f13=0 时按代码首位识别北交所**（`4xx/8xx/9xx` → bj，其余 → sz）。
 
-### 新浪 Referer 限制
+### f51/f52 不是涨跌停价（v2.0.1 实网核对修正）
 
-浏览器扩展 fetch 无法设置 Referer 头，新浪 API 可能返回 `Forbidden`。因此新浪仅作备用，`processBatch` 在东财（primary）失败/缺失后才对**剩余 code** 调用新浪（fallback）。
+东财批量接口 `ulist.np/get` 上的 f51/f52 是**无关量纲**（实测 sh600519 f51=2715 亿、sz000001 f51=0），只有逐只的 `stock/get` 上才是涨跌停价。照搬会把「涨停价」渲染成天文数字。已从请求字段与解析中移除；涨跌停仅由腾讯备源提供。
 
 ### price>0 不变量
 
 东财对停牌股票返回 `0.00` 或 `"-"`，直接 `.toFixed()` 会崩溃。三重保障：
 1. `num()`（`provider-parsers.ts`）把 `'-'`/`''`/`null`/`undefined` → `null`。
-2. `parseEastmoney`/`parseSina` 丢弃 `price<=0` 或非有限的行（`enrichQuote` 返回 null）。
+2. `parseEastmoney`/`parseTencent` 丢弃 `price<=0` 或非有限的行（`enrichQuote` 返回 null）。
 3. `QuoteService.callProvider` 仅当 `isUsableQuote(quote)`（price>0）时才写入 `freshResults` 与 `cacheWrites`。
 
 **任何情况下不生成模拟价格**——缺失即缺失，由缓存或 `missing` 状态兜底。
@@ -187,9 +229,9 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 
 `refresh` 在去重后若 `requested.length === 0`，直接返回空快照（仍发射 `start`/`end` span），**不读 session、不触碰 `failureCount`、不发起任何网络请求**。这是空自选股场景下的硬不变量。
 
-### fltt=2 价格缩放
+### fltt=2 无需价格缩放
 
-东财 `fltt=2` 返回的数值是真实值 ×100，`scalePrice()` 在解析时 `÷100` 还原。f2/f3/f4/f18 均为价格类字段，必须缩放；f5/f6/f12/f13/f14/f15/f16/f17 不缩放。
+东财 `fltt=2` 返回的数值是**浮点值**（元/百分比），直接 `parseFloat` 使用即可，**无需 ÷100 缩放**。这是 v2 相对 v1.3 文档的一个澄清（旧文档误写为需要缩放）。所有 f 字段均如此。
 
 ### deadline 与超时的关系
 
@@ -206,6 +248,6 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 - 代码前缀统一小写：`sh`/`sz`/`bj`。
 - Provider 是**纯传输/解析适配器**：接收注入 fetch、HTTP 非 2xx 抛错、解析后返回部分结果映射；**不做缓存、不做降级、不分类错误**——失败决策（超时/HTTP/解析）全部由 `QuoteService` 的 `try/catch` 静默吞掉并交由 fallback 或缓存兜底。
 - 只返回真实行情数据，**任何情况下不生成模拟价格**。
-- `enrichQuote`/`parseEastmoney`/`parseSina` 是纯函数，不修改原始数据，返回新对象。
+- `enrichQuote`/`parseEastmoney`/`parseTencent` 是纯函数，不修改原始数据，返回新对象。
 - Provider 实现接收注入的 `fetch`，不直接引用 `globalThis.fetch`；`CancellationToken` 桥接到 `AbortController` 在 Provider 内完成。
 - 诊断事件 `version` 恒为 `'2.0.0'`、`scope` 恒为 `'quote'`；span `end` 必须被调用（exactly-once 保证幂等）。
