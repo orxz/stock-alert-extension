@@ -51,7 +51,7 @@ jobs:
           cat dist/SHA256SUMS.txt >> release-notes.md
           printf '```\n\n完整日志见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)\n' >> release-notes.md
       - name: Upload ZIP to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/stock-alert-extension-*.zip
