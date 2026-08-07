@@ -26,8 +26,13 @@ main
 以下检查必须全部通过才能合并：
 
 ```
-test (pull_request)  — npm run check + test:unit + test:e2e + package + check:bundle（ci.yml 的 job 名）
+test (pull_request)  — ci.yml 的 job 名
 ```
+
+> ci.yml 现在覆盖 `npm run ci` 的**全部**门禁（check / test:unit / test:critical-coverage /
+> test:component / test:build / test:e2e / test:a11y）+ test:performance + test:cross-browser +
+> package + check:bundle。门禁的权威定义见 [AGENTS.md](../AGENTS.md) 的「命令面」——
+> 新增 npm 测试脚本时必须同步更新 ci.yml 与 release.yml，避免「声明了但 CI 不跑」。
 
 ## 配置命令（GitHub CLI）
 

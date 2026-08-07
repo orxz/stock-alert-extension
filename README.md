@@ -1,5 +1,8 @@
 # 股票提醒助手 — 自选股分组与看板
 
+[![CI](https://github.com/orxz/stock-alert-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/ci.yml)
+[![Release](https://github.com/orxz/stock-alert-extension/actions/workflows/release.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/release.yml)
+[![CodeQL](https://github.com/orxz/stock-alert-extension/actions/workflows/codeql.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/codeql.yml)
 [![Version](https://img.shields.io/badge/version-v2.0.1-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.0.1)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](extension/manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)

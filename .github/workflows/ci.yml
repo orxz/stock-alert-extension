@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,12 +17,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # ── 静态门禁：types + lint + 架构边界 + 构建 + runtime import + manifest 校验
       - run: npm run check
+      # ── 纯 Node 测试（npm run ci 的 Node 部分，缺一不可）
       - run: npm run test:unit
-      - run: xvfb-run -a npm run test:e2e
+      # test:critical-coverage：Domain/Protocol/Storage/Reducer per-file 95/90/95/95 门槛
+      - run: npm run test:critical-coverage
+      # test:component：happy-dom 组件测试（生命周期 / DOM 映射 / 语义事件 / keyed update）
+      - run: npm run test:component
+      # test:build：构建产物 / 架构闸 / 容量夹具 / 商店素材规格（无需浏览器）
+      - run: npm run test:build
+      # ── 浏览器门禁（xvfb）
       # test:e2e 现在只跑 default project（实网用例已隔离到 live project，
       # 境外 runner 上会随第三方网络状况随机变红）。性能预算此前是被
       # `playwright test` 顺带跑到的，这里显式保留，避免门禁悄悄变松。
+      - run: xvfb-run -a npm run test:e2e
+      # test:a11y：axe-core 无障碍扫描（零 critical/serious；44×44px；WCAG 2.1 AA）
+      - run: xvfb-run -a npm run test:a11y
       - run: xvfb-run -a npm run test:performance
       # msedge 安装修迟到此——它仅被 test:cross-browser 消费。
       # 放在前段会让 check/unit/e2e/performance 全部耦合到 msedge 可用性。

@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
@@ -19,27 +19,43 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # ── 全门禁（对齐 npm run ci）
       - run: npm run check
       - run: npm run test:unit
+      - run: npm run test:critical-coverage
+      - run: npm run test:component
+      - run: npm run test:build
       - run: xvfb-run -a npm run test:e2e
+      - run: xvfb-run -a npm run test:a11y
+      - run: xvfb-run -a npm run test:performance
+      # ── 依赖安全
+      - run: npm audit --audit-level=high
+      # ── 打包 + 体积 + 释放包允许列表
       - run: npm run package:extension
       - run: npm run check:bundle
+      - run: npm run test:release
+      # ── 确定性构建：两次独立清洁构建产生字节一致 ZIP
+      - run: node scripts/verify-deterministic-build.mjs
+      # ── SHA-256 校验文件
       - name: Compute SHA-256
-        id: sha
         run: |
-          sha=$(shasum -a 256 dist/stock-alert-extension-*.zip | awk '{print $1}')
-          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
-          echo "## SHA-256" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "$sha" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          (cd dist && shasum -a 256 stock-alert-extension-*.zip | tee SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+      # ── 从 CHANGELOG 提取本版本段落作为 release notes（CHANGELOG 是 SSOT）
+      - name: Build release notes
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          node scripts/extract-changelog.mjs "${VERSION#v}" > release-notes.md
+          printf '\n---\n\n**校验（SHA-256）：**\n```\n' >> release-notes.md
+          cat dist/SHA256SUMS.txt >> release-notes.md
+          printf '```\n\n完整日志见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)\n' >> release-notes.md
       - name: Upload ZIP to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/stock-alert-extension-*.zip
-          body: |
-            **SHA-256:** `${{ steps.sha.outputs.sha256 }}`
-
-            详见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+          files: |
+            dist/stock-alert-extension-*.zip
+            dist/SHA256SUMS.txt
+          body_path: release-notes.md
           draft: false
           prerelease: false

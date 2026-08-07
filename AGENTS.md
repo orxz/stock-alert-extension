@@ -88,3 +88,8 @@ Infrastructure (Chrome / Storage / HTTP)  →  implements  →  Application Port
    期望值应指向唯一真相，而不是复制一份。
 4. **改动后先问「这条断言现在还会失败吗」。** 新增回归测试要红→绿验证过；
    改默认值/改名后，要确认原本守护它的用例仍然指向新的正确值。
+5. **CI workflow 必须覆盖 `npm run ci` 的全部门禁。** AGENTS.md 声明的命令面是
+   门禁的权威定义；`ci.yml` 是门禁的执行体。已发生过：AGENTS.md 声明了 7 个门禁
+   但 `ci.yml` 实际只跑 3 个（test:critical-coverage / test:component / test:build /
+   test:a11y 全漏）。**新增 npm 测试脚本时，必须同步更新 `ci.yml` 与 `release.yml`**，
+   并检查它是否真的落进了某个会跑的 glob。
