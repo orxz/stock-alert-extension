@@ -72,6 +72,7 @@ Infrastructure (Chrome / Storage / HTTP)  →  implements  →  Application Port
 - 改权限/入口/域名 → `extension/manifest.json`；host_permissions 只允许上述三个数据源域名
 - 改默认视图/主题 → `DEFAULT_BOARD_CONFIG` + `src/popup/main.ts`；**断言表格结构的 E2E 必须显式声明视图**（`listBoardConfig()` / `gridBoardConfig()`），依赖全局默认值的用例会在默认一改时集体变红
 - 改商店素材/文案 → `scripts/capture-store-assets.mjs` + `store-assets/`；素材是随版本提交的产物，改完跑 `npm run capture:store` 并让 `test:build` 校验规格。文案只许描述**源码中真实存在**的能力：本扩展**没有价格提醒功能**（「股票提醒助手」只是产品名），备源是**腾讯**不是新浪，可配置列是 **5** 个，自定义分组上限 **19**（+1 个默认）
+- 改跨浏览器支持（Edge / Chromium 系）→ `tests/e2e/extension-fixture.ts`（`channel` 参数化 + `E2E_CHANNEL` 环境变量）+ `tests/e2e/cross-browser.spec.ts`（Edge 冒烟）+ `playwright.config.mjs`（`edge` project）；上架流程见 `docs/multi-browser-publishing.md`。Chromium 系零代码改动，manifest 不含 `browser_specific_settings`（由 `validate-manifest.mjs` 断言）
 - 改动后验证 → `npm run ci`（含覆盖率门槛 + 架构边界 + 真实扩展 E2E + axe）；纯 Domain/Protocol 改动优先跑 `tests/unit/domain/` / `tests/unit/protocol/`
 
 ## 验证纪律（两次踩坑换来的）

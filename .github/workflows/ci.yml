@@ -24,6 +24,11 @@ jobs:
       # 境外 runner 上会随第三方网络状况随机变红）。性能预算此前是被
       # `playwright test` 顺带跑到的，这里显式保留，避免门禁悄悄变松。
       - run: xvfb-run -a npm run test:performance
+      # msedge 安装修迟到此——它仅被 test:cross-browser 消费。
+      # 放在前段会让 check/unit/e2e/performance 全部耦合到 msedge 可用性。
+      - run: npx playwright install --with-deps msedge
+      # 跨浏览器冒烟：在 Edge channel 上守护 Chromium 系分叉，离线模式不依赖实网。
+      - run: xvfb-run -a npm run test:cross-browser
       - run: npm run package:extension
       - run: npm run check:bundle
       - uses: actions/upload-artifact@v4

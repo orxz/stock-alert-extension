@@ -90,9 +90,17 @@ export interface LaunchOptions {
   holdQuotes?: boolean;
   /** 强制重新构建扩展（忽略缓存）。 */
   rebuild?: boolean;
+  /**
+   * 启动持久上下文的浏览器 channel。
+   * 默认 'chromium'（Chrome / Brave / Vivaldi 等 Chromium 通用基线）；
+   * 设为 'msedge' 用于 Edge 跨浏览器冒烟。
+   * 可被环境变量 E2E_CHANNEL 覆盖（优先级：options > E2E_CHANNEL > 'chromium'）。
+   */
+  channel?: 'chromium' | 'msedge';
 }
 
 export interface LaunchedExtension {
+  // context 的 channel 由 LaunchOptions.channel / E2E_CHANNEL 环境变量决定（默认 chromium，msedge 用于 Edge 跨浏览器冒烟）。排错时查 launchBuiltExtension 内的 channel 解析逻辑。
   context: BrowserContext;
   worker: Worker;
   page: Page;
@@ -106,6 +114,9 @@ export interface LaunchedExtension {
 
 export async function launchBuiltExtension(options: LaunchOptions = {}): Promise<LaunchedExtension> {
   const { seed = null, offline = false, holdQuotes = false, rebuild = false } = options;
+  // channel 优先级：显式 options > 环境变量 E2E_CHANNEL > 默认 'chromium'。
+  // cross-browser spec / edge project 通过环境变量注入，最小侵入现有用例。
+  const channel = options.channel ?? (process.env.E2E_CHANNEL === 'msedge' ? 'msedge' : 'chromium');
 
   if (rebuild) {
     buildPromise = null;
@@ -114,7 +125,7 @@ export async function launchBuiltExtension(options: LaunchOptions = {}): Promise
 
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'stock-alert-v2-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
-    channel: 'chromium',
+    channel,
     headless: process.env.CI === 'true' || false,
     args: [
       `--disable-extensions-except=${extensionPath}`,
