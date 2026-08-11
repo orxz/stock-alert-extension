@@ -21,7 +21,7 @@ export interface Stock {
  *
  * 市场判定（与 v1.3 stock-utils.js 一致）：
  * - sh: 600/601/603/605/688/689
- * - sz: 000/001/002/003/300/301
+ * - sz: 000/001/002/003/300/301/302（302 为 2025 年深交所创业板新增代码段，如中航成飞 302132）
  * - bj: 4/8/920（4 和 8 是单字符前缀，920 是三字符）
  */
 export function normalizeStockCode(input: unknown): StockCode | null {
@@ -36,7 +36,7 @@ export function normalizeStockCode(input: unknown): StockCode | null {
 
 function inferMarket(digits: string): 'sh' | 'sz' | 'bj' | null {
   if (/^(600|601|603|605|688|689)/.test(digits)) return 'sh';
-  if (/^(000|001|002|003|300|301)/.test(digits)) return 'sz';
+  if (/^(000|001|002|003|300|301|302)/.test(digits)) return 'sz';
   if (/^(4|8|920)/.test(digits)) return 'bj';
   return null;
 }

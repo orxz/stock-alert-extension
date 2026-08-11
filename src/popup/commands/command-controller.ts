@@ -87,6 +87,16 @@ export class CommandController {
    * promise 落定（无论成功失败）后从 inflight 移除，允许后续同 key 命令重新发起。
    */
   private mutate<M extends MutationMethod>(method: M, payload: RpcPayload<M>, key: string): Promise<void> {
+    // bootstrap 完成前 revision 为空字符串，写命令的 expectedRevision 会校验失败。
+    // 在此单点拦截所有写操作，避免 UI 各入口各自实现守卫。
+    if (this.store.getState().async.bootstrap.status !== 'success') {
+      this.store.dispatch({
+        type: 'mutation/failed',
+        key,
+        error: { code: 'NOT_READY', message: '数据正在加载中', retryable: true }
+      });
+      return Promise.resolve();
+    }
     const existing = this.inflight.get(key);
     if (existing) return existing;
     const promise = this.reconciler.execute(method, payload, key).finally(() => {

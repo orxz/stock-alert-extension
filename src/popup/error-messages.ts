@@ -21,6 +21,7 @@ const CODE_MESSAGES: Readonly<Record<string, string>> = {
   QUOTE_UNAVAILABLE: '行情服务暂时不可用，请稍后重试',
   SEARCH_UNAVAILABLE: '搜索服务暂时不可用，请稍后重试',
   STORAGE_UNAVAILABLE: '本地存储不可用，请检查浏览器隐私设置',
+  NOT_READY: '数据正在加载中，请稍后重试',
   PROTOCOL_MISMATCH: '扩展版本不一致，请刷新页面后重试',
   VALIDATION_FAILED: '输入内容无效，请检查后重试',
   NOT_FOUND: '未找到相关数据',
