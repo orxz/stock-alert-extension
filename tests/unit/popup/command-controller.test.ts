@@ -287,6 +287,64 @@ test('addStock sends code/name/groupIds', async () => {
   assert.equal(payload.name, 'A');
 });
 
+// ===== bootstrap guard: all writes blocked until bootstrap succeeds =====
+
+test('write command is blocked before bootstrap (idle) with NOT_READY', async () => {
+  const { rpc, store, controller } = setup();
+  assert.equal(store.getState().async.bootstrap.status, 'idle');
+  await controller.addStock({ code: CODE_A, name: 'A', groupIds: [] });
+  assert.equal(rpc.count('stock:add'), 0, '不发 RPC');
+  const entry = store.getState().async.mutations['stock:add:sh600519'];
+  assert.equal(entry?.status, 'failed');
+  assert.equal(entry?.error?.code, 'NOT_READY');
+});
+
+test('write command is blocked during bootstrap loading', async () => {
+  const { rpc, store, controller } = setup();
+  store.dispatch({ type: 'bootstrap/requested' });
+  await controller.setPinned({ groupId: G_ALL, code: CODE_A, pinned: true, orderedCodes: [CODE_A] });
+  assert.equal(rpc.count('stock:setPinned'), 0, 'loading 时不发 RPC');
+  assert.equal(store.getState().async.mutations['stock:setPinned:g_all:sh600519']?.status, 'failed');
+});
+
+test('write command is blocked when bootstrap errored', async () => {
+  const { rpc, store, controller } = setup();
+  store.dispatch({ type: 'bootstrap/failed', error: { code: 'STORAGE_UNAVAILABLE', message: '存储不可用', retryable: true } });
+  await controller.createGroup('新组');
+  assert.equal(rpc.count('group:create'), 0, 'error 时不发 RPC');
+  const keys = Object.keys(store.getState().async.mutations);
+  assert.equal(keys.length, 1);
+  assert.match(keys[0], /^group:create:g_/);
+  assert.equal(store.getState().async.mutations[keys[0]]?.status, 'failed');
+});
+
+test('write command succeeds after bootstrap completes', async () => {
+  const { rpc, store, controller } = setup();
+  // 先在 idle 状态尝试 → 被拦
+  await controller.addStock({ code: CODE_A, name: 'A', groupIds: [] });
+  assert.equal(rpc.count('stock:add'), 0);
+  // bootstrap 成功 → 写命令放行
+  seedRevision(store, REV1);
+  rpc.queueSuccess('stock:add', { value: { code: CODE_A, name: 'A', groupIds: [], manualOrder: {}, pinned: {}, addedAt: 0 }, userData: emptyUserData(), revision: REV2 });
+  await controller.addStock({ code: CODE_A, name: 'A', groupIds: [] });
+  assert.equal(rpc.count('stock:add'), 1, 'bootstrap 后放行');
+  assert.equal(store.getState().async.mutations['stock:add:sh600519'], undefined, 'mutation key 已清除');
+});
+
+test('read commands (search/quote/bootstrap) are not blocked by the guard', async () => {
+  const { rpc, store, controller } = setup();
+  assert.equal(store.getState().async.bootstrap.status, 'idle');
+  rpc.queueSuccess('stock:search', [{ code: CODE_A, name: 'A', pinyin: 'a', tags: [] }] as never);
+  await controller.dialogSearchStocks('a');
+  assert.equal(rpc.count('stock:search'), 1, '搜索不受守卫影响');
+  rpc.queueSuccess('quote:refresh', { results: {}, counts: { fresh: 1, cached: 0, missing: 0 }, attemptedAt: 5, succeededAt: 5, generation: 1 } as never);
+  await controller.refreshQuotes([CODE_A]);
+  assert.equal(rpc.count('quote:refresh'), 1, '行情刷新不受守卫影响');
+  rpc.queueBootstrap(bootstrapResult(emptyUserData(), REV1));
+  await controller.bootstrap();
+  assert.equal(store.getState().async.bootstrap.status, 'success', 'bootstrap 自身不受守卫影响');
+});
+
 // ===== timeout reconciliation through controller (brief Step 1 verbatim behavior) =====
 
 test('controller.setPinned reconciles after timeout when desired state committed', async () => {

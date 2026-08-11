@@ -121,11 +121,15 @@ export function selectHeader(state: AppState): HeaderViewModel {
   const groupName = group?.name ?? '全部';
   const stockCount = stocksForGroup(state.domain.userData.watchlist, state.view.currentGroupId).length;
   const config = selectCurrentBoardConfig(state);
+  // bootstrap 完成前 revision 为空字符串，任何写命令的 expectedRevision 都会
+  // 因不匹配 sha256:<hex> 格式而返回 INVALID_PAYLOAD。只有 bootstrap 成功后
+  // revision 才由 SW 返回（合法值），此时才允许写操作。
+  const canAddStock = state.async.bootstrap.status === 'success';
   return {
     groupName,
     stockCount,
     priceHidden: config.priceHidden,
-    canAddStock: true,
+    canAddStock,
     theme: state.view.theme
   };
 }

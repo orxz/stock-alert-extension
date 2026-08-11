@@ -20,7 +20,7 @@ export const CAPACITY_CONFIG = Object.freeze({
   staleAgeMs: 3_600_000,
   // 市场前缀池（与 src/domain/stock.ts inferMarket 严格对齐）。
   shPrefixes: ['600', '601', '603', '605', '688', '689'],
-  szPrefixes: ['000', '001', '002', '003', '300', '301'],
+  szPrefixes: ['000', '001', '002', '003', '300', '301', '302'],
   bjPrefixes: ['920', '830', '870', '880', '430', '480']
 });
 

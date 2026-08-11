@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { GroupId, StockCode, QuoteSnapshot, Stock, BoardConfig, UserData } from '../../../src/domain/index.js';
+import type { GroupId, StockCode, QuoteSnapshot, Stock, BoardConfig, UserData, UserDataRevision } from '../../../src/domain/index.js';
 import { createInitialState } from '../../../src/popup/store/state.js';
 import type { AppState } from '../../../src/popup/store/state.js';
 import {
@@ -537,6 +537,45 @@ test('selectHeader exposes current group name', () => {
   };
   const header = selectHeader(state);
   assert.equal(header.groupName, '科技');
+});
+
+test('selectHeader blocks add-stock until bootstrap succeeds', () => {
+  // 初始态：revision 为空字符串，此时写命令的 expectedRevision 会校验失败。
+  // canAddStock 必须为 false 才能从 UI 层阻止提交。
+  const idle = createInitialState();
+  assert.equal(idle.async.bootstrap.status, 'idle');
+  assert.equal(selectHeader(idle).canAddStock, false);
+
+  // bootstrap 进行中：revision 仍为空，同样阻止。
+  const loading: AppState = {
+    ...idle,
+    async: { ...idle.async, bootstrap: { status: 'loading' } }
+  };
+  assert.equal(selectHeader(loading).canAddStock, false);
+
+  // bootstrap 失败：revision 仍为空，同样阻止。
+  const errored: AppState = {
+    ...idle,
+    async: { ...idle.async, bootstrap: { status: 'error', error: { code: 'BOOTSTRAP_FAILED', message: 'fail', retryable: false } } }
+  };
+  assert.equal(selectHeader(errored).canAddStock, false);
+
+  // bootstrap 完成：revision 由 SW 返回（sha256:<hex>），允许写命令。
+  const success: AppState = {
+    ...idle,
+    domain: {
+      ...idle.domain,
+      revision: 'sha256:abc123' as UserDataRevision,
+      userData: {
+        ...idle.domain.userData,
+        groups: [
+          { groupId: 'g_all', name: '全部', order: 0, isDefault: true, createdAt: 0, updatedAt: 0 }
+        ]
+      }
+    },
+    async: { ...idle.async, bootstrap: { status: 'success' } }
+  };
+  assert.equal(selectHeader(success).canAddStock, true);
 });
 
 // ===== selectBatchToolbar =====

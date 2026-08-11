@@ -35,7 +35,7 @@ test('all custom groups have unique ids and names', () => {
 
 test('every stock code is a valid sh/sz/bj 6-digit code', () => {
   const fixture = buildCapacityFixture();
-  const valid = /^(sh(600|601|603|605|688|689)\d{3}|sz(000|001|002|003|300|301)\d{3}|bj(920|830|870|880|430|480)\d{3})$/;
+  const valid = /^(sh(600|601|603|605|688|689)\d{3}|sz(000|001|002|003|300|301|302)\d{3}|bj(920|830|870|880|430|480)\d{3})$/;
   for (const s of fixture.watchlist) {
     assert.match(s.code, valid, `invalid code: ${s.code}`);
   }

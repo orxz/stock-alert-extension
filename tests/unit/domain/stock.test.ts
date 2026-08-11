@@ -39,13 +39,14 @@ test('normalizeStockCode covers all supported prefixes case-insensitively', () =
   assert.equal(normalizeStockCode('605555'), 'sh605555');
   assert.equal(normalizeStockCode('688981'), 'sh688981');
   assert.equal(normalizeStockCode('689009'), 'sh689009');
-  // sz: 000/001/002/003/300/301
+  // sz: 000/001/002/003/300/301/302（302 为 2025 年深交所创业板新增代码段，如中航成飞 302132）
   assert.equal(normalizeStockCode('000002'), 'sz000002');
   assert.equal(normalizeStockCode('001872'), 'sz001872');
   assert.equal(normalizeStockCode('002594'), 'sz002594');
   assert.equal(normalizeStockCode('003816'), 'sz003816');
   assert.equal(normalizeStockCode('300750'), 'sz300750');
   assert.equal(normalizeStockCode('301308'), 'sz301308');
+  assert.equal(normalizeStockCode('302132'), 'sz302132');
   // bj: 4/8/920
   assert.equal(normalizeStockCode('430047'), 'bj430047');
   assert.equal(normalizeStockCode('830799'), 'bj830799');
