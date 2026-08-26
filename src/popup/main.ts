@@ -91,16 +91,18 @@ function scheduleNextRefresh(): void {
   const interval = isMarketSession() ? 10_000 : 300_000;
   refreshTimer = setTimeout(() => {
     if (destroyed) return;
+    // 空自选股也刷新：QuoteService 会把固定指数目录并入请求（指数条常驻）。
     const codes = store.getState().domain.userData.watchlist.map((s) => s.code);
-    if (codes.length > 0) {
-      void controller.refreshQuotes(codes, false);
-    }
+    void controller.refreshQuotes(codes, false);
     scheduleNextRefresh();
   }, interval);
 }
 
-// Bootstrap → 调度首次刷新。
+// Bootstrap → **立即刷新一次**（指数条/自选股冷启动即有数据），随后进入常规调度周期。
 void controller.bootstrap().then(() => {
+  if (destroyed) return;
+  const codes = store.getState().domain.userData.watchlist.map((s) => s.code);
+  void controller.refreshQuotes(codes, false);
   scheduleNextRefresh();
 });
 

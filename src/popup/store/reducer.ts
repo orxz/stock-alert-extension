@@ -226,6 +226,13 @@ export function reducer(state: AppState, action: AppAction): AppState {
         }
       };
 
+    // ===== detail panel (pure UI) =====
+    case 'view/detailOpen':
+      return { ...state, view: { ...state.view, detail: { code: action.code, name: action.name } } };
+
+    case 'view/detailClose':
+      return { ...state, view: { ...state.view, detail: null } };
+
     // ===== overlay =====
     case 'overlay/dialog':
       return { ...state, overlay: { ...state.overlay, dialog: action.dialog } };

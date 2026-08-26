@@ -1,17 +1,52 @@
 # 更新日志
 
-## Unreleased
+## v2.6.0 — 大盘指数、科创50 与分时/K线图表
+
+### 修复
+- **涨跌幅幅度条/涨停高亮按板块归一（v2.6）**：此前写死 ±10% 基准——创业板/科创板（±20%）、北交所（±30%）的涨幅条被错误压满、真涨停不高亮（如创业板 19.95% 涨停漏判）。改为复用 `domain/limit-rule` 的 `limitPctFor`（列表与卡片两处），指数按主板基准归一
+- **审核修复（发布前 review）**：① `parseEastmoney` JSDoc 与 v2.5.5 推导行为矛盾（「缺失显示 --」→ 已更正为推导兜底语义）；② canvas 每次全量重绘无条件重设 width/height（十字光标 mousemove 路径持续重分配 backing store）——加尺寸守卫；③ 删除 `_geo.prevClose` 死字段
+- **涨跌停数据一直缺失（v2.5.5）**：根因是结构性的一—东财批量接口不返回涨跌停（f51/f52 在 ulist.np/get 上是无关量纲），而备源只在主源缺失时才被调用，主源成功的股票永远拿不到腾讯真值，长期显示 `--`。修复：**真值优先，规则推导兜底**——腾讯 [47]/[48] 有真值时用真值；缺失时（主源路径/腾讯停牌哨兵）按交易所规则推导（昨收×板块幅度四舍五入到分：沪深主板 ±10%、ST 风险警示（名称前缀 ST/*ST/S*ST/SST）±5%、创业板/科创板 ±20%、北交所 ±30%）。规则推导是确定性公式（同一昨收必得同一结果，可独立复算），不是模拟行情；实测茅台昨收 1304 → 1434.40/1173.60，与 stock/get 真值一致。规则表与推导在 `domain/limit-rule.ts`（新增 8 组单测：板块幅度/ST 前缀/半分进位/指数排除），解析层 `applyDerivedLimits` 双源接入（5 组集成测试：真值优先/哨兵兜底/无昨收不推导/指数不适用）；已知边界：新股上市首日（无涨跌停或特殊幅度）无法从代码段判断，推导值偏保守
 
 ### 新增
+- **量能副图区间加高（v2.5.4）**：成交量副图从固定 40px 改为总高的 **22%（钳 48..96px）**——大屏下量能柱对比更清晰；副图左上角新增**最大量标签**（如「量 5.4万手」，≥1 万手归万）；柱顶留 6px 余量不顶分隔线
+- **量能副图 + 十字光标（v2.5）**：分时/K线主图下方新增**量能柱副图**（涨跌色）；canvas **mousemove 十字光标**（虚线 + 顶部读数框：分时「时间 价 均」/ K线「日期 开收高低」）；时间轴 4 档刻度（分时）、日期轴 3 档（K线）；**最新价虚线 + 右侧色带标签**；K线蜡烛改经典样式（涨=空心红、跌=实心绿）
+- **hover 迷你分时（v2.3）**：悬停行情行/卡片时，详情浮层顶部显示 148×36 迷你分时走势图（涨跌色与点位趋势一致）——首次 hover 按需拉取、popup 生命周期内缓存不重复请求；拉取失败静默降级（浮层其余 16 项指标照常显示）。表/卡片/board/grid 链式注入 loader（AppShell → stock-app → board → grid/card），视图惰性挂载后自动重放
+- **指数条优化（v2.3）**：chip 可点击/键盘激活（role=button + tabindex，aria-label 含点击提示）→ 打开详情面板（分时/K线同自选股）；hover/focus 高亮；aria 语义修正（外层 group 内 button，不再用 list/listitem 与 tablist 冲突）。（同期加过的涨跌额已于 v2.4.1 移除）
+- **指数点击进详情**：上证/深成/创业板/科创50 点击即开详情面板（与自选股同链路 chart:load）
+- **科创50 入指数条（v2.2）**：固定目录从 3 条扩为 4 条（上证/深成/创业板/科创50）——科创板个股代码段（688/689）早已支持，本轮补齐指数维度；本地热门目录同步收录科创板指数
+- **详情面板：分时 + 日/周/月 K线（v2.2）**：点击行情行/卡片打开内嵌面板——canvas 自绘（零依赖，符合 MV3 CSP）分时图（价格线 + 昨收基准 + 均价 + 涨跌色）与 K线（蜡烛 + 5/10/20 均线 + 60 根窗口），四个形态标签（分时/日K/周K/月K）切换；数据源为东财历史行情 `push2his.eastmoney.com`（manifest 新增该域 host 权限，权限类别不变仍为 host）；新 RPC 方法 `chart:load`（注册表第 14 个，registry + rpc-handlers 两端同步）；`chart-service`（application）single-flight + 4s 超时 + 可用性校验（不可用即报错，绝不生成模拟曲线）
+- **指数条迷你图（v2.2）**：每只指数内嵌 36×18 canvas 迷你趋势（分时点 20 点抽样，涨跌色与点位趋势一致）；数据来自 `chart:load` trends，失败静默降级为无迷你图（点位/涨跌幅不受影响）
+- **字段实证（f51/f52 教训延续）**：trends2/kline 字段语义全部取自 2026-08-26 实网样本核对（trends2 f51-58、kline f51-61 映射见 provider-parsers 注释），含「涨跌幅 != 振幅」下标防错断言
+- **大盘指数支持（v2.1.0，A+B 全量）**：① 固定指数条——popup 顶部常驻 上证指数 / 深证成指 / 创业板指（`domain/index-quote.ts` 的 `INDEX_CATALOG` 是目录唯一真相，随每次行情刷新同批拉取，冷启动从缓存回放，不占分组/排序体系）；② 指数可进自选——`normalizeStockCode` 支持指数段（`sh000xxx` 上证系列 / `sz399xxx` 深证系列 / `bj899xxx` 北证50），搜索放行 `SecurityType=5` 且只允许交易所指数段位（北证50 靠段位而非 MktNum/Classify 判定市场，实测其 `Classify=34`、`MktNum=0`），本地热门目录同步收录指数（远端搜索降级也能命中）。**实测依据**：东财批量接口与腾讯备源对全部 8 个指数开箱即用且可与股票混合同批，零权限新增（详见 `docs/调研-大盘指数支持.md`）
 - **跨浏览器支持（Edge + Chromium 系）**：评估确认 Edge / Brave / Opera / Vivaldi 均为 Chromium 内核，当前扩展所用 MV3 API（runtime / storage.local+session+onChanged / alarms / action，权限仅 storage + alarms）零代码改动即可运行。新增 `tests/e2e/cross-browser.spec.ts` 跨浏览器冒烟（bootstrap → seed 渲染 → 切分组 view 不变量 → 增删股票写回）；`launchBuiltExtension` 参数化 `channel`（`E2E_CHANNEL` 环境变量驱动，默认 chromium）；Playwright 新增 `edge` project（msedge channel）；CI 安装 msedge 并跑跨浏览器冒烟守护 Chromium 系分叉；`validate-manifest.mjs` 断言 manifest 不含 `browser_specific_settings`（Firefox 专有，范围外）；上架流程文档见 `docs/multi-browser-publishing.md`
 
 ### 变更
+- **迷你图绘制收敛为单一真相（v2.5.3，技术债清偿）**：三处重复实现（stock-table `drawMiniTrends` / stock-card `ensureMiniTrends` / index-strip `drawSparklines`）与四处 `hexToRgba`、四处硬编码涨跌色全部收敛到 `src/popup/components/sparkline.ts`（`drawSparkline` + `CHART_UP/DOWN/FLAT` + `hexToRgba` + `trendColorOf`）——改一处漏两处的隐患消除；测试侧 canvas 2d stub 同步收敛到 `tests/helpers/canvas-stub.ts`（此前两个测试文件各自维护 API 清单）；新增 sparkline 组件单测（判色/转换/契约/分辨率回退）
+- **列表 hover 迷你分时质感升级（v2.5.2）**：详情浮层顶部迷你图从纯折线升级为**面积渐变**（0.2→0.03 淡出，与详情大图同风格）+ 昨收中位虚线 + 按容器实际尺寸设定 canvas 分辨率（不再被 CSS 拉伸发糊）——`stock-table` / `stock-card` 两处同步
+- **指数 sparkline 质感升级（v2.5.2）**：迷你趋势图加**面积渐变**（0.25→0.04）+ 物理分辨率按容器尺寸适配——指数条与列表/详情图的视觉语言统一
+- **图表分辨率按容器实际尺寸（v2.5.1）**：canvas 不再固定 320×240 逻辑分辨率被 CSS 拉伸——render() 读取容器 getBoundingClientRect 设定物理尺寸（实测 402×448），线条/文字 1:1 不再发糊变形；ResizeObserver 监听尺寸变化自动重绘；十字光标读数/十字线坐标同步改用实际视口
+- **指数条简化（v2.4.1）**：移除指数 chip 的涨跌额字段——指数区域只保留 名称+点位+涨跌幅+迷你趋势图（涨跌额与涨跌幅信息重叠，420px 窄条视觉冗余）；数据投影/组件/CSS/测试同步清理，StockCardViewModel 的涨跌额不受影响
+- **数值区涨跌幅强化（v2.4）**：网格卡片涨跌幅补**幅度条**（宽度按 |涨跌幅|/10% 归一化，与列表一致）——列表本已有（`--pct` 伪元素），卡片补齐后网格/列表信息密度对等
+- **详情入口感知（v2.4）**：行情行名称区 hover/focus 淡入「详情›」指示，行/卡片光标 pointer、卡片 hover 描边——点击开详情的可发现性不再靠用户试出
+- **分时/ K线图质感（v2.4）**：
+  - **DPR 适配**：canvas 物理分辨率按 devicePixelRatio 缩放（此前固定 320×200 被 CSS 拉伸发糊——质感问题的根因）
+  - **真实价格轴**：左轴 5 档刻度（此前是 `fillText('')` 死代码，轴是空的）
+  - **分时**：价格线加渐变面积填充（涨跌色 0.22→0.02 淡出），时间轴/均价线保留
+  - **K线**：MA5/10/20 图例（色点+当前值，度量值随最新 bar 动态）；图例左对齐防溢出截断
+  - **修复**：加载失败也渲染 DPR 空态（此前 canvas 停在 HTML 默认 300×150，空态未适配）
+- **空自选股不变量收窄**：「空自选股不请求网络」→「空自选股不因自选股触发请求」——固定指数目录无条件并入每次刷新（`QuoteService.refresh` 内合并，调用方无需感知），空 watchlist 时仍会拉取目录指数；后台 scheduler 空 watchlist 分支同样保留目录刷新（badge 仍清空）
+- **指数字段从源头剔除**：指数行的 PE/PB/涨跌停经 `projectIndexQuote`（domain 投影）在解析层剔除——东财指数 PE/PB 上报 0、腾讯指数涨跌停上报 -1、两源 PE 口径矛盾（0 vs 17.70），任何一项透出都会渲染假值（0.00 / -1.00）；腾讯源涨跌停非正值一律归无效（对股票行同样生效，停牌/无涨跌停品种不再透出 -1）
+- **行情缓存保留集**：`quoteCache` 的写入成员校验、孤儿清理、bootstrap 缓存读取三处统一为「watchlist ∪ 固定指数目录」——目录指数虽不在 watchlist，缓存必须可写、不被清理、冷启动可回放；`mutate` 删除被移除代码的缓存时同样豁免目录指数
 - **默认视图改为网格**：`DEFAULT_BOARD_CONFIG.viewMode` 由 `list` 改为 `grid`——全新用户打开即一屏卡片。深色主题本就是默认（`popup/main.ts` 只在 `localStorage.uiTheme === 'light'` 时转浅色，不跟随系统），本次一并由 E2E「fresh profile」用例锁死「深色 + 网格」这一首屏契约
 - 已保存过视图偏好的用户不受影响：`boardConfig` 有该分组条目时读用户自己的选择，默认值只用于缺失时回退
 - 断言表格结构的 E2E 改为显式声明视图（新增 `listBoardConfig()` 夹具）——此前它们依赖全局默认值，默认一改就集体变红
 - 商店素材首图改为网格视图并去掉种子里写死的 `boardConfig`，使第一张截图就是真实首屏
 
 ---
+
+### 修复
+- **指数条只剩名称（v2.4.2）**：4 只指数 + 单行 flex + 迷你图固定 36px 时，点位/涨跌幅 span 被挤出（宽度 0，ellipsis 截断为空）——视觉上只看到名称。修复：指数条改 **2×2 网格**（条高 28px→56px，每只 ~194px 横向空间），名称/点位/涨跌幅 `flex-shrink:0` 保证完整，迷你图作为可收缩项兜底；纵向契约注释同步更新（44+56+38+40+Board+30=560）。守护测试：组件断言 4 chip 的点位/涨跌幅文本非空且无涨跌额字段
+- **指数条冷启动为空（v2.1.1）**：popup 首帧指数条显示 `--`（缺失 3）长达 10s（盘中）/ 5min（盘外）——`bootstrap` 完成后要等第一个调度周期才发起刷新，全新 profile 无指数缓存时首屏永远空。修复：bootstrap 完成即触发一次立即刷新（指数+自选股），实测首数据 519ms。实网回归守护：`live-quotes.spec.ts` 新增「冷启动自动刷新指数条（不点按钮）」用例
 
 ## v2.0.1 — 列设置修复与详情面板丰富
 

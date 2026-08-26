@@ -8,7 +8,8 @@ import { resolve, join } from 'node:path';
 const REQUIRED_HOSTS = [
   'https://qt.gtimg.cn/*',
   'https://push2.eastmoney.com/*',
-  'https://searchapi.eastmoney.com/*'
+  'https://searchapi.eastmoney.com/*',
+  'https://push2his.eastmoney.com/*'
 ];
 
 const REQUIRED_PERMISSIONS = ['storage', 'alarms'];
@@ -38,7 +39,7 @@ export async function validateManifest(manifest, rootDir) {
 
   // 3. host_permissions 精确匹配。
   if (JSON.stringify(manifest.host_permissions || []) !== JSON.stringify(REQUIRED_HOSTS)) {
-    errors.push('host_permissions must match the approved three hosts');
+    errors.push('host_permissions must match the approved hosts');
   }
 
   // 4. background 必须是 ES module。

@@ -116,17 +116,19 @@ test('MutationPayload unifies all mutation payload shapes', () => {
   assert.equal(mp, add);
 });
 
-test('MutationMethod excludes the three read methods (compile-time + runtime count)', () => {
+test('MutationMethod excludes the four read methods (compile-time + runtime count)', () => {
   // Compile-time: read methods resolve to false (excluded); mutation methods resolve to true (included).
   type Check<M extends RpcMethod> = M extends MutationMethod ? true : false;
   const notBootstrap: false = (false as unknown as Check<'app:bootstrap'>);
   const notRefresh: false = (false as unknown as Check<'quote:refresh'>);
   const notSearch: false = (false as unknown as Check<'stock:search'>);
+  const notChart: false = (false as unknown as Check<'chart:load'>);
   const isMutation: true = (true as unknown as Check<'stock:add'>);
   assert.equal(notBootstrap, false);
   assert.equal(notRefresh, false);
   assert.equal(notSearch, false);
+  assert.equal(notChart, false);
   assert.equal(isMutation, true);
-  // Runtime: 13 total methods - 3 read methods = 10 mutation methods.
-  assert.equal(Object.keys(rpcRegistry).length - 3, 10);
+  // Runtime: 14 total methods - 4 read methods = 10 mutation methods.
+  assert.equal(Object.keys(rpcRegistry).length - 4, 10);
 });

@@ -665,3 +665,74 @@ stock-card:focus-within .stock-detail-tooltip {
   color: var(--text-1);
   text-align: right;
 }
+
+/* ============================================================================
+   hover 迷你分时（v2.3）：详情浮层内的 148×36 走势图。
+   ========================================================================== */
+
+.detail-mini-wrap {
+  grid-column: 1 / -1; /* 占满浮层双栏宽 */
+  margin-bottom: var(--sp-1);
+}
+
+.detail-mini-wrap[hidden] {
+  display: none;
+}
+
+.detail-mini-trends {
+  display: block;
+  width: 100%;
+  height: 36px;
+}
+
+/* 卡片涨跌幅幅度条（与列表一致：宽度按 |涨跌幅| / 10% 归一化）。 */
+.stock-card-change-percent {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 2px;
+}
+
+.stock-card-change-percent::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  width: calc(var(--pct, 0) * 100%);
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* ============================================================================
+   详情入口感知（v2.3）：名称区 hover 显示「详情›」指示 + 可点击光标。
+   ========================================================================== */
+
+.stock-table-name-wrap {
+  cursor: pointer;
+}
+
+.stock-table-name-wrap::after {
+  content: '详情›';
+  margin-left: var(--sp-1);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity var(--dur-theme);
+  white-space: nowrap;
+}
+
+.stock-table-row:hover .stock-table-name-wrap::after,
+.stock-table-row:focus-within .stock-table-name-wrap::after {
+  opacity: 1;
+}
+
+/* 卡片：整体可点击提示。 */
+stock-card {
+  cursor: pointer;
+}
+
+stock-card:hover {
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+  border-radius: var(--r-md);
+}

@@ -37,9 +37,11 @@ import { BootstrapService } from '../application/bootstrap/bootstrap-service.js'
 import { PortfolioCommandsImpl } from '../application/portfolio/commands.js';
 import { QuoteService } from '../application/quotes/quote-service.js';
 import { SearchService } from '../application/search/search-service.js';
+import { ChartService } from '../application/charts/chart-service.js';
 import { EastmoneyQuoteProvider } from '../infrastructure/quote-providers/eastmoney-quote-provider.js';
 import { TencentQuoteProvider } from '../infrastructure/quote-providers/tencent-quote-provider.js';
 import { EastmoneySearchProvider } from '../infrastructure/quote-providers/eastmoney-search-provider.js';
+import { EastmoneyChartProvider } from '../infrastructure/quote-providers/eastmoney-chart-provider.js';
 import { searchLocalCatalog } from '../infrastructure/quote-providers/local-stock-catalog.js';
 import { QuoteScheduler, ALARM_NAME } from './scheduler.js';
 
@@ -104,6 +106,8 @@ function createRuntimeDependencies() {
     const portfolio = new PortfolioCommandsImpl(userDataRepository, clock);
     const quotes = new QuoteService(primary, fallback, quoteCacheRepository, clock, sessionState, sink);
     const search = new SearchService(searchProvider, searchLocalCatalog, clock);
+    // 历史行情（分时/K线）：按需明细，不做后台周期、不做持久缓存。
+    const charts = new ChartService(new EastmoneyChartProvider(boundFetch), clock, sink);
 
     // ── 初始化工厂扩展（brief Step 6）──
     // (b) 孤儿缓存清理：删除不在 watchlist 中的 quoteCache:* 条目。
@@ -125,7 +129,7 @@ function createRuntimeDependencies() {
     // (d) ensureAlarm：SW 重建后 alarm 丢失时恢复 safety alarm。
     await scheduler.ensureAlarm();
 
-    return { bootstrap, portfolio, quotes, search };
+    return { bootstrap, portfolio, quotes, search, charts };
   });
 
   // Lazy bootstrap/quotes delegate：通过 barrier.get() 惰性获取已初始化的服务。

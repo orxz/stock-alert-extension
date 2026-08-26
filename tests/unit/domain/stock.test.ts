@@ -27,8 +27,28 @@ test('normalizeStockCode accepts explicit market prefixes', () => {
 
 test('normalizeStockCode rejects explicit prefix that conflicts with inferred market', () => {
   assert.equal(normalizeStockCode('sz600519'), null);
-  assert.equal(normalizeStockCode('sh000001'), null);
+  // sh000001 不再是冲突：v2.1 起显式 sh + 000xxx 归沪市指数（上证指数）。
+  // 真正的冲突示例换成 sh399001（深市指数段配沪前缀）。
+  assert.equal(normalizeStockCode('sh399001'), null);
   assert.equal(normalizeStockCode('bj600519'), null);
+});
+
+test('normalizeStockCode accepts exchange index codes (v2.1)', () => {
+  // 显式前缀：sh000xxx / sz399xxx / bj899xxx 归指数段
+  assert.equal(normalizeStockCode('sh000001'), 'sh000001'); // 上证指数
+  assert.equal(normalizeStockCode('sh000300'), 'sh000300'); // 沪深300
+  assert.equal(normalizeStockCode('sz399001'), 'sz399001'); // 深证成指
+  assert.equal(normalizeStockCode('sz399006'), 'sz399006'); // 创业板指
+  assert.equal(normalizeStockCode('bj899050'), 'bj899050'); // 北证50
+});
+
+test('normalizeStockCode keeps bare 000xxx as sz stock for v1 compatibility', () => {
+  // 裸 000xxx 仍归深市股票（sz000001=平安银行）：存量代码语义不翻转。
+  assert.equal(normalizeStockCode('000001'), 'sz000001');
+  assert.equal(normalizeStockCode('000300'), 'sz000300');
+  // 裸 399/899 无股票歧义：直接归指数段。
+  assert.equal(normalizeStockCode('399001'), 'sz399001');
+  assert.equal(normalizeStockCode('899050'), 'bj899050');
 });
 
 test('normalizeStockCode covers all supported prefixes case-insensitively', () => {

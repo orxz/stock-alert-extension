@@ -208,9 +208,9 @@ test('ensureAlarm schedules safety alarm when missing', async () => {
   assert.equal(alarm.calls[0].when, NOW + SAFETY_DELAY_MS);
 });
 
-// ===== 空 watchlist 清 badge，不调 QuoteService =====
+// ===== 空 watchlist：清 badge，但仍刷新固定指数目录（v2.1） =====
 
-test('empty watchlist clears badge without calling QuoteService', async () => {
+test('empty watchlist clears badge and still refreshes index catalog', async () => {
   const { scheduler, action, refreshCalls } = createScheduler({
     bootstrapResult: EMPTY_BOOTSTRAP
   });
@@ -218,7 +218,8 @@ test('empty watchlist clears badge without calling QuoteService', async () => {
   assert.equal(action.clearCalls.length, 1);
   assert.equal(action.clearCalls[0].title, '股票提醒助手\n暂无自选股，点击添加');
   assert.equal(action.renderCalls.length, 0);
-  assert.equal(refreshCalls.value, 0);
+  // 指数条是常驻视图：空 watchlist 仍请求目录（QuoteService 负责并入指数代码）。
+  assert.equal(refreshCalls.value, 1);
 });
 
 // ===== SW 重建（alarm 丢失后 ensureAlarm 恢复）=====

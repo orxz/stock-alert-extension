@@ -6,6 +6,7 @@ import type { Stock } from '../domain/stock.js';
 import type { Group } from '../domain/group.js';
 import type { BoardConfig } from '../domain/board-config.js';
 import type { QuoteSnapshot, StockSearchResult } from '../domain/quote.js';
+import type { ChartData, ChartKind, KlinePeriod } from '../domain/chart.js';
 
 import type { ValidationResult, ValidatedValue } from './validators.js';
 import {
@@ -37,7 +38,8 @@ import type {
   SetGroupOrderPayload,
   PatchPreferencesPayload,
   QuoteRefreshPayload,
-  StockSearchPayload
+  StockSearchPayload,
+  ChartLoadPayload
 } from './messages.js';
 
 /** 单次操作涉及的最大股票代码数（与 v1.3 自选股上限一致）。 */
@@ -64,6 +66,12 @@ const boardConfigPatch = partialStrictObject({
 const validateEmptyObject = strictObject({});
 const validateQuoteRefresh = strictObject({ codes: stockCodes, force: boolean() });
 const validateStockSearch = strictObject({ query: nonEmptyTrimmedString() });
+const validateChartLoad = strictObject({
+  code: stockCode(),
+  kind: literalEnum('trends', 'kline'),
+  // period 仅 kline 需要；trends 传了也接受（默认 day）。
+  period: literalEnum('day', 'week', 'month')
+});
 const validateAddStock = strictObject({
   expectedRevision: revision(),
   code: stockCode(),
@@ -130,12 +138,13 @@ const method = <P, R>(validate: Contract<P, R>['validate']): Contract<P, R> => (
   resultType: undefined
 });
 
-// ===== 单一注册表：13 个方法（顺序与 brief Step 1 methods 数组一致）=====
+// ===== 单一注册表：14 个方法（顺序与 brief Step 1 methods 数组一致）=====
 
 export const rpcRegistry = {
   'app:bootstrap': method<Readonly<Record<never, never>>, BootstrapResult>(validateEmptyObject),
   'quote:refresh': method<QuoteRefreshPayload, QuoteSnapshot>(validateQuoteRefresh),
   'stock:search': method<StockSearchPayload, readonly StockSearchResult[]>(validateStockSearch),
+  'chart:load': method<ChartLoadPayload, ChartData>(validateChartLoad),
   'stock:add': method<AddStockPayload, MutationResult<Stock>>(validateAddStock),
   'stock:remove': method<RemoveStockPayload, MutationResult<null>>(validateRemoveStock),
   'stock:move': method<MoveStockPayload, MutationResult<null>>(validateMoveStock),
@@ -155,7 +164,7 @@ export type RpcPayload<M extends RpcMethod> = ValidatedValue<(typeof rpcRegistry
 export type RpcResult<M extends RpcMethod> = NonNullable<(typeof rpcRegistry)[M]['resultType']>;
 export type RpcRequestFor<M extends RpcMethod> = RpcRequest<M, RpcPayload<M>>;
 export type RpcResponseFor<M extends RpcMethod> = RpcResponse<RpcResult<M>>;
-export type MutationMethod = Exclude<RpcMethod, 'app:bootstrap' | 'quote:refresh' | 'stock:search'>;
+export type MutationMethod = Exclude<RpcMethod, 'app:bootstrap' | 'quote:refresh' | 'stock:search' | 'chart:load'>;
 export type MutationPayload = RpcPayload<MutationMethod>;
 
 // ===== 请求信封校验：protocol/requestId/method/payload 四层防线 =====

@@ -15,6 +15,7 @@ import { computeUserDataRevision } from './user-data-revision.js';
 import type { UserData } from '../../domain/board-config.js';
 import type { StockCode, UserDataRevision } from '../../domain/brands.js';
 import type { QuoteCacheEntry } from '../../domain/quote.js';
+import { INDEX_CATALOG_CODES } from '../../domain/index-quote.js';
 import type { AppError } from '../../domain/errors.js';
 import type { MutationResult } from '../../protocol/messages.js';
 import type { BootstrapStorageSnapshot, MutableUserData } from '../../application/ports/storage.js';
@@ -36,6 +37,21 @@ const USER_DATA_KEYS = [
 export interface StorageCoordinatorOptions {
   readonly area: StorageArea;
   readonly clock?: () => number;
+}
+
+/**
+ * 行情缓存的「保留代码集」：watchlist 成员 ∪ 固定指数目录。
+ *
+ * 目录指数不在 watchlist 中（固定指数条是常驻视图，不是用户数据，见
+ * domain/index-quote.ts），但它们的缓存必须能写入、不被孤儿清理删掉——
+ * 否则 popup 冷启动时指数条永远拿不到缓存、每次都要等一轮网络。
+ * 写入豁免（doWriteQuoteCache）、孤儿清理豁免（doReconcile）、
+ * bootstrap 缓存读取（doReadBootstrap）三处共用本集合。
+ */
+function retainedQuoteCodes(userData: UserData): ReadonlySet<string> {
+  const codes = new Set<string>(userData.watchlist.map((stock) => String(stock.code)));
+  for (const code of INDEX_CATALOG_CODES) codes.add(String(code));
+  return codes;
 }
 
 /**
@@ -112,7 +128,8 @@ export class StorageCoordinator {
   private async doReadBootstrap(): Promise<BootstrapStorageSnapshot> {
     const userData = await this.loadUserData();
     const revision = await computeUserDataRevision(userData);
-    const codes = userData.watchlist.map((stock) => stock.code);
+    // 缓存读取范围与保留代码集一致：watchlist ∪ 目录指数（指数条冷启动即有缓存可画）。
+    const codes = [...retainedQuoteCodes(userData)] as StockCode[];
     const quoteCache = await this.readCacheInternal(codes);
     // 清理孤儿缓存（每次冷启动都清理）。
     // 复用刚加载的 userData——此前这里会再走一遍 loadUserData + sanitizeV2，
@@ -163,12 +180,16 @@ export class StorageCoordinator {
       boardConfig: after.boardConfig
     });
 
-    // 删除被移除 codes 的行情缓存（防孤儿）
+    // 删除被移除 codes 的行情缓存（防孤儿）——但目录指数豁免：
+    // 用户删除的 index 即便也出现在目录（如 sh000001），其缓存属于固定指数条，不得误删。
     const beforeCodes = new Set(before.watchlist.map((s) => s.code));
     const afterCodes = new Set(after.watchlist.map((s) => s.code));
+    const retained = retainedQuoteCodes(after);
     const removedKeys: string[] = [];
     for (const code of beforeCodes) {
-      if (!afterCodes.has(code)) removedKeys.push(quoteCacheKey(code));
+      if (!afterCodes.has(code) && !retained.has(String(code))) {
+        removedKeys.push(quoteCacheKey(code));
+      }
     }
     if (removedKeys.length > 0) {
       await this.area.remove(removedKeys);
@@ -198,10 +219,10 @@ export class StorageCoordinator {
     entries: Readonly<Record<StockCode, QuoteCacheEntry>>
   ): Promise<void> {
     const data = await this.loadUserData();
-    const memberCodes = new Set(data.watchlist.map((stock) => stock.code));
+    const retained = retainedQuoteCodes(data);
     const patch: Record<string, unknown> = {};
     for (const [code, entry] of Object.entries(entries)) {
-      if (memberCodes.has(code as StockCode)) {
+      if (retained.has(code)) {
         patch[quoteCacheKey(code)] = { ...entry, cacheVersion: 1, code };
       }
     }
@@ -235,13 +256,13 @@ export class StorageCoordinator {
    */
   private async doReconcile(preloaded?: UserData): Promise<number> {
     const data = preloaded ?? (await this.loadUserData());
-    const memberCodes = new Set(data.watchlist.map((stock) => stock.code));
+    const retained = retainedQuoteCodes(data);
     const allKeys = await this.listKeys();
     const orphanKeys: string[] = [];
     for (const key of allKeys) {
       if (key.startsWith(QUOTE_CACHE_PREFIX)) {
         const code = key.slice(QUOTE_CACHE_PREFIX.length);
-        if (!memberCodes.has(code as StockCode)) {
+        if (!retained.has(code)) {
           orphanKeys.push(key);
         }
       }

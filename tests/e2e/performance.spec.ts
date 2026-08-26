@@ -100,7 +100,12 @@ async function measureOnce(seed: Record<string, unknown>): Promise<{
       return ready ? nav.domContentLoadedEventEnd - nav.startTime : 0;
     });
 
-    // 网格渲染完成后（与 domUpdateMs 同一双 rAF 之后）记录卡片数。
+    // 网格渲染完成后记录卡片数。此前固定等「双 rAF」就计数，在慢机器/headless 下
+    // raf-scheduler 驱动的虚拟渲染可能尚未产出首屏 → 0 卡片（门禁随机红）。
+    // 改为条件轮询：等首张卡片挂载或 2s 超时——节点上限断言不变，只修等待机制。
+    await launched.page.waitForSelector('stock-grid stock-card[data-key]', {
+      timeout: 2_000
+    }).catch(() => { /* 超时由下方断言报出（gridCards=0） */ });
     const gridCards = await launched.page
       .locator('stock-grid stock-card[data-key]')
       .count();

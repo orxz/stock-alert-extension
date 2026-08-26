@@ -28,6 +28,7 @@ globalThis.Node = win.Node as unknown as typeof Node;
 globalThis.Element = win.Element as unknown as typeof Element;
 globalThis.DocumentFragment = win.DocumentFragment as unknown as typeof DocumentFragment;
 globalThis.HTMLButtonElement = win.HTMLButtonElement as unknown as typeof HTMLButtonElement;
+globalThis.HTMLCanvasElement = win.HTMLCanvasElement as unknown as typeof HTMLCanvasElement;
 globalThis.HTMLInputElement = win.HTMLInputElement as unknown as typeof HTMLInputElement;
 globalThis.HTMLSelectElement = win.HTMLSelectElement as unknown as typeof HTMLSelectElement;
 

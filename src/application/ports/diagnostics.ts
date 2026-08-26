@@ -13,7 +13,7 @@ export interface DiagnosticEvent {
   readonly version: '2.0.0';
   readonly requestId?: string;
   readonly runId?: string;
-  readonly scope: 'rpc' | 'storage' | 'quote' | 'search' | 'scheduler' | 'ui';
+  readonly scope: 'rpc' | 'storage' | 'quote' | 'search' | 'scheduler' | 'ui' | 'chart';
   readonly type: string;
   readonly outcome?: 'ok' | 'degraded' | 'failed';
   readonly durationMs?: number;

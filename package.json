@@ -1,6 +1,6 @@
 {
   "name": "stock-alert-extension",
-  "version": "2.0.1",
+  "version": "2.6.0",
   "private": true,
   "engines": {
     "node": ">=22"

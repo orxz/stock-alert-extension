@@ -5,6 +5,7 @@
 import type { UserDataRepository } from '../ports/storage.js';
 import type { Clock } from '../ports/clock.js';
 import { snapshotFromCache } from '../../domain/quote.js';
+import { INDEX_CATALOG_CODES } from '../../domain/index-quote.js';
 import type { BootstrapResult } from '../../protocol/messages.js';
 
 /**
@@ -27,9 +28,14 @@ export class BootstrapService {
       version: '2.0.0',
       userData: snapshot.userData,
       revision: snapshot.revision,
+      // 快照范围 = watchlist ∪ 目录指数：指数条冷启动即从缓存渲染（不触发网络）。
+      // 存储层 doReadBootstrap 已按同一保留集读取缓存，此处只是同一集合的快照派生。
       quoteSnapshot: snapshotFromCache(
         snapshot.quoteCache,
-        snapshot.userData.watchlist.map((stock) => stock.code),
+        [...new Set([
+          ...snapshot.userData.watchlist.map((stock) => stock.code),
+          ...INDEX_CATALOG_CODES
+        ])],
         this.clock.now()
       )
     };

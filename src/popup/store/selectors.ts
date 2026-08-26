@@ -8,8 +8,10 @@ import {
   defaultBoardConfig,
   toStockCardViewModels,
   toGroupTabs,
+  toIndexStrip,
   closedDialog,
-  closedPopover
+  closedPopover,
+  closedDetailPanel
 } from '../view-models.js';
 import { friendlyErrorMessage } from '../error-messages.js';
 import type {
@@ -25,7 +27,9 @@ import type {
   DialogViewModel,
   DialogGroupOption,
   ColumnPanelViewModel,
-  PopoverViewModel
+  PopoverViewModel,
+  IndexStripViewModel,
+  DetailPanelViewModel
 } from '../view-models.js';
 
 /** 列的中文标签（展示层文案，不进 domain）。 */
@@ -113,6 +117,17 @@ export function selectToolbar(state: AppState): ToolbarViewModel {
     totalCount: total,
     hasStocks: total > 0
   };
+}
+
+/** 固定指数条视图模型：从最新行情快照投影（目录顺序为真相）。 */
+export function selectIndexStrip(state: AppState): IndexStripViewModel {
+  return toIndexStrip(state.domain.quotes);
+}
+
+/** 详情面板状态（纯 UI 开关）。 */
+export function selectDetailPanel(state: AppState): DetailPanelViewModel {
+  const detail = state.view.detail;
+  return detail ? { open: true, code: detail.code, name: detail.name } : closedDetailPanel();
 }
 
 /** 头部视图模型：当前分组名 + 股票数 + 按钮状态。 */
@@ -321,6 +336,8 @@ export function selectAppViewModel(state: AppState): AppViewModel {
     currentGroupId: state.view.currentGroupId,
     searchKeyword: state.view.searchKeyword,
     header: selectHeader(state),
+    indexStrip: selectIndexStrip(state),
+    detail: selectDetailPanel(state),
     groupTabs: selectGroupTabs(state),
     board: selectBoard(state),
     toolbar: selectToolbar(state),

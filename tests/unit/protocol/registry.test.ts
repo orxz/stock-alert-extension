@@ -8,7 +8,7 @@ import { rpcRegistry, validateRpcRequest } from '../../../src/protocol/registry.
 import type { RpcMethod } from '../../../src/protocol/registry.js';
 
 const methods = [
-  'app:bootstrap', 'quote:refresh', 'stock:search',
+  'app:bootstrap', 'quote:refresh', 'stock:search', 'chart:load',
   'stock:add', 'stock:remove', 'stock:move', 'stock:setPinned', 'stock:setOrder',
   'group:create', 'group:rename', 'group:delete', 'group:setOrder', 'preferences:patch'
 ] as const;

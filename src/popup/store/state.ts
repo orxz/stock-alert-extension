@@ -75,6 +75,8 @@ export interface AppState {
       keyword: string;
       results: readonly StockSearchResult[];
     }>;
+    /** 详情面板打开状态（纯 UI）：code+name 供标题；null = 关闭。图表数据由组件自治拉取。 */
+    detail: Readonly<{ code: StockCode; name: string }> | null;
   }>;
   readonly async: Readonly<{
     bootstrap: AsyncState;
@@ -126,7 +128,8 @@ export function createInitialState(
       selectedCodes: [],
       theme,
       columns,
-      dialogSearch: { keyword: '', results: [] }
+      dialogSearch: { keyword: '', results: [] },
+      detail: null
     },
     async: {
       bootstrap: { status: 'idle' },

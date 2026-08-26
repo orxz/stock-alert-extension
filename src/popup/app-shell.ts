@@ -12,7 +12,9 @@ import type { WebStorageLike } from './ui-preferences.js';
 import { friendlyErrorMessage } from './error-messages.js';
 import type { PopupEventMap, DialogSubmitDetail } from './components/events.js';
 import type { DialogState } from './store/state.js';
-import type { GroupId, StockCode } from '../domain/index.js';
+import type { GroupId, StockCode, ChartKind, KlinePeriod, ChartData, TrendPoint } from '../domain/index.js';
+import type { ChartLoader } from './components/chart-detail-panel.js';
+import type { SparklineLoader } from './components/index-strip.js';
 
 export interface DiagnosticSink {
   emit(event: { readonly timestamp: number; readonly scope: string; readonly type: string; readonly outcome?: string; readonly errorCode?: string }): void;
@@ -52,6 +54,36 @@ export function createAppShell(deps: AppShellDeps): AppShell {
   const liveRegion = deps.liveRegion;
   let destroyed = false;
   const ac = new AbortController();
+
+  // 详情面板 loader 注入：组件在 stock-app 骨架内，首次渲染前注入一次（幂等）。
+  const detailPanel = stockApp.querySelector('chart-detail-panel') as
+    | (HTMLElement & { setLoader?: (loader: ChartLoader | null) => void })
+    | null;
+  if (detailPanel?.setLoader) {
+    detailPanel.setLoader((code, kind, period) => controller.loadChart(code as StockCode, kind, period));
+  }
+
+  // 指数条迷你图 loader：复用 chart:load（kind=trends），取分时点画 sparkline。
+  const indexStrip = stockApp.querySelector('index-strip') as
+    | (HTMLElement & { setSparklineLoader?: (loader: SparklineLoader | null) => void })
+    | null;
+  if (indexStrip?.setSparklineLoader) {
+    indexStrip.setSparklineLoader(async (code) => {
+      const data = await controller.loadChart(code as StockCode, 'trends', 'day');
+      return data.trends ?? [];
+    });
+  }
+
+  // hover 迷你分时 loader：表/卡片浮层按需拉取（一次+缓存），复用同一 chart:load。
+  const stockAppWithLoader = stockApp as HTMLElement & {
+    setTrendsLoader?(loader: ((code: string) => Promise<readonly TrendPoint[]>) | null): void;
+  };
+  if (stockAppWithLoader.setTrendsLoader) {
+    stockAppWithLoader.setTrendsLoader(async (code) => {
+      const data = await controller.loadChart(code as StockCode, 'trends', 'day');
+      return data.trends ?? [];
+    });
+  }
 
   function renderAppSafely(): void {
     try {
@@ -186,6 +218,19 @@ export function createAppShell(deps: AppShellDeps): AppShell {
       type: 'overlay/menu',
       menu: { kind: 'stock-actions', anchorId: d.anchorId, code: d.code }
     });
+  });
+
+  // ===== 详情面板（分时/K线/指标）=====
+
+  on('detail-open-request', (d) => {
+    const state = store.getState();
+    // 选择模式（管理持仓）优先：点击是勾选语义，不打开详情。
+    if (state.view.selectionMode) return;
+    store.dispatch({ type: 'view/detailOpen', code: d.code, name: d.name });
+  });
+
+  on('detail-close-request', () => {
+    store.dispatch({ type: 'view/detailClose' });
   });
 
   on('stock-remove-confirm-request', (d) => {

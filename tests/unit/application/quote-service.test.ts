@@ -16,8 +16,12 @@ import type { StockCode } from '../../../src/domain/brands.js';
 import type { Quote, QuoteCacheEntry, QuoteSnapshot } from '../../../src/domain/quote.js';
 import { FixedClock } from '../../helpers/fixed-clock.js';
 import { FakeSessionState } from '../../helpers/fake-session-state.js';
+import { INDEX_CATALOG_CODES } from '../../../src/domain/index-quote.js';
 
 const NOW = 1_700_000_000;
+
+/** 目录指数数（v2.1 起 QuoteService 无条件并入请求集合）。 */
+const CATALOG_COUNT = INDEX_CATALOG_CODES.length;
 
 // ── 工具函数 ──
 
@@ -207,19 +211,20 @@ function createService(overrides: ServiceOverrides = {}): {
   return { service, clock: clock as FixedClock, session, cache, sink, events };
 }
 
-// ===== chunking: 120 codes → 3 batches =====
+// ===== chunking: 120 codes + 目录指数 → 3 batches =====
 
-test('chunking: 120 codes split into 3 batches of 50/50/20', async () => {
+test('chunking: 120 codes split into 3 batches of 50/50/23 (catalog appended)', async () => {
   const { provider, calls } = okProvider();
   const { service } = createService({ primary: provider });
   const codes = makeCodes(120);
   const result = await service.refresh(codes, { force: true });
 
+  // 120 自选股 + 3 目录指数 = 123，切批 50/50/23；指数与股票混合同批（实测支持）。
   assert.equal(calls.value, 3, 'primary called 3 times');
   assert.equal(calls.codes[0].length, 50);
   assert.equal(calls.codes[1].length, 50);
-  assert.equal(calls.codes[2].length, 20);
-  assert.equal(result.counts.fresh, 120);
+  assert.equal(calls.codes[2].length, 20 + CATALOG_COUNT);
+  assert.equal(result.counts.fresh, 120 + CATALOG_COUNT);
 });
 
 // ===== concurrency 2: 最多 2 批同时执行 =====
@@ -260,9 +265,18 @@ test('partial success: primary returns half, rest cached from cache', async () =
   const { service } = createService({ primary, cache });
   const result = await service.refresh(codes, { force: true });
 
-  assert.equal(result.counts.fresh, 5);
-  assert.equal(result.counts.cached, 5);
-  assert.equal(result.counts.missing, 0);
+  // 请求集合 = 10 用户 + CATALOG_COUNT 目录（用户在前）；primary 返回前一半。
+  // 推导：fresh = floor(total*0.5)；cached = 用户的 5 条缓存中未被 fresh 覆盖的；
+  // missing = total - fresh - cached。全部从目录数量推导，不写死。
+  const total = 10 + CATALOG_COUNT;
+  const fresh = Math.floor(total * 0.5);
+  // fresh 按请求顺序覆盖（用户 10 个在前）：用户码 0..fresh-1，其中 fresh>=10 时可能吃进目录。
+  const userFreshCovered = Math.min(fresh, 10);
+  const cached = Math.max(0, 5 - Math.max(0, userFreshCovered - 5));
+  const missing = total - fresh - cached;
+  assert.equal(result.counts.fresh, fresh);
+  assert.equal(result.counts.cached, cached);
+  assert.equal(result.counts.missing, missing);
 });
 
 // ===== 7 天缓存删除 =====
@@ -349,7 +363,7 @@ test('fresh > 0 resets backoff to zero', async () => {
 
   const result = await service.refresh([sc('sh600519')], { force: true });
 
-  assert.equal(result.counts.fresh, 1);
+  assert.equal(result.counts.fresh, 1 + CATALOG_COUNT);
   const state = session.peek();
   assert.equal(state.failureCount, 0);
   assert.equal(state.nextAutomaticAttemptAt, 0);
@@ -368,26 +382,33 @@ test('force bypasses backoff time check but records outcome', async () => {
 
   assert.ok(!result.deferredUntil, 'not deferred');
   assert.equal(calls.value, 1, 'primary called despite backoff');
-  assert.equal(result.counts.fresh, 1);
+  assert.equal(result.counts.fresh, 1 + CATALOG_COUNT);
   // 成功重置退避
   assert.equal(session.peek().failureCount, 0);
 });
 
-// ===== 空请求: 立即返回，不触碰 session =====
+// ===== 空自选股: 仍刷新固定指数目录（v2.1 契约） =====
 
-test('empty codes return immediately without touching session', async () => {
+test('empty watchlist still refreshes the index catalog', async () => {
   const session = new FakeSessionState();
   const { provider, calls } = okProvider();
   const { service } = createService({ primary: provider, session });
 
   const result = await service.refresh([], { force: false });
 
-  assert.equal(result.counts.fresh, 0);
-  assert.equal(result.counts.cached, 0);
-  assert.equal(result.counts.missing, 0);
-  assert.equal(calls.value, 0, 'primary not called');
-  assert.equal(session.readCount, 0, 'session not read');
-  assert.equal(session.writeCount, 0, 'session not written');
+  // 指数条是常驻视图：空自选股不再意味着零请求，而是只请求目录指数。
+  assert.equal(calls.value, 1, 'primary called once for the catalog');
+  assert.deepEqual(
+    calls.codes[0].map(String),
+    INDEX_CATALOG_CODES.map(String),
+    'provider receives exactly the catalog codes'
+  );
+  assert.equal(result.counts.fresh, CATALOG_COUNT);
+  for (const code of INDEX_CATALOG_CODES) {
+    assert.ok(result.results[code], `snapshot covers ${code}`);
+  }
+  // 成功重置退避（fresh>0）
+  assert.equal(session.peek().failureCount, 0);
 });
 
 // ===== single-flight: 并发 refresh 不重叠执行 =====
@@ -443,7 +464,7 @@ test('single-flight only merges callers that requested the same code set', async
   assert.ok(a.results.sh600519, 'caller A gets what it asked for');
   assert.ok(b.results.sh600519, 'caller B gets the shared code');
   assert.ok(b.results.sz000002, 'caller B gets the code only it requested');
-  assert.equal(b.counts.fresh, 2);
+  assert.equal(b.counts.fresh, 2 + CATALOG_COUNT);
   assert.ok(
     seen.some((set) => set.includes('sz000002')),
     'the extra code actually reached a provider'
@@ -492,7 +513,7 @@ test('a provider transport failure is reported instead of silently swallowed', a
   assert.equal(failures.length, 1, 'exactly one provider-failed event for the throwing provider');
   assert.equal(failures[0].outcome, 'failed');
   assert.equal(failures[0].scope, 'quote');
-  assert.equal(failures[0].counts?.codes, 1);
+  assert.equal(failures[0].counts?.codes, 1 + CATALOG_COUNT);
 });
 
 test('provider-failed distinguishes primary from fallback', async () => {
@@ -542,10 +563,15 @@ test('dual-source: missing codes from primary fetched from fallback', async () =
   const result = await service.refresh([sc('sh600519'), sc('sz000001')], { force: true });
 
   assert.ok(fallbackCalled, 'fallback was called');
-  assert.deepEqual(fallbackCodes, ['sz000001'], 'fallback only for missing code');
+  // primary 只回 sh600519；fallback 收其余（sz000001 + 目录指数）。
+  assert.deepEqual(
+    fallbackCodes,
+    ['sz000001', ...INDEX_CATALOG_CODES.map(String)],
+    'fallback covers primary-missing codes including catalog'
+  );
   assert.equal(result.results.sh600519.source, 'eastmoney');
   assert.equal(result.results.sz000001.source, 'tencent');
-  assert.equal(result.counts.fresh, 2);
+  assert.equal(result.counts.fresh, 2 + CATALOG_COUNT);
 });
 
 // ===== 诊断: exactly-once start + end =====

@@ -35,6 +35,10 @@ export interface PopupEventMap {
   'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove'; readonly groupId?: GroupId };
   /** 工具栏「列设置」触发；detail 带触发元素 id 以便定位与焦点归还。 */
   'column-panel-open-request': { readonly anchorId: string };
+  /** 行/卡片点击打开详情面板（分时/K线/指标）。 */
+  'detail-open-request': { readonly code: StockCode; readonly name: string };
+  /** 详情面板关闭（关闭按钮 / ESC）。 */
+  'detail-close-request': Record<never, never>;
   /** 列设置面板提交完整的最终态（非增量 patch）。 */
   'column-settings-change': { readonly columns: UiColumnPreferences };
   /** 请求关闭当前 popover。 */

@@ -6,7 +6,7 @@
 //   活跃 run 结束后若 pendingRun 则以 'coalesced' 源重跑一次。
 // - safety-before-work：每次 cycle 开始先安排 5 分钟 safety alarm（防 SW 被杀后丢失调度）。
 // - exact-after-work：工作结束后安排精确 interval alarm（盘中 30s / 盘外 5min）。
-// - 空 watchlist：action.clear，不调 QuoteService 或 SessionStatePort。
+// - 空 watchlist：action.clear，仍刷新固定指数目录（不投影 badge）。
 // - runId 贯穿诊断：cycle:start / cycle:end / update-action-failed 共享同一 runId。
 // - provider/cache 失败：updateAction 内部 catch，不抛出——调度循环不中断。
 import type { Clock } from '../application/ports/clock.js';
@@ -158,9 +158,12 @@ export class QuoteScheduler {
       const boot = await bootstrap.execute();
       const stocks = stocksForGroup(boot.userData.watchlist, ALL_GROUP_ID);
 
-      // ── 空 watchlist：清 badge，不调 QuoteService ──
+      // ── 空 watchlist：清 badge，但仍刷新固定指数目录 ──
+      // 指数条是常驻视图（不依赖 watchlist）；QuoteService 会把目录指数并入请求。
+      // badge 只投影 watchlist，指数结果不影响它。
       if (stocks.length === 0) {
         await action.clear(EMPTY_TITLE);
+        await quotes.refresh([], { requestId: runId });
         return;
       }
 

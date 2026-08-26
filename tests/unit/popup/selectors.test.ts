@@ -702,3 +702,47 @@ test('selectColumnPanel reflects enabled set on configurable columns', () => {
   assert.equal(status?.enabled, false);
   assert.equal(vm.columns.find((c) => c.key === 'price')?.enabled, true);
 });
+
+// ===== 固定指数条 selector（v2.1）=====
+
+import { selectIndexStrip } from '../../../src/popup/store/selectors.js';
+import { INDEX_CATALOG } from '../../../src/domain/index-quote.js';
+
+test('selectIndexStrip renders catalog skeleton on empty snapshot', () => {
+  const state = createInitialState();
+  const vm = selectIndexStrip(state);
+  assert.equal(vm.items.length, INDEX_CATALOG.length);
+  for (const item of vm.items) {
+    assert.equal(item.displayPrice, '--');
+    assert.equal(item.displayChangePercent, '--');
+    assert.equal(item.trend, 'none');
+  }
+});
+
+test('selectIndexStrip projects snapshot quotes in catalog order', () => {
+  const state = createInitialState();
+  state.domain.quotes = emptySnapshot();
+  state.domain.quotes = {
+    ...state.domain.quotes,
+    results: {
+      ...state.domain.quotes.results,
+      sz399006: {
+        code: 'sz399006' as StockCode,
+        status: 'fresh',
+        source: 'eastmoney',
+        provider: 'eastmoney',
+        fetchedAt: 0,
+        quote: { code: 'sz399006' as StockCode, name: '创业板指', price: 3400.53, change: 3.01, changePercent: 0.09, amount: 1 },
+        error: null
+      }
+    }
+  };
+  const vm = selectIndexStrip(state);
+  assert.deepEqual(vm.items.map((i) => String(i.code)), INDEX_CATALOG.map((e) => String(e.code)));
+  const cyb = vm.items.find((i) => String(i.code) === 'sz399006');
+  assert.equal(cyb?.displayPrice, '3400.53');
+  assert.equal(cyb?.displayChangePercent, '+0.09%');
+  assert.equal(cyb?.trend, 'up');
+  const sh = vm.items.find((i) => String(i.code) === 'sh000001');
+  assert.equal(sh?.displayPrice, '--', '无行情指数仍渲染占位');
+});

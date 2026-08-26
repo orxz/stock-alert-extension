@@ -5,10 +5,14 @@
 // Pin 按钮发出 stock-pin-request；up/down 按钮通过 moveKey helper 计算完整 orderedCodes 并发出 stock-order-request。
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { StockCode, GroupId } from '../../domain/brands.js';
+import type { TrendPoint } from '../../domain/index.js';
+import { buildIndexSparkline } from '../../domain/index.js';
+import { limitPctFor } from '../../domain/limit-rule.js';
 import type { StockCardViewModel } from '../view-models.js';
 import type { ColumnKey } from '../ui-preferences.js';
 import { emitPopupEvent } from './events.js';
 import { applyTooltipFlip, tooltipNeedsFlip } from './detail-tooltip.js';
+import { drawSparkline } from './sparkline.js';
 
 /**
  * 纯函数：在有序代码列表中将 code 移动 delta 位，返回新数组。
@@ -48,6 +52,9 @@ export class StockCardElement extends HTMLElement {
   private _viewModel: StockCardViewModel | null = null;
   private _orderedCodes: readonly StockCode[] = [];
   private _groupId: GroupId = 'g_all' as GroupId;
+  /** hover 迷你分时 loader（AppShell 经 stock-board 注入；null = 不显示）。 */
+  private _trendsLoader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null = null;
+  private _trendsDrawn = false;
   /** 列设置 enabled 集合（null = 未设置，默认全部显示）。 */
   private _columns: readonly ColumnKey[] | null = null;
 
@@ -85,6 +92,37 @@ export class StockCardElement extends HTMLElement {
   set viewModel(value: StockCardViewModel) {
     this._viewModel = value;
     if (this.isConnected) this.applyViewModel(value);
+  }
+
+  /** 注入 hover 迷你分时数据源（AppShell 经 stock-board 递达；换源重置绘制标记）。 */
+  setTrendsLoader(loader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null): void {
+    this._trendsLoader = loader;
+    this._trendsDrawn = false;
+    const canvas = this.querySelector('.detail-mini-trends') as HTMLCanvasElement | null;
+    const wrap = canvas?.closest('.detail-mini-wrap') as HTMLElement | null;
+    canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+    if (wrap) wrap.hidden = true;
+  }
+
+  /** hover 触发：未绘制过则惰性拉取一次并绘制迷你分时（失败重置标记，下次 hover 可重试）。 */
+  private ensureMiniTrends(): void {
+    if (this._trendsDrawn || !this._trendsLoader || !this._viewModel) return;
+    this._trendsDrawn = true; // 防 hover 抖动重复请求（仅成功时才保留）
+    this._trendsLoader(this._viewModel.code)
+      .then((points) => {
+        if (points.length < 2) return;
+        const canvas = this.querySelector('.detail-mini-trends') as HTMLCanvasElement | null;
+        const wrap = canvas?.closest('.detail-mini-wrap') as HTMLElement | null;
+        if (!canvas || !wrap) return;
+        // 委托公共绘制（单一真相）：面积渐变 + 容器实际分辨率 + 中位虚线。
+        if (drawSparkline(canvas, buildIndexSparkline(points), { midline: true })) {
+          wrap.hidden = false;
+        }
+      })
+      .catch(() => {
+        // 失败：重置标记——下次 hover 重新尝试（网络偶发失败不该永久锁死迷你图）。
+        this._trendsDrawn = false;
+      });
   }
 
   get orderedCodes(): readonly StockCode[] {
@@ -192,6 +230,19 @@ export class StockCardElement extends HTMLElement {
     const tooltip = document.createElement('div');
     tooltip.className = 'stock-detail-tooltip';
     tooltip.setAttribute('role', 'tooltip');
+
+    // v2.3 hover 迷你分时图（有数据才显示）。
+    const miniWrap = document.createElement('div');
+    miniWrap.className = 'detail-mini-wrap';
+    miniWrap.hidden = true;
+    const mini = document.createElement('canvas');
+    mini.className = 'detail-mini-trends';
+    mini.width = 148;
+    mini.height = 36;
+    mini.setAttribute('aria-hidden', 'true');
+    miniWrap.append(mini);
+    tooltip.append(miniWrap);
+
     const fields: ReadonlyArray<readonly [string, string]> = [
       ['今开', 'open'],
       ['最高', 'high'],
@@ -249,13 +300,16 @@ export class StockCardElement extends HTMLElement {
       });
     }, { signal });
 
-    // 卡片点击：发出 stock-toggle-select（app-shell 在选择模式下处理）。
+    // 卡片点击：非选择模式打开详情面板；选择模式仍发 toggle-select（app-shell 决定去向）。
     this.addEventListener('click', (e) => {
       if (!this._viewModel) return;
       // 忽略来自按钮的点击。
       const target = e.target as HTMLElement;
       if (target.closest('button')) return;
       emitPopupEvent(this, 'stock-toggle-select', { code: this._viewModel.code });
+      // 非选择模式下 toggle-select 被 app-shell 忽略——顺带发详情请求（低冲突：
+      // 选择模式切回时 toggle-select 生效，detail-open 由 app-shell 的 selection 检查守卫）。
+      emitPopupEvent(this, 'detail-open-request', { code: this._viewModel.code, name: this._viewModel.name });
     }, { signal });
 
     // 键盘快捷键：Enter/Space 切换 pin（卡片可聚焦，role=group 不构成嵌套交互）。
@@ -271,7 +325,10 @@ export class StockCardElement extends HTMLElement {
     // mouseover 冒泡（卡片内子元素间高频触发），用 lastHoveredCard 短路重复计算。
     this.addEventListener('mouseover', (e) => {
       const card = (e.target as HTMLElement).closest('stock-card') as HTMLElement | null;
-      if (card === this) this.refreshTooltipFlip();
+      if (card === this) {
+        this.refreshTooltipFlip();
+        this.ensureMiniTrends();
+      }
     }, { signal });
     this.addEventListener('mouseleave', () => {
       this.clearTooltipFlip();
@@ -335,10 +392,18 @@ export class StockCardElement extends HTMLElement {
       this.changeEl.classList.toggle('is-down', vm.change !== null && vm.change < 0);
     }
     if (this.changePercentEl) {
-      const pctText = vm.changePercent !== null ? `${vm.changePercent.toFixed(2)}%` : '--';
+      const pct = vm.changePercent;
+      const pctText = pct !== null ? `${pct.toFixed(2)}%` : '--';
       this.changePercentEl.textContent = pctText;
-      this.changePercentEl.classList.toggle('is-up', vm.changePercent !== null && vm.changePercent > 0);
-      this.changePercentEl.classList.toggle('is-down', vm.changePercent !== null && vm.changePercent < 0);
+      this.changePercentEl.classList.toggle('is-up', pct !== null && pct > 0);
+      this.changePercentEl.classList.toggle('is-down', pct !== null && pct < 0);
+      // 幅度条：宽度按 |涨跌幅| 相对该板块涨跌停幅度归一（主板10/ST5/创业科创20/北交30，
+      // 复用 domain/limit-rule 单一真相——指数按主板基准）。
+      const base = ((limitPctFor(String(vm.code)) ?? 0.1) * 100);
+      this.changePercentEl.style.setProperty(
+        '--pct',
+        pct === null ? '0' : Math.min(1, Math.abs(pct) / base).toFixed(3)
+      );
     }
     if (this.statusEl) {
       this.statusEl.textContent = STATUS_LABELS[vm.status] ?? '';

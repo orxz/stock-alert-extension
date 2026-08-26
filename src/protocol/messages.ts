@@ -6,6 +6,7 @@ import type { Stock } from '../domain/stock.js';
 import type { Group } from '../domain/group.js';
 import type { BoardConfig, UserData } from '../domain/board-config.js';
 import type { QuoteSnapshot } from '../domain/quote.js';
+import type { ChartData, ChartKind, KlinePeriod } from '../domain/chart.js';
 import type { RpcError } from './error-codes.js';
 
 // ===== Step 3: 结果类型 =====
@@ -94,6 +95,14 @@ export type QuoteRefreshPayload = Readonly<{
 export type StockSearchPayload = Readonly<{
   query: string;
 }>;
+export type ChartLoadPayload = Readonly<{
+  code: StockCode;
+  kind: ChartKind;
+  /** K线周期（trends 忽略，popup 恒传默认 'day'）——必填避免可选校验分支。 */
+  period: KlinePeriod;
+}>;
+
+export type { ChartData };
 
 // 重导出 Stock/Group 仅为类型完整性（MutationResult<Stock>/MutationResult<Group> 在 registry 中引用）。
 export type { Stock, Group };

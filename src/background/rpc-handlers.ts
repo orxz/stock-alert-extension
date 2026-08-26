@@ -9,6 +9,7 @@ import type { RpcMethod, RpcPayload, RpcResult } from '../protocol/registry.js';
 import type { BootstrapResult } from '../protocol/messages.js';
 import type { StockCode } from '../domain/brands.js';
 import type { QuoteSnapshot, StockSearchResult } from '../domain/quote.js';
+import type { ChartData, ChartKind, KlinePeriod } from '../domain/chart.js';
 import type { PortfolioCommands } from '../application/portfolio/commands.js';
 import type { ReadOptions, RefreshOptions } from '../application/quotes/quote-service.js';
 
@@ -24,6 +25,7 @@ export interface AppServices {
     refresh(codes: readonly StockCode[], options?: RefreshOptions): Promise<QuoteSnapshot>;
   };
   readonly search: { search(query: string): Promise<readonly StockSearchResult[]> };
+  readonly charts: { load(code: StockCode, kind: ChartKind, period: KlinePeriod): Promise<ChartData> };
 }
 
 /** 单个 RPC 方法的 handler 签名：接收校验后的 payload 与 services，返回 result。 */
@@ -33,13 +35,14 @@ export type RpcHandler<M extends RpcMethod> = (
 ) => Promise<RpcResult<M>>;
 
 /**
- * handler 表：13 个方法各委托到唯一 service 方法。
- * `app:bootstrap` → BootstrapService；quote/search 用各自 service；mutation 用 PortfolioCommands。
+ * handler 表：14 个方法各委托到唯一 service 方法。
+ * `app:bootstrap` → BootstrapService；quote/search/charts 用各自 service；mutation 用 PortfolioCommands。
  */
 export const handlers = {
   'app:bootstrap': (_payload, services) => services.bootstrap.execute(),
   'quote:refresh': (payload, services) => services.quotes.refresh(payload.codes, { force: payload.force }),
   'stock:search': (payload, services) => services.search.search(payload.query),
+  'chart:load': (payload, services) => services.charts.load(payload.code, payload.kind, payload.period),
   'stock:add': (payload, services) => services.portfolio.addStock(payload),
   'stock:remove': (payload, services) => services.portfolio.removeStocks(payload),
   'stock:move': (payload, services) => services.portfolio.moveStocks(payload),

@@ -8,6 +8,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resetDom } from '../helpers/dom-environment.js';
+import { stubCanvas2d } from '../helpers/canvas-stub.js';
 import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import { TABLE_ROW_EXTENT } from '../../src/popup/components/stock-table.js';
@@ -422,4 +423,93 @@ test('hovering a row triggers tooltip flip detection without errors', () => {
     row.dispatchEvent(new Event('focusin', { bubbles: true }));
     row.dispatchEvent(new Event('focusout', { bubbles: true }));
   });
+});
+
+// ===== v2.3 hover 迷你分时 =====（canvas 2d stub 见 tests/helpers/canvas-stub.ts）
+
+test('hovering a row lazily loads its trends and draws the mini canvas', async () => {
+  stubCanvas2d();
+  const { el } = setupTable([card('sh600519')]);
+  const tableEl = el as unknown as {
+    setTrendsLoader?: (l: ((code: string) => Promise<readonly TrendPoint[]>) | null) => void;
+  };
+  assert.ok(tableEl.setTrendsLoader, '表组件暴露 setTrendsLoader');
+  const calls: string[] = [];
+  tableEl.setTrendsLoader?.(async (code) => {
+    calls.push(code);
+    return [
+      { time: 0, price: 100, avgPrice: 100, high: 100, low: 100, volume: 0, amount: 0, volumeRatio: 0 },
+      { time: 60_000, price: 101, avgPrice: 100.5, high: 102, low: 100, volume: 0, amount: 0, volumeRatio: 0 }
+    ] as readonly TrendPoint[];
+  });
+
+  const row = el.querySelector('tr[data-key="sh600519"]') as HTMLElement;
+  row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.deepEqual(calls, ['sh600519'], 'hover 触发一次拉取');
+  const wrap = row.querySelector('.detail-mini-wrap') as HTMLElement | null;
+  assert.ok(wrap, '迷你分时容器存在');
+  assert.equal(wrap?.hidden, false, '绘制完成后显示');
+  const canvas = row.querySelector('.detail-mini-trends') as HTMLCanvasElement | null;
+  assert.ok(canvas, 'canvas 存在');
+});
+
+test('trends loader failure keeps tooltip content without mini chart', async () => {
+  const { el } = setupTable([card('sh600519')]);
+  const tableEl = el as unknown as { setTrendsLoader?: (l: unknown) => void };
+  tableEl.setTrendsLoader?.(async () => { throw new Error('offline'); });
+  const row = el.querySelector('tr[data-key="sh600519"]') as HTMLElement;
+  row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 20));
+  const wrap = row.querySelector('.detail-mini-wrap') as HTMLElement | null;
+  assert.equal(wrap?.hidden, true, '失败时迷你图保持隐藏（浮层其余指标照常）');
+});
+
+test('hover does not refetch after first load (cache)', async () => {
+  const { el } = setupTable([card('sh600519')]);
+  const tableEl = el as unknown as { setTrendsLoader?: (l: unknown) => void };
+  const calls: string[] = [];
+  tableEl.setTrendsLoader?.(async (code: string) => {
+    calls.push(code);
+    return [
+      { time: 0, price: 100, avgPrice: 100, high: 100, low: 100, volume: 0, amount: 0, volumeRatio: 0 },
+      { time: 60_000, price: 101, avgPrice: 100.5, high: 102, low: 100, volume: 0, amount: 0, volumeRatio: 0 }
+    ] as readonly TrendPoint[];
+  });
+  const row = el.querySelector('tr[data-key="sh600519"]') as HTMLElement;
+  row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 20));
+  row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(calls.length, 1, '同 code 只拉一次（缓存）');
+});
+
+// ===== v2.6 幅度条按板块归一 =====
+
+test('change percent bar normalizes by board limit (not fixed 10%)', () => {
+  const { el } = setupTable([
+    card('sh600519', { changePercent: 5 }),   // 主板 ±10% → 0.5
+    card('sz300750', { changePercent: 15 }),  // 创业板 ±20% → 0.75（旧：clamp 1）
+    card('bj920001', { changePercent: 9 })    // 北交 ±30% → 0.3
+  ]);
+  const pctOf = (code: string): string | undefined =>
+    el.querySelector(`tr[data-key="${code}"] [data-column="changePercent"]`)?.getAttribute('style')?.match(/--pct:\s*([\d.]+)/)?.[1];
+  assert.equal(pctOf('sh600519'), '0.500', '主板 5% → 半条');
+  assert.equal(pctOf('sz300750'), '0.750', '创业板 15% → 3/4 条（旧实现错误地满条）');
+  assert.equal(pctOf('bj920001'), '0.300', '北交 9% → 0.3 条');
+  // 真涨停高亮：创业板 19.95% 触及 ±20% → is-limit；主板 5% 不亮。
+  assert.ok(el.querySelector('tr[data-key="sz300750"] [data-column="changePercent"]')?.classList.contains('is-limit') === false);
+});
+
+test('is-limit highlights at board-specific threshold', () => {
+  const { el } = setupTable([
+    card('sz300750', { changePercent: 19.95 }),  // 创业板涨停 → is-limit
+    card('sh600519', { changePercent: 9.98 }),   // 主板涨停 → is-limit
+    card('sh600519x', { changePercent: 5 })      // 占位
+  ]);
+  const isLimit = (code: string): boolean | undefined =>
+    el.querySelector(`tr[data-key="${code}"] [data-column="changePercent"]`)?.classList.contains('is-limit');
+  assert.equal(isLimit('sz300750'), true, '创业板 19.95% ≈ ±20% 涨停 → 高亮（旧实现漏判）');
+  assert.equal(isLimit('sh600519'), true, '主板 9.98% ≈ ±10% 涨停 → 高亮');
 });

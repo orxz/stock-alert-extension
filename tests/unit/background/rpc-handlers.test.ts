@@ -1,5 +1,5 @@
 // tests/unit/background/rpc-handlers.test.ts
-// Task 10 — 穷尽式 RPC handler 表：13 个方法各映射到唯一 service 调用。
+// Task 10 — 穷尽式 RPC handler 表：14 个方法各映射到唯一 service 调用。
 // satisfies { [M in RpcMethod]: RpcHandler<M> } 在编译期保证缺失/多余条目被 TS 拒绝。
 // 此测试在运行时验证：handler 表键集 == 注册表键集，且每个方法分发到正确的 service 方法。
 import assert from 'node:assert/strict';
@@ -16,6 +16,7 @@ const validPayloads: Record<string, unknown> = {
   'app:bootstrap': {},
   'quote:refresh': { codes: ['sh600519'], force: false },
   'stock:search': { query: '茅台' },
+  'chart:load': { code: 'sh600519', kind: 'trends', period: 'day' },
   'stock:add': { expectedRevision: 'sha256:abc', code: 'sh600519', name: '贵州茅台', groupIds: ['g_all'] },
   'stock:remove': { expectedRevision: 'sha256:abc', codes: ['sh600519'], groupId: 'g_all' },
   'stock:move': { expectedRevision: 'sha256:abc', codes: ['sh600519'], fromGroupId: 'g_all', targetGroupIds: ['g_1'] },
@@ -33,6 +34,7 @@ const expectedTarget: Record<string, string> = {
   'app:bootstrap': 'bootstrap.execute',
   'quote:refresh': 'quotes.refresh',
   'stock:search': 'search.search',
+  'chart:load': 'charts.load',
   'stock:add': 'portfolio.addStock',
   'stock:remove': 'portfolio.removeStocks',
   'stock:move': 'portfolio.moveStocks',
@@ -56,6 +58,7 @@ function recordingServices(): { services: Record<string, unknown>; called: strin
     bootstrap: { execute: rec('bootstrap.execute') },
     quotes: { refresh: rec('quotes.refresh'), read: rec('quotes.read') },
     search: { search: rec('search.search') },
+    charts: { load: rec('charts.load') },
     portfolio: {
       addStock: rec('portfolio.addStock'),
       removeStocks: rec('portfolio.removeStocks'),
@@ -76,8 +79,8 @@ test('handler table keys match the registry exactly', () => {
   assert.deepEqual(Object.keys(handlers).sort(), [...methods].sort());
 });
 
-test('handler table has exactly 13 entries', () => {
-  assert.equal(Object.keys(handlers).length, 13);
+test('handler table has exactly 14 entries', () => {
+  assert.equal(Object.keys(handlers).length, 14);
 });
 
 // 逐方法验证：handlers[method] 调用对应的 service 方法。
@@ -106,6 +109,7 @@ test('quote:refresh forwards codes and force flag to quotes.refresh', async () =
       read: () => Promise.resolve(null)
     },
     search: { search: () => Promise.resolve(null) },
+    charts: { load: () => Promise.resolve(null) },
     portfolio: {}
   };
   await (handlers as Record<string, (p: unknown, s: unknown) => Promise<unknown>>)['quote:refresh'](
@@ -122,6 +126,7 @@ test('stock:search forwards query to search.search', async () => {
     bootstrap: { execute: () => Promise.resolve(null) },
     quotes: { refresh: () => Promise.resolve(null), read: () => Promise.resolve(null) },
     search: { search: (q: unknown) => { received.query = q; return Promise.resolve([]); } },
+    charts: { load: () => Promise.resolve(null) },
     portfolio: {}
   };
   await (handlers as Record<string, (p: unknown, s: unknown) => Promise<unknown>>)['stock:search'](
@@ -129,4 +134,29 @@ test('stock:search forwards query to search.search', async () => {
     services
   );
   assert.equal(received.query, '茅台');
+});
+
+test('chart:load forwards code/kind/period to charts.load', async () => {
+  const received: { code?: unknown; kind?: unknown; period?: unknown } = {};
+  const services = {
+    bootstrap: { execute: () => Promise.resolve(null) },
+    quotes: { refresh: () => Promise.resolve(null), read: () => Promise.resolve(null) },
+    search: { search: () => Promise.resolve([]) },
+    charts: {
+      load: (code: unknown, kind: unknown, period: unknown) => {
+        received.code = code;
+        received.kind = kind;
+        received.period = period;
+        return Promise.resolve(null);
+      }
+    },
+    portfolio: {}
+  };
+  await (handlers as Record<string, (p: unknown, s: unknown) => Promise<unknown>>)['chart:load'](
+    { code: 'sz399006', kind: 'kline', period: 'week' },
+    services
+  );
+  assert.equal(received.code, 'sz399006');
+  assert.equal(received.kind, 'kline');
+  assert.equal(received.period, 'week');
 });

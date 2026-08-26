@@ -5,10 +5,21 @@ export type { Brand, StockCode, GroupId, UserDataRevision } from './brands.js';
 export type { Group } from './group.js';
 export type { Stock } from './stock.js';
 export type { Quote, QuoteCacheEntry, QuoteResult, QuoteSnapshot, StockSearchResult } from './quote.js';
+export type {
+  TrendPoint,
+  KlineBar,
+  ChartKind,
+  KlinePeriod,
+  ChartData,
+  ChartError
+} from './chart.js';
+export { buildIndexSparkline, isUsableTrends, isUsableKlines } from './chart.js';
 export type { ViewMode, SortField, SortDirection, BoardConfig, UserData } from './board-config.js';
 export type { ErrorCode, AppError } from './errors.js';
 export type { BadgeState } from './formatting.js';
-export { normalizeStockCode } from './stock.js';
+export { normalizeStockCode, isIndexCode } from './stock.js';
+export type { IndexCatalogEntry } from './index-quote.js';
+export { INDEX_CATALOG, INDEX_CATALOG_CODES, projectIndexQuote } from './index-quote.js';
 export { isUsableQuote, snapshotFromCache } from './quote.js';
 export { sortStocks, stocksForGroup } from './portfolio.js';
 export {

@@ -11,6 +11,13 @@ import { ALARM_NAME } from '../../../src/background/scheduler.js';
 // ── 在导入 main.ts 之前安装 Chrome mock ──
 const chromeMock = installChromeMock();
 
+// v2.1：空 watchlist 也会刷新固定指数目录（scheduler 不再短路），
+// 接线测试不应打真网——注入恒败 fetch，provider 失败由 QuoteService 内部
+// catch 并记录诊断，cycle 照常走完 safety/exact alarm 安排。
+globalThis.fetch = (async () => {
+  throw new Error('offline: main.test.ts stub');
+}) as typeof globalThis.fetch;
+
 /** 等待谓词为真（500 次微任务轮询，容忍并发测试负载）。 */
 async function waitFor(predicate: () => boolean, maxIterations = 500): Promise<void> {
   for (let i = 0; i < maxIterations; i++) {

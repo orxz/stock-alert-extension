@@ -5,17 +5,22 @@
 // 架构约束：仅 import domain types + view-models + 子组件；无 RPC/Store 依赖。
 import type { AppViewModel } from '../view-models.js';
 import './stock-header.js';
+import './index-strip.js';
 import './group-tabs.js';
 import './stock-toolbar.js';
 import './stock-board.js';
 import './batch-toolbar.js';
 import './quote-status.js';
+import './chart-detail-panel.js';
 import type { StockHeaderElement } from './stock-header.js';
+import type { IndexStripElement } from './index-strip.js';
+import type { TrendsLoader } from './stock-table.js';
 import type { GroupTabsElement } from './group-tabs.js';
 import type { StockToolbarElement } from './stock-toolbar.js';
 import type { StockBoardElement } from './stock-board.js';
 import type { BatchToolbarElement } from './batch-toolbar.js';
 import type { QuoteStatusElement } from './quote-status.js';
+import type { ChartDetailPanelElement } from './chart-detail-panel.js';
 
 // 类型断言 helper：document.createElement 返回 HTMLElement，需断言为具体类型。
 function create<T extends HTMLElement>(tag: string): T {
@@ -29,11 +34,13 @@ export class StockAppElement extends HTMLElement {
 
   // 子组件引用
   private headerEl: StockHeaderElement | null = null;
+  private indexStripEl: IndexStripElement | null = null;
   private tabsEl: GroupTabsElement | null = null;
   private toolbarEl: StockToolbarElement | null = null;
   private boardEl: StockBoardElement | null = null;
   private batchEl: BatchToolbarElement | null = null;
   private quoteStatusEl: QuoteStatusElement | null = null;
+  private detailPanelEl: ChartDetailPanelElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -54,6 +61,13 @@ export class StockAppElement extends HTMLElement {
     return this._viewModel;
   }
 
+  /** 注入 hover 迷你分时数据源（AppShell → board → grid/card 链式转发）。 */
+  setTrendsLoader(loader: TrendsLoader | null): void {
+    if (this.boardEl) {
+      (this.boardEl as unknown as { setTrendsLoader?(l: TrendsLoader | null): void }).setTrendsLoader?.(loader);
+    }
+  }
+
   set viewModel(value: AppViewModel) {
     this._viewModel = value;
     if (this.isConnected) this.applyViewModel(value);
@@ -70,6 +84,12 @@ export class StockAppElement extends HTMLElement {
     header.setAttribute('data-region', 'header');
     this.headerEl = header;
     this.append(header);
+
+    // 固定大盘指数条（常驻视图，不随分组/搜索变化）
+    const indexStrip = create<IndexStripElement>('index-strip');
+    indexStrip.id = 'index-strip';
+    this.indexStripEl = indexStrip;
+    this.append(indexStrip);
 
     // 分组导航标签
     const tabs = create<GroupTabsElement>('group-tabs');
@@ -105,10 +125,16 @@ export class StockAppElement extends HTMLElement {
     quoteStatus.id = 'quote-status-summary';
     this.quoteStatusEl = quoteStatus;
     this.append(quoteStatus);
+
+    // 详情面板（分时/K线/指标）——覆盖层，默认 hidden。
+    const detailPanel = create<ChartDetailPanelElement>('chart-detail-panel');
+    this.detailPanelEl = detailPanel;
+    this.append(detailPanel);
   }
 
   private applyViewModel(vm: AppViewModel): void {
     if (this.headerEl) this.headerEl.viewModel = vm.header;
+    if (this.indexStripEl) this.indexStripEl.viewModel = vm.indexStrip;
     if (this.tabsEl) {
       this.tabsEl.viewModel = vm.groupTabs;
       this.tabsEl.selectionMode = vm.batchToolbar.visible;
@@ -121,5 +147,6 @@ export class StockAppElement extends HTMLElement {
     }
     if (this.batchEl) this.batchEl.viewModel = vm.batchToolbar;
     if (this.quoteStatusEl) this.quoteStatusEl.viewModel = vm.quoteStatus;
+    if (this.detailPanelEl) this.detailPanelEl.viewModel = vm.detail;
   }
 }

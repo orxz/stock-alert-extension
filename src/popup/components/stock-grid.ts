@@ -4,6 +4,7 @@
 // 事件委托：在 grid 容器上监听 stock-card 的 pin/order 事件并转发。
 // 架构约束：仅 import domain + view-models + events + keyed-update；per-connection AbortController。
 import type { StockCode, GroupId } from '../../domain/brands.js';
+import type { TrendPoint } from '../../domain/index.js';
 import type { StockCardViewModel } from '../view-models.js';
 import type { ColumnKey } from '../ui-preferences.js';
 import { updateKeyedChildren } from './keyed-update.js';
@@ -31,6 +32,8 @@ function createSpacer(): HTMLElement {
 }
 
 export class StockGridElement extends HTMLElement {
+  private _trendsLoader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null = null;
+
   private connection: AbortController | undefined;
   private skeletonBuilt = false;
   private _viewModel: readonly StockCardViewModel[] = [];
@@ -60,6 +63,14 @@ export class StockGridElement extends HTMLElement {
   disconnectedCallback(): void {
     this.connection?.abort();
     this.connection = undefined;
+  }
+
+  /** 注入 hover 迷你分时数据源（board 转发；应用到已渲染的全部 card）。 */
+  setTrendsLoader(loader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null): void {
+    this._trendsLoader = loader;
+    for (const card of this.querySelectorAll('stock-card')) {
+      (card as unknown as StockCardElement).setTrendsLoader?.(loader);
+    }
   }
 
   get viewModel(): readonly StockCardViewModel[] {
@@ -195,6 +206,7 @@ export class StockGridElement extends HTMLElement {
     card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
+    card.setTrendsLoader?.(this._trendsLoader);
     // 与 updateCard 用同一种写法，避免两条路径长出不同的分支行为。
     card.toggleAttribute('data-selected', this._selectedSet.has(vm.code));
     return card;
@@ -206,6 +218,7 @@ export class StockGridElement extends HTMLElement {
     card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
+    card.setTrendsLoader?.(this._trendsLoader);
     node.toggleAttribute('data-selected', this._selectedSet.has(vm.code));
   }
 }

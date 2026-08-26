@@ -11,7 +11,10 @@ import type {
   StockCode,
   UserDataRevision,
   QuoteSnapshot,
-  StockSearchResult
+  StockSearchResult,
+  ChartData,
+  ChartKind,
+  KlinePeriod
 } from '../../domain/index.js';
 import type {
   MutationMethod,
@@ -239,5 +242,13 @@ export class CommandController {
     } catch (error) {
       this.store.dispatch({ type: 'bootstrap/failed', error: toSafeClientError(error) });
     }
+  }
+
+  /**
+   * 详情面板图表加载：chart:load RPC 直通（详情面板组件自治持有 loading/error/data；
+   * 此处不做 generation 编排——图表是一次性明细，最新一次请求胜出即可）。
+   */
+  async loadChart(code: StockCode, kind: ChartKind, period: KlinePeriod): Promise<ChartData> {
+    return (await this.rpc.call('chart:load', { code, kind, period })) as ChartData;
   }
 }

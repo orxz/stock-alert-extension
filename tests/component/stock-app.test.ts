@@ -7,7 +7,7 @@ import test from 'node:test';
 import { resetDom } from '../helpers/dom-environment.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { AppViewModel } from '../../src/popup/view-models.js';
-import { closedDialog } from '../../src/popup/view-models.js';
+import { closedDialog, emptyIndexStrip, closedDetailPanel } from '../../src/popup/view-models.js';
 import type { GroupId } from '../../src/domain/index.js';
 
 /** 构造最小 AppViewModel 用于断言渲染（字段均可控）。 */
@@ -16,6 +16,8 @@ function mkViewModel(overrides: Partial<AppViewModel> = {}): AppViewModel {
     currentGroupId: 'g_all' as GroupId,
     searchKeyword: '',
     header: { groupName: '全部', stockCount: 0, selectionMode: false, priceHidden: false, canAddStock: true, theme: 'dark' },
+    indexStrip: emptyIndexStrip(),
+    detail: closedDetailPanel(),
     groupTabs: [],
     board: {
       viewMode: 'list',
@@ -57,8 +59,9 @@ test('connectedCallback renders the header / group-tabs / board skeleton', () =>
   const el = document.createElement('stock-app');
   document.body.append(el);
 
-  // 骨架：header + group-tabs + board + toolbar 等稳定 region 容器（Light DOM）。
+  // 骨架：header + index-strip + group-tabs + board + toolbar 等稳定 region 容器（Light DOM）。
   assert.ok(el.querySelector('[data-region="header"]'));
+  assert.ok(el.querySelector('[data-region="index-strip"]'));
   assert.ok(el.querySelector('[data-region="group-tabs"]'));
   assert.ok(el.querySelector('[data-region="board"]'));
   assert.ok(el.querySelector('[data-region="toolbar"]'));

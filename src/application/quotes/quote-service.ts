@@ -11,6 +11,7 @@
 import type { StockCode } from '../../domain/brands.js';
 import type { Quote, QuoteCacheEntry, QuoteResult, QuoteSnapshot } from '../../domain/quote.js';
 import { isUsableQuote, snapshotFromCache } from '../../domain/quote.js';
+import { INDEX_CATALOG_CODES } from '../../domain/index-quote.js';
 import type { QuoteCacheRepository } from '../ports/storage.js';
 import type { Clock } from '../ports/clock.js';
 import type { QuoteProvider } from '../ports/quote-provider.js';
@@ -133,15 +134,20 @@ export class QuoteService {
 
   /**
    * 刷新行情：single-flight + 退避 + 批量并发 + 双源 + 缓存 + 诊断。
+   *
+   * v2.1：固定指数目录无条件并入请求集合（与股票混合同批，实测东财单批支持），
+   * 返回快照始终包含指数条数据。调用方传空数组（空自选股）时仍会请求指数——
+   * 「空自选股不请求网络」的不变量相应收窄为「空自选股不因自选股触发请求」。
    */
   async refresh(
     codes: readonly StockCode[],
     options?: RefreshOptions
   ): Promise<QuoteSnapshot> {
-    const requested = uniqueCodes(codes);
+    const requested = uniqueCodes([...codes, ...INDEX_CATALOG_CODES]);
     const now = this.clock.now();
 
-    // ── 空自选股守卫 ──
+    // ── 空请求守卫（防御性）──
+    // 目录硬编码非空，实际不可达；仅当未来目录可配置为空时兑底。
     // 直接返回空快照，不触碰 failureCount、不读写 session。
     if (requested.length === 0) {
       const span = startSpan(this.sink, {

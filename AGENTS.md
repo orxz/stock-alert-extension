@@ -1,4 +1,4 @@
-# AGENTS.md — 股票提醒助手（Chrome 扩展，Manifest V3，v2.0.1 TypeScript/ESM）
+# AGENTS.md — 股票提醒助手（Chrome 扩展，Manifest V3，v2.6.0 TypeScript/ESM）
 
 新会话从本文件起步。本文档是 **Qoder / 通用 Agent** 的入口，也是**开发规范（核心边界 / 不变量 / 风险路由 / 命令面 / 验证纪律）的唯一权威**；整体架构概览（分层图 / 数据流）见 [docs/项目架构.md](docs/项目架构.md)；Claude Code 用户入口见 [CLAUDE.md](CLAUDE.md)。
 
@@ -51,14 +51,14 @@ Infrastructure (Chrome / Storage / HTTP)  →  implements  →  Application Port
 
 ## 核心边界（不变量）
 
-- **存储**：`StorageCoordinator`（`src/infrastructure/storage/storage-coordinator.ts`）是 `chrome.storage.local` 的唯一业务调用者和唯一写入队列；所有用户数据/缓存读写进入同一串行临界区。schema v2 由 `groups` / `watchlist` / `boardConfig` / `quoteCache:<code>` 组成；`g_all`（「全部」）是计算视图，不存储成员标记。`userDataRevision` 是规范化 `groups + watchlist + boardConfig` 的 SHA-256 摘要，不作为独立 key 持久化。schema 迁移走 `migrateToV2`（幂等）并备份到 `migrationBackup:v1.2.1`（首次写入不覆盖）
-- **行情**：`QuoteProvider`（`src/infrastructure/quote-providers/`）是纯传输层（东财主源 + 腾讯备源），只返回真实远端数据；`QuoteService`（`src/application/quotes/`）负责编排（4s Provider 超时、8s 总 deadline、50 只/批、并发 2、fresh `<30s` / cached `30s~7d` / 超期删除、失败退避 `30s→2m→5m` 持久化到 `chrome.storage.session`）；`price > 0` 才视为可用行情；缺失时保留未过期缓存，**绝不生成模拟价格**；空自选股不请求网络也不改变退避状态
-- **代码规范**：股票代码带市场前缀 `sh` / `sz` / `bj`，统一经 `src/domain/stock.ts` 的 `normalizeStockCode` 规范化
+- **存储**：`StorageCoordinator`（`src/infrastructure/storage/storage-coordinator.ts`）是 `chrome.storage.local` 的唯一业务调用者和唯一写入队列；所有用户数据/缓存读写进入同一串行临界区。schema v2 由 `groups` / `watchlist` / `boardConfig` / `quoteCache:<code>` 组成；`g_all`（「全部」）是计算视图，不存储成员标记。`userDataRevision` 是规范化 `groups + watchlist + boardConfig` 的 SHA-256 摘要，不作为独立 key 持久化。schema 迁移走 `migrateToV2`（幂等）并备份到 `migrationBackup:v1.2.1`（首次写入不覆盖）。行情缓存的「保留集」= watchlist ∪ `INDEX_CATALOG`（固定指数目录）：写入校验、孤儿清理、bootstrap 缓存读取三处共用同一保留集，否则指数条缓存会在每次冷启动被清掉
+- **行情**：`QuoteProvider`（`src/infrastructure/quote-providers/`）是纯传输层（东财主源 + 腾讯备源），只返回真实远端数据；`QuoteService`（`src/application/quotes/`）负责编排（4s Provider 超时、8s 总 deadline、50 只/批、并发 2、fresh `<30s` / cached `30s~7d` / 超期删除、失败退避 `30s→2m→5m` 持久化到 `chrome.storage.session`）；`price > 0` 才视为可用行情；缺失时保留未过期缓存，**绝不生成模拟价格**；空自选股不因自选股触发请求——但 `INDEX_CATALOG`（固定指数目录，`domain/index-quote.ts`）无条件并入每次 refresh（与股票混合同批，实测支持），返回快照始终含指数条数据
+- **代码规范**：证券代码带市场前缀 `sh` / `sz` / `bj`，统一经 `src/domain/stock.ts` 的 `normalizeStockCode` 规范化。v2.1 起支持交易所指数段：`sh000xxx`（上证系列）/ `sz399xxx`（深证系列）/ `bj899xxx`（北证50）；**歧义消解**：裸 `000xxx` 仍归深市股票（sz000001=平安银行，v1 兼容），只有显式 `sh` 前缀才归沪市指数；`isIndexCode` 判定三段指数前缀
 - **RPC v2**：`src/protocol/registry.ts` 是唯一的 RPC 方法/payload/result/validator 注册表（13 个方法）；所有写命令是幂等最终态命令并携带 `expectedRevision`；冲突返回 `CONFLICT` 不写入；`requestId` 贯穿全链路
 - **Popup Store**：`src/popup/store/reducer.ts` 是 `AppState` 的唯一写入口（纯函数）；`domain.boardConfig` 是持久偏好的唯一真相；超时写入进入 uncertain 状态，经 bootstrap 对账确认后更新——绝不盲目回滚
 - **view 不变量**：`currentGroupId` 必须指向存在的分组，且**选中集 ⊆ 当前分组可见集**。替换 `userData` 的路径有**两条**——`mutation/confirmed` 与 `bootstrap/confirmed`（写命令超时 → uncertain → `app:bootstrap` 对账），两条都必须过 `settleView`。只在 mutation 分支收敛会让批量工具栏为已删除的股票留计数
 - **默认形态**：全新用户打开即 **深色 + 网格**。两处默认值——`DEFAULT_BOARD_CONFIG`（`src/domain/portfolio.ts`，唯一定义处）与 `src/popup/main.ts` 的 `initialTheme`（仅当 `localStorage.uiTheme === 'light'` 才转浅色，不读 `prefers-color-scheme`）。由 `tests/e2e/preferences.spec.ts` 的「fresh profile」用例守护
-- **行情字段绑定 endpoint，不可跨接口套用**：东财 `f*` 字段的含义**随 endpoint 变化**——`f51/f52` 只在逐只的 `stock/get` 上是涨停/跌停价，在本项目使用的批量接口 `ulist.np/get` 上是无关量纲（实测茅台 2715 亿、平安银行 0）。新增字段前必须拿真实接口比对已知真值，不能只照字段表；provider 缺该数据时保持 `undefined`，展示层渲染 `--`
+- **行情字段绑定 endpoint 与品种，不可跨接口/品种套用**：东财 `f*` 字段的含义**随 endpoint 变化**——`f51/f52` 只在逐只的 `stock/get` 上是涨停/跌停价，在本项目使用的批量接口 `ulist.np/get` 上是无关量纲（实测茅台 2715 亿、平安银行 0）。新增字段前必须拿真实接口比对已知真值，不能只照字段表。**涨跌停（v2.5.5）**：腾讯真值（[47]/[48]）优先，缺失时（主源路径/腾讯哨兵）按交易所规则推导（昨收×板块幅度四舍五入到分：主板 ±10%/ST ±5%/创业科创 ±20%/北交 ±30%——确定性公式而非模拟行情，规则表在 `domain/limit-rule.ts`；备源只在主源缺失时才被调用，所以主源成功股必须靠推导）；边界：新股上市首日无法从代码段判断，推导值偏保守。**字段含义也随品种变化**：指数行东财 PE/PB 上报 0、腾讯涨跌停上报 -1、两源 PE 口径矛盾（0 vs 17.70）——指数行经 `projectIndexQuote`（`domain/index-quote.ts`）从解析层剔除 pe/pb/limitUp/limitDown，不许 0.00/-1.00 假值流入展示层；腾讯源涨跌停非正值一律归无效（股票行过滤后由推导兑底）
 - **商店素材规格**：`store-assets/` 的截图必须是 1280x800 或 640x400、小图块 440x280、顶部图块 1400x560，且为 24 位无 alpha PNG。由 `tests/unit/build/store-assets.test.mjs` 守护——商店只在**上传那一刻**报「图片尺寸不正确」，没有门禁就会一直躺着一批不能用的图
 - **行高契约**：`TABLE_ROW_EXTENT`（`stock-table.ts`）必须等于 `tokens.css` 的 `--row-h`，否则虚拟滚动的 spacer 与真实行高逐行错位。由组件测试直接比对两个真实来源双向锁死
 - **调度**：刷新间隔由市场状态计算——盘中 popup 10s / 后台 alarm 30s，盘外 5 分钟；每次任务先创建安全 Alarm（5 分钟），结束后替换为精确 Alarm；每次 SW 激活执行 `ensureAlarm`
@@ -66,10 +66,16 @@ Infrastructure (Chrome / Storage / HTTP)  →  implements  →  Application Port
 ## 风险路由（改哪里、注意什么）
 
 - 改行情逻辑 → `src/infrastructure/quote-providers/`（传输/解析）或 `src/application/quotes/quote-service.ts`（编排）；退避状态持久化到 `chrome.storage.session`，SW 重建后恢复
+- 改大盘指数（固定指数条/指数可添加）→ 目录与投影在 `src/domain/index-quote.ts`（唯一真相）；搜索放行指数段在 `provider-parsers.ts` 的 `parseEastmoneySearch`（只放行 000/399/899 段，北证50 搜索端 Classify=34 靠段位而非 MktNum 判市场）；指数条 UI 在 `src/popup/components/index-strip.ts` + `selectors.ts` 的 `selectIndexStrip`
+- 改分时/K线（v2.2 详情面板）→ 传输在 `src/infrastructure/quote-providers/eastmoney-chart-provider.ts`（域名 push2his.eastmoney.com），编排在 `src/application/charts/chart-service.ts`（按需明细，single-flight + 4s 超时 + 可用性校验，不做后台周期/持久缓存），解析在 `provider-parsers.ts` 的 `parseEastmoneyTrends/parseEastmoneyKline`，UI 在 `src/popup/components/chart-detail-panel.ts`（canvas 自绘，零依赖）；`chart:load` 是 RPC 注册表第 14 个方法，两端同步（registry + rpc-handlers）
+- 改 hover 迷你分时/指数条（v2.3）→ 数据链路复用 chart:load（AppShell 注入 loader：`stock-app.setTrendsLoader` → `stock-board` 转发 → `stock-grid` 下发 `stock-card`；**视图惰性挂载后必须重放 loader**——board 的 setView 里对新建 table/grid 调用 setTrendsLoader，漏掉会导致 hover 无迷你图）；指数条可点击进详情在 `index-strip.ts`（chip role=button，非 listitem——aria 语义与分组 tablist 区分）；**指数条展示从简（v2.4.1 起只有 名称/点位/涨跌幅/迷你图，无涨跌额）**——投影在 `view-models.ts` 的 `toIndexStrip`，涨跌额字段已删，重建前勿在白名单添加；**指数条布局是 2×2 网格**（28px→56px 高，见 `layout.css` 的几何契约注释——单行 flex 4 只会把点位/涨跌幅挤成 0 宽，只剩名称，v2.4.2 教训；mini 图几何在 layout.css，着色在 controls.css `.index-chip-spark`）
+- 改图表绘制（v2.4 质感）→ 全在 `src/popup/components/chart-detail-panel.ts` 的 render/renderTrends/renderKlines/drawGrid/drawMaLegend（canvas 自绘）：**canvas 分辨率必须按容器实际尺寸设定**（render() 读 getBoundingClientRect ——固定 320×240 被 CSS 拉伸会发糊变形，v2.5.1 教训；ResizeObserver 尺寸变化重绘）；**价格轴刻度在 drawGrid（传 min/max）；均线图例左对齐防溢出**；表格/卡片涨跌幅幅度条在 board.css（`--pct` 变量 + ::before），卡片在 `stock-card.ts` applyViewModel 设置 `--pct`；十字光标坐标用 `this._vw/_vh`（与 render 同步，勿回退常量）
+- 改涨跌幅幅度条/涨停高亮（v2.6）→ 归一基准不再是固定 ±10%：表格在 `stock-table.ts` 的 `limitPctOf(code)`（复用 `domain/limit-rule.ts` 的 `limitPctFor`，指数按主板基准），卡片在 `stock-card.ts` applyViewModel；改板块规则只改 limit-rule.ts 一处
+- 改迷你分时/指数 sparkline（v2.5.3 已收敛）→ 绘制唯一真相在 `src/popup/components/sparkline.ts`（`drawSparkline` 面积渐变+容宽分辨率+涨跌色，`CHART_UP/DOWN/FLAT`、`hexToRgba`、`trendColorOf` 也在此——全项目唯一副本，含 chart-detail-panel）；消费方 stock-table `drawMiniTrends` / stock-card `ensureMiniTrends` / index-strip `drawSparklines` 只做取数与委托，改样式改 sparkline.ts 一处；指数条颜色跟随快照 trend（传 `options.color`），hover 迷你图跟随序列首尾（默认判色）+中位虚线；测试 canvas stub 在 `tests/helpers/canvas-stub.ts`（勿在测试里再手写 mock）；数据链路复用 chart:load trends；十字光标坐标用 `this._vw/_vh`（与 render 同步，勿回退常量）
 - 改存储 schema/字段 → `src/infrastructure/storage/sanitize-v2.ts` + `migration-service.ts` + `storage-coordinator.ts`：必须保持 v1.2.1→v2 兼容，所有写操作走 Coordinator 单队列
 - 新增/修改 RPC 方法 → `src/protocol/registry.ts`（单一注册表）+ `src/background/rpc-handlers.ts`（exhaustive handler 表）两端同步；payload 用注册表内联 validator 校验
 - 改 Popup 状态流 → `src/popup/store/reducer.ts`（唯一写入口）+ `selectors.ts`；组件只接收 ViewModel、发出语义事件，不访问 Store/RPC/Repository
-- 改权限/入口/域名 → `extension/manifest.json`；host_permissions 只允许上述三个数据源域名
+- 改权限/入口/域名 → `extension/manifest.json`；host_permissions 只允许四个数据源域名（push2.eastmoney.com / searchapi.eastmoney.com / qt.gtimg.cn / push2his.eastmoney.com）
 - 改默认视图/主题 → `DEFAULT_BOARD_CONFIG` + `src/popup/main.ts`；**断言表格结构的 E2E 必须显式声明视图**（`listBoardConfig()` / `gridBoardConfig()`），依赖全局默认值的用例会在默认一改时集体变红
 - 改商店素材/文案 → `scripts/capture-store-assets.mjs` + `store-assets/`；素材是随版本提交的产物，改完跑 `npm run capture:store` 并让 `test:build` 校验规格。文案只许描述**源码中真实存在**的能力：本扩展**没有价格提醒功能**（「股票提醒助手」只是产品名），备源是**腾讯**不是新浪，可配置列是 **5** 个，自定义分组上限 **19**（+1 个默认）
 - 改跨浏览器支持（Edge / Chromium 系）→ `tests/e2e/extension-fixture.ts`（`channel` 参数化 + `E2E_CHANNEL` 环境变量）+ `tests/e2e/cross-browser.spec.ts`（Edge 冒烟）+ `playwright.config.mjs`（`edge` project）；上架流程见 `docs/multi-browser-publishing.md`。Chromium 系零代码改动，manifest 不含 `browser_specific_settings`（由 `validate-manifest.mjs` 断言）

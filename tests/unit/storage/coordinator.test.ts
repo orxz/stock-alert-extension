@@ -377,3 +377,80 @@ test('readBootstrap reads existing cache for watchlist codes', async () => {
   const snapshot = await coordinator.readBootstrap();
   assert.ok(snapshot.quoteCache['sh600519' as StockCode]);
 });
+
+// ===== 固定指数目录的缓存豁免（v2.1）=====
+// 目录指数不在 watchlist，但缓存必须可写入、不被孤儿清理删除、
+// 且 bootstrap 读取范围包含它们——否则指数条冷启动永远无缓存。
+
+import { INDEX_CATALOG_CODES } from '../../../src/domain/index-quote.js';
+
+test('writeQuoteCache accepts catalog index codes even outside watchlist', async () => {
+  const coordinator = createEmptyCoordinator();
+  const area = (coordinator as unknown as { area: MemoryStorageArea }).area;
+  const entries: Record<string, QuoteCacheEntry> = {};
+  for (const code of INDEX_CATALOG_CODES) entries[String(code)] = validCacheEntry(String(code));
+  entries.sh600519 = validCacheEntry('sh600519'); // 非 watchlist 非目录 → 仍拒写
+
+  await coordinator.writeQuoteCache(entries as Record<StockCode, QuoteCacheEntry>);
+
+  const raw = await area.get(null);
+  for (const code of INDEX_CATALOG_CODES) {
+    assert.ok(raw[`quoteCache:${code}`], `目录指数 ${code} 缓存写入成功`);
+  }
+  assert.equal(raw['quoteCache:sh600519'], undefined, '非成员非目录代码仍拒写');
+});
+
+test('orphan reconciliation keeps catalog index caches with empty watchlist', async () => {
+  const coordinator = createEmptyCoordinator();
+  const area = (coordinator as unknown as { area: MemoryStorageArea }).area;
+  const seed: Record<string, unknown> = {};
+  for (const code of INDEX_CATALOG_CODES) seed[`quoteCache:${code}`] = validCacheEntry(String(code));
+  seed['quoteCache:sz000002'] = validCacheEntry('sz000002'); // 真孤儿
+  await area.set(seed);
+
+  const removed = await coordinator.reconcileOrphanQuoteCache();
+
+  assert.equal(removed, 1, '只删真孤儿');
+  const raw = await area.get(null);
+  for (const code of INDEX_CATALOG_CODES) {
+    assert.ok(raw[`quoteCache:${code}`], `目录指数 ${code} 缓存未被清理`);
+  }
+  assert.equal(raw['quoteCache:sz000002'], undefined);
+});
+
+test('readBootstrap quoteCache covers watchlist and catalog codes', async () => {
+  const coordinator = createCoordinatorWithStock('sh600519');
+  const area = (coordinator as unknown as { area: MemoryStorageArea }).area;
+  const seed: Record<string, unknown> = {
+    'quoteCache:sh600519': validCacheEntry('sh600519'),
+    'quoteCache:sz000002': validCacheEntry('sz000002') // 非保留集：读了也不该出现在快照
+  };
+  for (const code of INDEX_CATALOG_CODES) seed[`quoteCache:${code}`] = validCacheEntry(String(code));
+  await area.set(seed);
+
+  const snapshot = await coordinator.readBootstrap();
+
+  assert.ok(snapshot.quoteCache.sh600519, 'watchlist 成员在缓存快照中');
+  for (const code of INDEX_CATALOG_CODES) {
+    const entry = snapshot.quoteCache[code];
+    assert.ok(entry, `目录指数 ${code} 进入 bootstrap 缓存快照（指数条冷启动渲染）`);
+  }
+  assert.equal(snapshot.quoteCache.sz000002, undefined, '非保留集代码不进快照');
+});
+
+test('mutate removing a catalog index keeps its cache (strip retains it)', async () => {
+  const coordinator = createCoordinatorWithStock('sh000001');
+  const area = (coordinator as unknown as { area: MemoryStorageArea }).area;
+  const key = 'quoteCache:sh000001';
+  await area.set({ [key]: validCacheEntry('sh000001') });
+
+  // mutation：删掉 sh000001（模拟用户删除添加的指数）
+  const before = await coordinator.readBootstrap();
+  await coordinator.mutate(before.revision, (draft) => {
+    draft.watchlist = draft.watchlist.filter((s) => s.code !== 'sh000001');
+    return null;
+  });
+
+  const raw = await area.get(null);
+  assert.ok(raw[key], '目录指数缓存不因用户删除自选而丢失（固定指数条仍需回放）');
+});

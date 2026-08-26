@@ -8,7 +8,9 @@ import { FixedClock } from '../../helpers/fixed-clock.js';
 import { StorageCoordinator } from '../../../src/infrastructure/storage/storage-coordinator.js';
 import { BootstrapService } from '../../../src/application/bootstrap/bootstrap-service.js';
 import type { StockCode, QuoteCacheEntry } from '../../../src/domain/index.js';
+import { INDEX_CATALOG_CODES } from '../../../src/domain/index-quote.js';
 
+const CATALOG_COUNT = INDEX_CATALOG_CODES.length;
 const NOW = 1_700_000_000;
 
 /** 有效行情缓存条目工厂。 */
@@ -92,8 +94,9 @@ test('execute derives fresh quoteSnapshot from cache', async () => {
     'quoteCache:sz000001': validCacheEntry('sz000001')
   });
   const result = await bootstrap.execute();
+  // 快照范围 = watchlist(2 fresh) ∪ 目录系数（无缓存 → missing）。
   assert.equal(result.quoteSnapshot.counts.fresh, 2);
-  assert.equal(result.quoteSnapshot.counts.missing, 0);
+  assert.equal(result.quoteSnapshot.counts.missing, CATALOG_COUNT);
   assert.equal(result.quoteSnapshot.results['sh600519' as StockCode].status, 'fresh');
   assert.equal(result.quoteSnapshot.results['sh600519' as StockCode].quote?.price, 100);
 });
@@ -101,9 +104,12 @@ test('execute derives fresh quoteSnapshot from cache', async () => {
 test('execute marks missing for codes without cache', async () => {
   const { bootstrap } = createService();
   const result = await bootstrap.execute();
-  assert.equal(result.quoteSnapshot.counts.missing, 2);
+  // watchlist 2 + 目录均无缓存。
+  assert.equal(result.quoteSnapshot.counts.missing, 2 + CATALOG_COUNT);
   assert.equal(result.quoteSnapshot.counts.fresh, 0);
   assert.equal(result.quoteSnapshot.results['sh600519' as StockCode].status, 'missing');
+  // 目录指数在快照中占位（指数条冷启动即从快照渲染 '--'）
+  assert.equal(result.quoteSnapshot.results['sh000001' as StockCode].status, 'missing');
 });
 
 test('execute marks cached (stale within 7 days) for older entries', async () => {

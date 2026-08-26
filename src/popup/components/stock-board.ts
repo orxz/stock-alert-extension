@@ -6,6 +6,7 @@
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { BoardViewModel } from '../view-models.js';
 import type { StockCode } from '../../domain/brands.js';
+import type { TrendPoint } from '../../domain/index.js';
 import { emitPopupEvent } from './events.js';
 import './stock-grid.js';
 import './stock-table.js';
@@ -40,6 +41,8 @@ export class StockBoardElement extends HTMLElement {
   /** 惰性创建：只有被激活过的视图才会存在。 */
   private gridEl: StockGridElement | null = null;
   private tableEl: StockTableElement | null = null;
+  /** hover 迷你分时 loader（AppShell 注入；转发 grid/table）。 */
+  private _trendsLoader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null = null;
 
   private connection: AbortController | undefined;
   /** 当前挂载的视图模式；null 表示 loading/error/empty 态（无数据视图）。 */
@@ -83,6 +86,13 @@ export class StockBoardElement extends HTMLElement {
 
   get viewModel(): BoardViewModel | null {
     return this._viewModel;
+  }
+
+  /** 注入 hover 迷你分时数据源；转发给 table 与 grid（后者再下发到各 card）。 */
+  setTrendsLoader(loader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null): void {
+    this._trendsLoader = loader;
+    if (this.tableEl) this.tableEl.setTrendsLoader?.(loader);
+    if (this.gridEl) this.gridEl.setTrendsLoader?.(loader);
   }
 
   set viewModel(value: BoardViewModel) {
@@ -195,9 +205,11 @@ export class StockBoardElement extends HTMLElement {
 
     if (mode === 'list') {
       this.tableEl ??= document.createElement('stock-table') as StockTableElement;
+      this.tableEl.setTrendsLoader?.(this._trendsLoader);
       this.append(this.tableEl);
     } else {
       this.gridEl ??= document.createElement('stock-grid') as StockGridElement;
+      this.gridEl.setTrendsLoader?.(this._trendsLoader);
       this.append(this.gridEl);
     }
     this.scrollTop = this.scrollOffsets[mode];

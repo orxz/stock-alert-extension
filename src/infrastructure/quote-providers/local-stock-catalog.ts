@@ -40,7 +40,16 @@ export const LOCAL_STOCK_CATALOG: readonly StockSearchResult[] = [
   { code: code('sh601633'), name: '长城汽车', pinyin: 'ccqc', tags: [] },
   { code: code('sh600009'), name: '上海机场', pinyin: 'shjc', tags: [] },
   { code: code('sz000002'), name: '万科A', pinyin: 'wka', tags: [] },
-  { code: code('sh600585'), name: '海螺水泥', pinyin: 'hlsn', tags: [] }
+  { code: code('sh600585'), name: '海螺水泥', pinyin: 'hlsn', tags: [] },
+  // 大盘指数（v2.1）：远端搜索降级时也可搜到指数，tags 标记供 UI 区分。
+  { code: code('sh000001'), name: '上证指数', pinyin: 'szzs', tags: ['指数'] },
+  { code: code('sz399001'), name: '深证成指', pinyin: 'szcz', tags: ['指数'] },
+  { code: code('sz399006'), name: '创业板指', pinyin: 'cybz', tags: ['指数'] },
+  { code: code('sh000300'), name: '沪深300', pinyin: 'hs300', tags: ['指数'] },
+  { code: code('sh000688'), name: '科创50', pinyin: 'kc50', tags: ['指数'] },
+  { code: code('sh000016'), name: '上证50', pinyin: 'sz50', tags: ['指数'] },
+  { code: code('sh000905'), name: '中证500', pinyin: 'zz500', tags: ['指数'] },
+  { code: code('bj899050'), name: '北证50', pinyin: 'bz50', tags: ['指数'] }
 ];
 
 /**

@@ -38,6 +38,9 @@ export type AppAction =
   | { readonly type: 'view/clearSelection' }
   | { readonly type: 'view/theme'; readonly theme: 'dark' | 'light' }
   | { readonly type: 'view/columns'; readonly columns: UiColumnPreferences }
+  // 详情面板开关（纯 UI，图表数据由面板组件自治拉取）
+  | { readonly type: 'view/detailOpen'; readonly code: StockCode; readonly name: string }
+  | { readonly type: 'view/detailClose' }
   // dialog search（独立于工具栏过滤，避免对话框搜索时后台列表跳动）
   | { readonly type: 'view/dialogSearchKeyword'; readonly keyword: string }
   | { readonly type: 'view/dialogSearchResults'; readonly results: readonly StockSearchResult[] }

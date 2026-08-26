@@ -15,6 +15,7 @@ import type {
   StockSearchResult
 } from '../domain/index.js';
 import { DEFAULT_BOARD_CONFIG } from '../domain/portfolio.js';
+import { INDEX_CATALOG } from '../domain/index-quote.js';
 import type { ColumnKey } from './ui-preferences.js';
 
 /** 单只股票卡片视图模型。 */
@@ -155,6 +156,18 @@ export function closedPopover(): PopoverViewModel {
   return { open: false, kind: null, anchorId: null, columnPanel: null, stockActions: null };
 }
 
+/** 详情面板视图模型（纯状态开关：code+name 供标题与图表拉取）。 */
+export interface DetailPanelViewModel {
+  readonly open: boolean;
+  readonly code: StockCode | null;
+  readonly name: string;
+}
+
+/** 关闭态。 */
+export function closedDetailPanel(): DetailPanelViewModel {
+  return { open: false, code: null, name: '' };
+}
+
 /** 行情刷新状态视图模型。 */
 export interface QuoteStatusViewModel {
   readonly status: 'idle' | 'loading' | 'success' | 'error';
@@ -164,6 +177,77 @@ export interface QuoteStatusViewModel {
   readonly missingCount: number;
   readonly lastRefreshTime: string;
   readonly deferredUntil: string;
+}
+
+/**
+ * 固定指数条单只指数视图模型。
+ *
+ * priceHidden 不掩码指数条：价格隐藏是保护个人持仓盈亏的隐私功能，
+ * 大盘点位是公共市场信息，与用户资产无关。
+ */
+export interface IndexStripItemViewModel {
+  readonly code: StockCode;
+  readonly name: string;
+  /** 点位展示文本（两位小数）；无行情 '--'。 */
+  readonly displayPrice: string;
+  /** 涨跌幅展示文本（带符号 + 百分号）；无行情 '--'。 */
+  readonly displayChangePercent: string;
+  /** 涨跌趋势（着色）：up 红跌涨、down 绿、flat 中性、none 无行情。 */
+  readonly trend: 'up' | 'down' | 'flat' | 'none';
+  /** 缓存态标签（cached → '延迟'，指数条不做 stale 高亮，仅文本提示）。 */
+  readonly staleLabel: string;
+}
+
+/** 固定指数条视图模型：目录顺序（上证/深成/创业板/科创50），条目恒为目录全集。 */
+export interface IndexStripViewModel {
+  readonly items: readonly IndexStripItemViewModel[];
+}
+
+/** 无行情时的指数条视图模型（bootstrap 前的骨架）。 */
+export function emptyIndexStrip(): IndexStripViewModel {
+  return {
+    items: INDEX_CATALOG.map((entry) => ({
+      code: entry.code,
+      name: entry.name,
+      displayPrice: '--',
+      displayChangePercent: '--',
+      trend: 'none' as const,
+      staleLabel: ''
+    }))
+  };
+}
+
+/**
+ * 从行情快照投影固定指数条：目录为顺序真相，快照仅为数据源。
+ * 行情字段在解析层已被 projectIndexQuote 剔除（PE/PB/涨跌停），此处只做展示投影。
+ */
+export function toIndexStrip(snapshot: QuoteSnapshot): IndexStripViewModel {
+  return {
+    items: INDEX_CATALOG.map((entry) => {
+      const result: QuoteResult | undefined = snapshot.results[entry.code];
+      const quote = result?.quote ?? null;
+      if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
+        return {
+          code: entry.code,
+          name: entry.name,
+          displayPrice: '--',
+          displayChangePercent: '--',
+          trend: 'none' as const,
+          staleLabel: ''
+        };
+      }
+      const pct = Number.isFinite(quote.changePercent) ? quote.changePercent : null;
+      const trend = pct === null || pct === 0 ? 'flat' : pct > 0 ? 'up' : 'down';
+      return {
+        code: entry.code,
+        name: entry.name,
+        displayPrice: quote.price.toFixed(2),
+        displayChangePercent: pct === null ? '--' : `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%`,
+        trend,
+        staleLabel: result?.status === 'cached' ? '延迟' : ''
+      };
+    })
+  };
 }
 
 /** 无障碍实时区域视图模型（toast / 状态播报）。 */
@@ -369,6 +453,8 @@ export interface AppViewModel {
   readonly currentGroupId: GroupId;
   readonly searchKeyword: string;
   readonly header: HeaderViewModel;
+  readonly indexStrip: IndexStripViewModel;
+  readonly detail: DetailPanelViewModel;
   readonly groupTabs: readonly GroupTabViewModel[];
   readonly board: BoardViewModel;
   readonly toolbar: ToolbarViewModel;

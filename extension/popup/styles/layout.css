@@ -1,7 +1,7 @@
 /* ============================================================================
    几何 —— 固定 420×560
    ============================================================================
-   44 (Header) + 38 (Tabs) + 40 (Toolbar) + 408 (Board) + 30 (Status) = 560。
+   44 (Header) + 56 (IndexStrip 2×2) + 38 (Tabs) + 40 (Toolbar) + Board + 30 (Status) = 560。
    Board 是 flex:1 的余量项——改动其余任何一条的高度，Board 会自动吸收，
    但这行注释必须跟着改：它是这份纵向契约唯一的书面记录。
    Board 是**唯一**纵向滚动容器；body 与 stock-app 绝不滚动。
@@ -28,10 +28,53 @@ stock-app {
   width: 420px;
   height: 560px;
   overflow: hidden;
+  /* 详情面板（chart-detail-panel）绝对定位上下文。 */
+  position: relative;
 }
 
 stock-app[hidden] {
   display: none;
+}
+
+/* 固定大盘指数条：56px 常驻条（2×2 网格——4 只指数在 420px 单行会把
+   点位/涨跌幅挤到只剩名称；两行布局让每只指数有 ~200px 横向空间）。 */
+index-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  height: 56px;
+  flex: 0 0 56px;
+  padding: var(--sp-1) var(--sp-3);
+  overflow: hidden;
+}
+
+.index-chip {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  min-width: 0;
+  white-space: nowrap;
+  /* 数字优先不被挤没：名称/点位/涨跌幅不收缩，迷你图作为可收缩项尾部兜底。 */
+}
+
+.index-chip-name {
+  flex-shrink: 0;
+}
+
+.index-chip-price,
+.index-chip-pct {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.index-chip-spark {
+  width: 36px;
+  height: 18px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* 行情区：唯一纵向滚动区 */
