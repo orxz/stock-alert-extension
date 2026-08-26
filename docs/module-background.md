@@ -18,7 +18,7 @@ src/background/
 ├── main.ts                    — 组合根：createRuntimeDependencies() + 同步注册 5 个 Chrome listener
 ├── initialization-barrier.ts  — 三态可重试初始化屏障（idle → running → ready）
 ├── router.ts                  — callback Router：将 onMessage 回调语义适配到异步 dispatch 流水线
-├── rpc-handlers.ts            — exhaustive handler 表：13 个 RpcMethod 各映射到一个 service 调用
+├── rpc-handlers.ts            — exhaustive handler 表：14 个 RpcMethod 各映射到一个 service 调用
 ├── scheduler.ts               — 行情调度器：safety-before-work + exact-after-work + single-flight
 └── badge-presenter.ts         — 纯 Badge/Tooltip 投影函数（零副作用）
 
@@ -66,12 +66,13 @@ Chrome listener（顶层同步注册）：
 - **错误映射**：`AppError`（结构化错误模型）保留 `code/message/retryable`；其余未知错误映射为 `INTERNAL`，不泄漏 stack。
 - **诊断 span**：每个请求发射 `rpc` scope 的 `dispatch:start` / `dispatch:end` span，含 requestId 与耗时。
 
-`rpc-handlers.ts` 的 `handlers` 对象用 `satisfies { [M in RpcMethod]: RpcHandler<M> }` 编译期强制穷尽性：注册表（`src/protocol/registry.ts`）新增方法时此处漏处理即编译失败——单一真相源保持同步。13 个方法映射：
+`rpc-handlers.ts` 的 `handlers` 对象用 `satisfies { [M in RpcMethod]: RpcHandler<M> }` 编译期强制穷尽性：注册表（`src/protocol/registry.ts`）新增方法时此处漏处理即编译失败——单一真相源保持同步。14 个方法映射：
 
 ```
 app:bootstrap        → BootstrapService.execute()
 quote:refresh        → QuoteService.refresh(codes, { force })
 stock:search         → SearchService.search(query)
+chart:load           → ChartService.load(code, kind, period)  — 分时/K线（v2.2）
 stock:add/remove/move/setPinned/setOrder → PortfolioCommands.*
 group:create/rename/delete/setOrder      → PortfolioCommands.*
 preferences:patch                       → PortfolioCommands.patchPreferences

@@ -1,6 +1,6 @@
 # 股票提醒助手 — 功能说明书与 API 集成指南
 
-> 版本：v2.0.1 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-08-07
+> 版本：v2.6.0 ｜ 平台：Chrome 浏览器扩展（Manifest V3） ｜ 文档更新日期：2026-08-26
 >
 > 本文档是面向开发者的功能规格与 API 集成指南。整体架构概览见 [项目架构.md](项目架构.md)；开发规范唯一权威见根目录 [AGENTS.md](../AGENTS.md)；行情模块的 provider 实现细节见 [module-quotes.md](module-quotes.md)。
 
@@ -20,10 +20,10 @@
 
 「股票提醒助手」是一款基于 Chrome Manifest V3 的浏览器扩展，为用户提供自选股分组管理、实时行情看板、智能搜索补全和后台 Badge/Tooltip 功能。插件不使用任何远程代码，所有逻辑均在本地执行。
 
-- **版本**：v2.0.1
+- **版本**：v2.6.0
 - **Manifest 版本**：V3
 - **权限**：`storage`、`alarms`
-- **主机权限**：`https://push2.eastmoney.com/*`、`https://searchapi.eastmoney.com/*`、`https://qt.gtimg.cn/*`
+- **主机权限**：`https://push2.eastmoney.com/*`、`https://searchapi.eastmoney.com/*`、`https://qt.gtimg.cn/*`、`https://push2his.eastmoney.com/*`（历史行情——分时/K线）
 - **CSP 策略**：`script-src 'self'; object-src 'self'`
 - **涨跌色惯例**：红色 = 涨（`#E74C3C`），绿色 = 跌（`#27AE60`），灰色 = 平（`#95A5A6`）
 
@@ -46,10 +46,10 @@ Infrastructure (Chrome/Storage/HTTP)  →  implements  →  Application Ports
 
 ```
 src/
-├── domain/        — 领域模型（Stock/Group/Quote/BoardConfig + 规则 + 格式化），纯 ES2022
-├── protocol/      — RPC v2 单一注册表（13 方法 / payload / result / 校验器）
-├── application/   — 用例（Bootstrap / PortfolioCommands / QuoteService / SearchService）+ Ports
-├── infrastructure/— Chrome Storage 适配器 + StorageCoordinator + Quote/Search Providers
+├── domain/        — 领域模型（Stock/Group/Quote/BoardConfig/Chart/涨跌停规则/指数目录 + 规则 + 格式化），纯 ES2022
+├── protocol/      — RPC v2 单一注册表（14 方法 / payload / result / 校验器）
+├── application/   — 用例（Bootstrap / PortfolioCommands / QuoteService / SearchService / ChartService）+ Ports
+├── infrastructure/— Chrome Storage 适配器 + StorageCoordinator + Quote/Search/Chart Providers
 ├── background/    — SW 组合根：listener 注册 + 初始化屏障 + Router + Scheduler + Badge
 └── popup/         — 不可变 Store + Reducer + Commands + Light DOM Web Components
 ```
@@ -83,6 +83,8 @@ src/
 
 **双视图**：网格卡片 / 数据列表，每分组独立保存配置（`boardConfig`）。
 
+**固定指数条**（v2.1+/v2.6）：顶部常驻 上证指数 / 深证成指 / 创业板指 / 科创50（2×2 网格），每只显示 名称 + 点位 + 涨跌幅 + 迷你趋势图；点击指数打开详情面板（分时/K线）。目录真相在 `domain/index-quote.ts` 的 `INDEX_CATALOG`，不占分组/排序体系；指数也可经搜索加入自选（`normalizeStockCode` 支持 `sh000xxx` / `sz399xxx` / `bj899xxx` 指数段）。
+
 **默认形态**：全新用户打开即 **深色 + 网格**。
 
 **自动刷新**：
@@ -100,11 +102,12 @@ src/
 
 状态栏汇总显示「实时 N · 缓存 M」。**绝不生成模拟价格**。
 
-### 3.3 详情面板（v2.0.1）
+### 3.3 详情面板（v2.0.1 悬停 16 项 + v2.2 点击分时/K线）
 
-悬停列表行 / 卡片，详情数据从 5 项扩展到 **16 项**双栏布局：
+- **悬停浮层**（v2.0.1）：鼠标停在行/卡片上，显示 **16 项**双栏详情 + **迷你分时走势**（v2.5.2，面积渐变，首次 hover 按需拉取 + 缓存）。
+- **点击详情面板**（v2.2）：点击行/卡片/指数 chip 打开覆盖面板——**分时图**（价格线 + 当日均价 + 昨收基准 + 量能副图）、**日K/周K/月K**（蜡烛 + MA5/10/20 + 量能副图 + 图例）、十字光标悬浮读数、最新价标签；canvas 自绘零依赖，物理分辨率按容器实际尺寸 × DPR（防拉伸发糊），量能副图高度为总高 22%（钳 48~96px）。数据源 `push2his.eastmoney.com`（`chart:load` RPC，single-flight + 4s 超时，失败显示错误态，绝不生成模拟曲线）。
 
-现价、涨跌额、涨跌幅、今开、昨收、最高、最低、成交量、成交额、换手率、振幅、量比、市盈率、市净率、总市值、流通市值、涨停价、跌停价。
+16 项字段：今开、昨收、最高、最低、成交量、成交额、涨跌额、涨跌幅、换手率、振幅、量比、市盈率、市净率、总市值、流通市值、涨停价、跌停价。
 
 ### 3.4 搜索与添加股票
 
@@ -123,6 +126,7 @@ v2.0.1 改名「管理持仓」——该模式的出口是全选 / 移动到分�
 ### 3.7 其他功能
 
 - **排序**：手动 / 涨跌幅 / 价格 / 成交额 / 自选时间，置顶与拖拽互不干扰
+- **涨跌停（v2.5.5）**：腾讯真值（[47]/[48]）优先；缺失时（东财批量接口不返回该字段）按交易所规则推导——昨收×板块幅度四舍五入到分：沪深主板 ±10%（ST ±5%）、创业板/科创板 ±20%、北交所 ±30%（规则表 `domain/limit-rule.ts`）。涨跌幅**幅度条按板块归一**（v2.6）
 - **价格隐藏**：投屏友好，价格类字段掩码 `****`
 - **虚拟滚动**：列表超过 50 只时启用 `content-visibility: auto`
 - **成交额单位以亿为主**：≥100 万为「X.X亿」，<100 万回退「X万」
@@ -181,14 +185,14 @@ v2.0.1 改名「管理持仓」——该模式的出口是全选 / 移动到分�
 
 **字段映射**：f2=现价 f3=涨跌幅 f4=涨跌额 f5=成交量 f6=成交额 f7=振幅 f8=换手率 f9=市盈率 f10=量比 f12=代码 f13=市场 f14=名称 f15=最高 f16=最低 f17=今开 f18=昨收 f20=总市值 f21=流通市值 f23=市净率
 
-> 涨停/跌停价**缺席**（该 endpoint 不提供，改用逐只接口会让 500 只变 500 次请求）。
+> 涨停/跌停价**缺席**（该 endpoint 不提供，改用逐只接口会让 500 只变 500 次请求）——v2.5.5 起由 `applyDerivedLimits` 按交易所规则推导兑底（腾讯真值优先），指数不适用。
 
 ### 5.2 东方财富搜索 API
 
 **端点**：`GET https://searchapi.eastmoney.com/api/suggest/get`
 
 - 参数：`input={关键词}&type=14&token=D43BF722C8E33BDC906FB84D85E326E8&count=15`
-- SecurityType 白名单：`{1,2,25,27}`（沪A/深A/科创板/北交所）
+- SecurityType 白名单：`{1,2,25,27}`（沪A/深A/科创板/北交所）+ `5`（指数，v2.1 起仅放行 000/399/899 交易所指数段）
 
 ### 5.3 腾讯行情 API（备源，v2.0.1 起）
 
@@ -196,7 +200,7 @@ v2.0.1 改名「管理持仓」——该模式的出口是全选 / 移动到分�
 
 - URL 直接拼接带前缀的代码，无需 secids 转换
 - 响应：GBK 文本，逐行 `v_<code>="..."`，字段以 `~` 分隔（88 槽位）
-- **涨跌停价仅腾讯源提供**：[1]=名称 [3]=现价 [4]=昨收 [5]=今开 [31]=涨跌额 [32]=涨跌幅 [33]=最高 [34]=最低 [36]=成交量 [38]=换手率 [39]=市盈率 [43]=振幅 [44]=流通市值 [45]=总市值 [46]=市净率 [47]=涨停价 [48]=跌停价 [49]=量比
+- **涨跌停：腾讯真值优先，缺失按规则推导**（v2.5.5）：[1]=名称 [3]=现价 [4]=昨收 [5]=今开 [31]=涨跌额 [32]=涨跌幅 [33]=最高 [34]=最低 [36]=成交量 [38]=换手率 [39]=市盈率 [43]=振幅 [44]=流通市值 [45]=总市值 [46]=市净率 [47]=涨停价 [48]=跌停价 [49]=量比（[47]/[48] 非正值（指数 -1 哨兵）过滤后由 `applyDerivedLimits` 按昨收×板块幅度推导）
 
 **备源选型理由**：原新浪 `hq.sinajs.cn` 自 2022 起强制 Referer 校验，MV3 SW 无法设置（forbidden header），实测固定 403。腾讯无此限制。
 
@@ -222,7 +226,7 @@ v2.0.1 改名「管理持仓」——该模式的出口是全选 / 移动到分�
 
 ### 6.2 主机权限
 
-仅三个数据源域名：`push2.eastmoney.com` / `searchapi.eastmoney.com` / `qt.gtimg.cn`
+仅四个数据源域名：`push2.eastmoney.com` / `searchapi.eastmoney.com` / `qt.gtimg.cn` / `push2his.eastmoney.com`（历史行情）
 
 ### 6.3 CSP 与代码安全
 
@@ -243,6 +247,7 @@ v2.0.1 改名「管理持仓」——该模式的出口是全选 / 移动到分�
 
 | 版本 | 要点 |
 |------|------|
+| **v2.6.0** | 大盘指数条（上证/深成/创业板/科创50 + 迷你趋势）；指数可进自选；详情面板分时 + 日/周/月K线（量能副图、十字光标、MA 均线）；hover 迷你分时；涨跌停规则推导 + 幅度条板块归一；指数条 2×2 网格与图表分辨率修复 |
 | **v2.0.1** | 列设置修复、详情面板（5→16 项）、「管理持仓」改名、成交额以亿为主、行情字段扩展、备源改腾讯、f51/f52 修正 |
 | **v2.0.0** | TypeScript 分层架构重建、单一 StorageCoordinator、RPC v2、不可变 Store + Reducer、架构边界门禁 |
 | v1.2.1 | 「全部」计算视图、schema v2 迁移、行情三态、串行写入、E2E + CI |

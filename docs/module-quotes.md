@@ -4,7 +4,7 @@
 
 ## overview
 
-v2.0.1 行情数据层按 Domain → Protocol → Application → Infrastructure 分层组织。Application 层的 `QuoteService`（`src/application/quotes/quote-service.ts`）是唯一编排者，负责批量、并发、超时、deadline、双源降级、缓存策略、退避与诊断；底层 HTTP 传输/解析被隔离在 Infrastructure 层的两个可注入 Provider（东财主源 + 腾讯备源），通过 `QuoteProvider` 端口对接。Provider 是纯传输/解析适配器，不做缓存、不做 UI、不持有状态。支持沪深主板、科创板、创业板、北交所全市场股票。
+v2.0.1 行情数据层按 Domain → Protocol → Application → Infrastructure 分层组织。Application 层的 `QuoteService`（`src/application/quotes/quote-service.ts`）是唯一编排者，负责批量、并发、超时、deadline、双源降级、缓存策略、退避与诊断；底层 HTTP 传输/解析被隔离在 Infrastructure 层的两个可注入 Provider（东财主源 + 腾讯备源），通过 `QuoteProvider` 端口对接。Provider 是纯传输/解析适配器，不做缓存、不做 UI、不持有状态。支持沪深主板、科创板、创业板、北交所全市场股票及交易所指数（指数并入刷新批次，见 §指数与历史行情）。
 
 ## architecture_design
 
@@ -212,9 +212,11 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 
 东财 push2 的 fields 参数必须包含 `f13`，否则响应不返回市场标识，无法区分深市（sz）与北交所（bj）。`parseEastmoney` 用 `f13===1?'sh':/^[489]\d{5}$/.test(code)?'bj':'sz'` 兜底——**f13=0 时按代码首位识别北交所**（`4xx/8xx/9xx` → bj，其余 → sz）。
 
-### f51/f52 不是涨跌停价（v2.0.1 实网核对修正）
+### f51/f52 不是涨跌停价 + 涨跌停规则推导（v2.0.1 实网核对 + v2.5.5 推导兜底）
 
-东财批量接口 `ulist.np/get` 上的 f51/f52 是**无关量纲**（实测 sh600519 f51=2715 亿、sz000001 f51=0），只有逐只的 `stock/get` 上才是涨跌停价。照搬会把「涨停价」渲染成天文数字。已从请求字段与解析中移除；涨跌停仅由腾讯备源提供。
+东财批量接口 `ulist.np/get` 上的 f51/f52 是**无关量纲**（实测 sh600519 f51=2715 亿、sz000001 f51=0），只有逐只的 `stock/get` 上才是涨跌停价。照搬会把「涨停价」渲染成天文数字。已从请求字段与解析中移除。
+
+**涨跌停来源链（v2.5.5 起）**：腾讯备源 [47]/[48] 真值优先；缺失时（主源路径 / 腾讯哨兵 0、-1 被 `tencentLimitPrice` 过滤）由解析层 `applyDerivedLimits` 按交易所规则推导——昨收×板块幅度四舍五入到分（沪深主板 ±10%、ST ±5%、创业/科创 ±20%、北交 ±30%；规则表 `domain/limit-rule.ts`，指数不适用）。推导是确定性公式而非模拟行情：同一昨收必得同一结果，可独立复算。
 
 ### price>0 不变量
 
@@ -251,3 +253,19 @@ interface SessionStatePort { readQuoteBackoff(): Promise<QuoteBackoffState>; wri
 - `enrichQuote`/`parseEastmoney`/`parseTencent` 是纯函数，不修改原始数据，返回新对象。
 - Provider 实现接收注入的 `fetch`，不直接引用 `globalThis.fetch`；`CancellationToken` 桥接到 `AbortController` 在 Provider 内完成。
 - 诊断事件 `version` 恒为 `'2.0.0'`、`scope` 恒为 `'quote'`；span `end` 必须被调用（exactly-once 保证幂等）。
+
+## 指数与历史行情（v2.1 / v2.2 / v2.5.5）
+
+### 固定指数目录（INDEX_CATALOG）
+
+`domain/index-quote.ts` 的 `INDEX_CATALOG` 是固定指数条目录的唯一真相（上证指数 / 深证成指 / 创业板指 / 科创50）。`QuoteService.refresh` 无条件把目录代码并入请求集合（与股票混合同批，东财批量接口实测支持指数 secid），返回快照始终含指数数据；空自选股时仍刷新目录（v2.1 起「空自选股不请求网络」收窄为「不因自选股触发请求」）。行情缓存的保留集 = watchlist ∪ 目录（写入校验 / 孤儿清理 / bootstrap 读取三处共用）。
+
+指数行经 `projectIndexQuote` 在解析层剔除 pe/pb/limitUp/limitDown（东财指数 PE/PB 上报 0、腾讯涨跌停上报 -1，两源 PE 口径矛盾——透出即假值）。
+
+### 历史行情（ChartService + EastmoneyChartProvider）
+
+分时/K线走独立链路（不进 QuoteService 的周期/缓存体系）：
+
+- `EastmoneyChartProvider`（`src/infrastructure/quote-providers/eastmoney-chart-provider.ts`）：`push2his.eastmoney.com` 的 `trends2/get`（分时，ndays=1）与 `kline/get`（日/周/月K，klt=101/102/103，lmt=250）；secid 映射与主源一致（sh→1. / sz/bj→0.）。
+- `ChartService`（`src/application/charts/chart-service.ts`）：single-flight（code|kind|period 归并）+ 4s 超时；`isUsableTrends`/`isUsableKlines` 可用性校验，不可用即报错——**绝不生成模拟曲线**；不做后台周期、不做持久缓存（一次性明细）。
+- 字段实证：trends2 `f51-f58` 与 kline `f51-f61` 语义取自实网样本（见 `provider-parsers.ts` 注释与测试 fixture）；`f59` 涨跌幅 ≠ `f58` 振幅（下标防错断言）。

@@ -3,11 +3,11 @@
 [![CI](https://github.com/orxz/stock-alert-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/ci.yml)
 [![Release](https://github.com/orxz/stock-alert-extension/actions/workflows/release.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/release.yml)
 [![CodeQL](https://github.com/orxz/stock-alert-extension/actions/workflows/codeql.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/codeql.yml)
-[![Version](https://img.shields.io/badge/version-v2.0.1-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.0.1)
+[![Version](https://img.shields.io/badge/version-v2.6.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.6.0)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](extension/manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动角标。覆盖**沪深主板、科创板、创业板、北交所**，数据只存本地，行情状态如实标注（实时 / 缓存 / 缺失），绝不生成模拟价格。
+A 股自选股看板 Chrome 扩展：大盘指数条、分组管理、实时行情、分时/K线图表。覆盖**沪深主板、科创板、创业板、北交所**及主要大盘指数，数据只存本地，行情状态如实标注（实时 / 缓存 / 缺失），绝不生成模拟价格。
 
 | 网格视图 | 列表视图 | 添加股票 |
 |:---:|:---:|:---:|
@@ -15,11 +15,14 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 ## 核心功能
 
+- **大盘指数条** — 上证指数 / 深证成指 / 创业板指 / 科创50 常驻顶部（2×2 网格），每只带迷你走势图；点击任意指数即看完整分时与K线；搜索还能把指数加进自选
+- **分时与K线** — 点击股票/指数打开详情面板：分时图（价格线 + 均价 + 昨收基准 + 量能副图）、日K/周K/月K（蜡烛 + MA5/10/20 + 量能副图）、十字光标悬浮读数；hover 浮层另带迷你分时
+- **涨跌停** — 腾讯真值优先，缺失时按交易所规则推导（主板 ±10%、ST ±5%、创业/科创 ±20%、北交 ±30%），涨跌幅幅度条按板块归一
 - **多分组看板** — 最多 19 个自定义分组（+「全部」默认视图），拖拽排序；股票加入任意分组后始终可见
 - **可信行情** — 东方财富主源 + 腾讯备源，失败保留 7 天本地缓存；实时 / 缓存（旧 HH:MM）/ 缺失（`--`）三态明确
 - **双视图 + 排序** — 网格卡片 / 数据列表，按涨跌幅、价格、成交额、自选时间排序，置顶与手动拖拽互不干扰
 - **排序联动角标** — 工具栏图标实时显示排序第一只股票的涨跌幅（红涨绿跌，缓存灰显），悬停查看前 5 只
-- **智能搜索** — 代码 / 拼音 / 中文名称联想补全，API 失败时自动降级本地搜索
+- **智能搜索** — 代码 / 拼音 / 中文名称联想补全（含指数），API 失败时自动降级本地搜索
 - **实用细节** — 自定义 5 列、价格隐藏（投屏友好）、盘中 10 秒 / 盘外 5 分钟自适应刷新、虚拟滚动
 
 ## 安装
@@ -27,12 +30,12 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 ### Chrome 商店（推荐）
 
 <a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
-  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v2.0.1-blue?logo=google-chrome" alt="Chrome Web Store">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v2.6.0-blue?logo=google-chrome" alt="Chrome Web Store">
 </a>
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v2.0.1.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v2.6.0.zip` 并解压
 2. 打开 `chrome://extensions`，启用「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压目录
 
@@ -42,9 +45,9 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 ### 三分钟上手
 
-1. **添加股票** — 点击 `＋`，输入代码（`600519`）、拼音（`mt`）或名称（`茅台`），联想补全后确认；市场前缀自动识别（600→沪、300→创业板、920→北交所等）
+1. **添加股票** — 点击 `＋`，输入代码（`600519`）、拼音（`mt`）或名称（`茅台`），联想补全后确认；市场前缀自动识别（600→沪、300→创业板、920→北交所等）；指数同理（搜「上证指数」或 `sh000001`）
 2. **组织分组** — 底部分组栏 `＋` 新建分组（如「持仓」「观察」）；选中股票 → 批量模式 → 移动到分组
-3. **看行情** — 工具栏切换排序方式，角标自动跟随显示第一只股票的涨跌幅；点状态栏 🔄 手动刷新
+3. **看行情** — 顶部指数条看大盘方向；点击股票/指数卡片看分时与K线；悬停行/卡片看 16 项详情 + 迷你走势；工具栏切换排序方式，角标自动跟随显示第一只股票的涨跌幅；点状态栏 🔄 手动刷新
 
 ### 操作速查
 
@@ -57,6 +60,8 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 | 自定义列 | 工具栏 ⚙（勾选 + 拖拽调序） |
 | 隐藏价格 | 工具栏 👁 |
 | 手动刷新 | 底部状态栏 🔄 |
+| 看分时 / K线 | 点击任意股票行 / 卡片 / 指数条 |
+| 悬停详情 | 鼠标停在行 / 卡片上（16 项指标 + 迷你走势） |
 
 ### 看懂行情状态
 
@@ -72,6 +77,7 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 
 | 版本 | 要点 |
 |------|------|
+| **v2.6.0** | 大盘指数条（上证/深成/创业板/科创50 + 迷你走势，点击进详情）；指数可进自选；详情面板分时 + 日/周/月K线（量能副图、十字光标、MA 均线，canvas 自绘零依赖）；hover 迷你分时；涨跌停规则推导（真值优先 + 板块幅度归一）；技术债清偿（迷你图绘制单一真相） |
 | **v2.0.1** | 列设置修复（排序/卡片视图生效/取消弹回）、详情面板丰富（5→16 项双栏）、「多选」改名「管理持仓」、成交额以亿为主、行情字段扩展（换手率/振幅/量比/市盈率/市净率/市值/涨跌停）；实网核对修正东财 f51/f52 非涨跌停，备源改为腾讯 |
 | **v2.0.0** | 基础架构重建：TypeScript + 原生 ESM + Light DOM Web Components；单一 StorageCoordinator 串行临界区 + 内容 revision 乐观并发；版本化 RPC v2（requestId / expectedRevision / 结构化错误）；可重试初始化屏障 + 持久化退避；不可变 Store + 语义 Commands + uncertain 对账；架构边界 / 无障碍 / 性能 / 容量门禁 |
 | **v1.2.1** | 「全部」改计算视图；schema v2 自动迁移（含备份）；行情三态如实标注；缓存灰显角标；串行写入防数据丢失；E2E + CI 质量门禁；移除 Demo 模拟价格 |
@@ -87,12 +93,13 @@ A 股自选股看板 Chrome 扩展：分组管理、实时行情、排序联动�
 | 优先级 | 来源 | 说明 |
 |:--:|------|------|
 | 1 | 东方财富 `push2.eastmoney.com` | 主源，JSON，实时行情 |
-| 2 | 腾讯 `qt.gtimg.cn` | 备源 |
-| 3 | 本地缓存 `quoteCache:*` | 双源失败时保留 7 天，过期或损坏显示 `--` |
+| 2 | 腾讯 `qt.gtimg.cn` | 备源（含涨停/跌停真值） |
+| 3 | 东方财富 `push2his.eastmoney.com` | 历史行情（分时/K线，详情面板与迷你图） |
+| 4 | 本地缓存 `quoteCache:*` | 双源失败时保留 7 天，过期或损坏显示 `--` |
 
 ## 隐私
 
-自选股、分组与看板配置仅保存在本地浏览器，开发者不收集不上传。查询行情时仅把股票代码发送给行情服务商，不包含姓名、邮箱、浏览记录或分组名称。详情见 [隐私政策](privacy/index.html)。
+自选股、分组与看板配置仅保存在本地浏览器，开发者不收集不上传。查询行情时仅把股票代码发送给行情服务商，不包含姓名、邮箱、浏览记录或分组名称。详情见 [隐私政策](extension/privacy/index.html)。
 
 ## 开发
 
@@ -112,12 +119,12 @@ npm run release:verify  # 发布验证（含回滚 + 确定性构建）
 
 | 目录 | 职责 |
 |------|------|
-| `src/domain/` | 领域模型（StockCode / Group / Quote / BoardConfig / 规则 / 格式化），纯 ES2022 |
-| `src/protocol/` | RPC v2 单一注册表（方法 / payload / result / 运行时校验） |
-| `src/application/` | 用例（Bootstrap / Portfolio Commands / QuoteService / SearchService）+ Ports |
-| `src/infrastructure/` | Chrome Storage 适配器 + StorageCoordinator + Quote/Search Providers |
+| `src/domain/` | 领域模型（StockCode / Group / Quote / BoardConfig / Chart / 涨跌停规则 / 指数目录 / 格式化），纯 ES2022 |
+| `src/protocol/` | RPC v2 单一注册表（14 方法 / payload / result / 运行时校验） |
+| `src/application/` | 用例（Bootstrap / Portfolio Commands / QuoteService / SearchService / ChartService）+ Ports |
+| `src/infrastructure/` | Chrome Storage 适配器 + StorageCoordinator + Quote/Search/Chart Providers |
 | `src/background/` | Service Worker：同步 listener 注册 + 可重试初始化屏障 + Router + Scheduler + Badge |
-| `src/popup/` | 不可变 Store + Reducer + Selectors + Commands + Light DOM Web Components |
+| `src/popup/` | 不可变 Store + Reducer + Selectors + Commands + Light DOM Web Components（含 canvas 图表） |
 | `extension/` | 静态资源（manifest.json / popup.html / styles / icons / privacy） |
 | `build/extension/` | tsc 输出 + 静态资源复制的可加载扩展（gitignored） |
 

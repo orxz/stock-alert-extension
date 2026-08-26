@@ -2,7 +2,7 @@
 
 ## overview
 
-v2.0.0 将弹窗 UI 重写为 TypeScript + ESM 的单向数据流架构（`src/popup/`，`tsc` 输出到 `build/extension/runtime/popup/`，由 `extension/popup.html` 以 `<script type="module">` 加载）。Popup 是 MV3 下的一个组合根：自身不直接访问 `Storage` / `QuoteService`，所有读写在 SW 之间走 RPC v2 单一注册表（`src/protocol/registry.ts`，13 个方法）。分层依赖严格收敛为 `domain` → `protocol` → `popup` 内部；组件层只依赖 `domain` 类型 + `view-models` + 语义事件，**无 RPC / Store 依赖**。
+v2.0.0 将弹窗 UI 重写为 TypeScript + ESM 的单向数据流架构（`src/popup/`，`tsc` 输出到 `build/extension/runtime/popup/`，由 `extension/popup.html` 以 `<script type="module">` 加载）。Popup 是 MV3 下的一个组合根：自身不直接访问 `Storage` / `QuoteService`，所有读写在 SW 之间走 RPC v2 单一注册表（`src/protocol/registry.ts`，14 个方法）。分层依赖严格收敛为 `domain` → `protocol` → `popup` 内部；组件层只依赖 `domain` 类型 + `view-models` + 语义事件，**无 RPC / Store 依赖**。
 
 数据流：
 
@@ -135,10 +135,11 @@ pending → call → RpcUncertainError → uncertain → bootstrap/confirmed（�
 
 全部组件为 Light DOM Custom Elements（无 Shadow DOM、无虚拟 DOM、无框架），由 `define-elements.ts` 幂等注册：
 
-- **根组件 `stock-app`**：组合 `stock-header` / `group-tabs` / `stock-toolbar` / `stock-board` / `batch-toolbar` / `quote-status`，通过 `set viewModel(AppViewModel)` 接收单次渲染快照并分发给子组件。**仅 import domain types + view-models + 子组件，无 RPC/Store 依赖**。
+- **根组件 `stock-app`**：组合 `stock-header` / `index-strip`（大盘指数条）/ `group-tabs` / `stock-toolbar` / `stock-board` / `batch-toolbar` / `quote-status` / `chart-detail-panel`（分时/K线详情面板），通过 `set viewModel(AppViewModel)` 接收单次渲染快照并分发给子组件。**仅 import domain types + view-models + 子组件，无 RPC/Store 依赖**。
 - **语义事件**：子组件通过 `emitPopupEvent(target, type, detail)` 发出 `CustomEvent`（`bubbles: true, composed: true`），冒泡到 `stock-app` 根，由 `AppShell` 监听并路由。`PopupEventMap` 穷举全部事件：`group-select` / `group-order-request` / `stock-pin-request` / `stock-remove-request` / `stock-order-request` / `batch-move-request` / `view-mode-change` / `preferences-change` / `selection-mode-change` / `stock-toggle-select` / `search-keyword-change` / `dialog-open-request` / `column-panel-open-request` / `dialog-submit` / `dialog-close-request` / `stock-search-select` / `quote-refresh-request`。
 - **AbortController 生命周期**：每个组件持有 per-connection `AbortController`，`connectedCallback` 中 `abort()` 旧连接再建新的，所有 `addEventListener` 传 `{ signal }`，`disconnectedCallback` 后监听器自动清理。
 - **keyed update**：`updateKeyedChildren(container, values, keyOf, create, update)` 用 `data-key` 属性做最小化 DOM diff——按 key 复用已存在节点并 `update`，新增节点 `create` 并 `insertBefore` 维持顺序，未出现在新列表的旧节点 `remove`。列表组件（grid/table/tabs）统一用它。
+- **canvas 图表组件**（v2.2+）：`chart-detail-panel`（详情面板分时/K线，canvas 自绘 + 按容器实际分辨率 + 十字光标）、`sparkline.ts`（迷你走势公共绘制单一真相——面积渐变 + 涨跌色，被 stock-table / stock-card / index-strip 三处复用）、`detail-tooltip.ts`（悬停浮层翻转辅助）；图表数据经 AppShell 注入的 loader 直通 `chart:load` RPC，组件自治 loading/error/data 三态。
 - **无 innerHTML**：所有用户可见文本通过 `textContent` / 文本节点注入，价格掩码改变文本为 `****` 但保留 accessible name；`fresh/cached/missing` 有文本标签。
 
 ### app-shell.ts（应用外壳）
@@ -159,7 +160,7 @@ pending → call → RpcUncertainError → uncertain → bootstrap/confirmed（�
 - 原生 Light DOM Web Components（Custom Elements + `connectedCallback` / `disconnectedCallback`），无 Shadow DOM、无虚拟 DOM、无框架
 - 单向数据流：`Store(reducer)` 为唯一状态写入口，`selectors` 只读派生，组件通过 `set viewModel` 接收不可变快照
 - 语义事件总线：子组件 `CustomEvent(bubbles+composed)` → 根组件 → `AppShell` 路由
-- RPC v2：`CallbackRpcClient` 经 `chrome.runtime.sendMessage` → SW 单一注册表（13 方法：`app:bootstrap` / `quote:refresh` / `stock:search` + 10 个 mutation）
+- RPC v2：`CallbackRpcClient` 经 `chrome.runtime.sendMessage` → SW 单一注册表（14 方法：`app:bootstrap` / `quote:refresh` / `stock:search` / `chart:load` + 10 个 mutation）
 - AbortController 管理组件与 AppShell 的全部监听器生命周期
 - CSS 设计令牌系统（CSS Custom Properties，WCAG 2.1 AA），样式在 `extension/popup/styles/`
 - ARIA 无障碍：`role="region"` 看板、`app-live-region` 实时区域、`app-dialog-host` 焦点陷阱
