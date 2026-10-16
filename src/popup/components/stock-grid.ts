@@ -177,8 +177,14 @@ export class StockGridElement extends HTMLElement {
       overscanScreens: OVERSCAN_SCREENS
     });
 
-    if (this.topSpacer) this.topSpacer.style.height = `${window.beforeExtent}px`;
-    if (this.bottomSpacer) this.bottomSpacer.style.height = `${window.afterExtent}px`;
+    if (this.topSpacer) {
+      this.topSpacer.style.height = `${window.beforeExtent}px`;
+      this.topSpacer.hidden = window.beforeExtent === 0;
+    }
+    if (this.bottomSpacer) {
+      this.bottomSpacer.style.height = `${window.afterExtent}px`;
+      this.bottomSpacer.hidden = window.afterExtent === 0;
+    }
 
     const firstCard = window.startIndex * GRID_COLUMNS;
     const lastCard = Math.min(total, window.endIndex * GRID_COLUMNS);

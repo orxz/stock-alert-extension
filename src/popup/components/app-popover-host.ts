@@ -15,6 +15,13 @@ import type { StockActionMenuElement } from './stock-action-menu.js';
 
 /** 距视口边缘的最小留白（px），避免弹层被裁切。 */
 const VIEWPORT_MARGIN = 8;
+const CONTROLS = 'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+interface FocusedControl {
+  column?: string;
+  item?: string;
+  action?: string;
+}
 
 export class AppPopoverHostElement extends HTMLElement {
   private connection: AbortController | undefined;
@@ -23,6 +30,7 @@ export class AppPopoverHostElement extends HTMLElement {
   private panelEl: HTMLElement | null = null;
   private columnPanelEl: ColumnPanelElement | null = null;
   private actionMenuEl: StockActionMenuElement | null = null;
+  private anchorObserver: MutationObserver | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -51,12 +59,17 @@ export class AppPopoverHostElement extends HTMLElement {
       emitPopupEvent(this, 'popover-close-request', {});
     }, { signal });
 
+    window.addEventListener('scroll', () => this.reposition(), { capture: true, signal });
+    window.addEventListener('resize', () => this.reposition(), { signal });
+
     if (this._viewModel) this.applyViewModel(this._viewModel);
   }
 
   disconnectedCallback(): void {
     this.connection?.abort();
     this.connection = undefined;
+    this.anchorObserver?.disconnect();
+    this.anchorObserver = null;
   }
 
   get viewModel(): PopoverViewModel | null {
@@ -65,8 +78,13 @@ export class AppPopoverHostElement extends HTMLElement {
 
   set viewModel(value: PopoverViewModel) {
     const wasOpen = this._viewModel?.open ?? false;
+    const sameContent = wasOpen && this._viewModel?.kind === value.kind
+      && this._viewModel?.anchorId === value.anchorId;
+    if (wasOpen && value.open && !sameContent) {
+      this.setAnchorExpanded(this._viewModel?.anchorId ?? null, false);
+    }
     this._viewModel = value;
-    if (this.isConnected) this.applyViewModel(value, wasOpen);
+    if (this.isConnected) this.applyViewModel(value, wasOpen, sameContent);
   }
 
   /** 触发元素自身的点击不算「外部点击」，否则会打开即关闭。 */
@@ -98,11 +116,13 @@ export class AppPopoverHostElement extends HTMLElement {
     this.append(panel);
   }
 
-  private applyViewModel(vm: PopoverViewModel, wasOpen = false): void {
+  private applyViewModel(vm: PopoverViewModel, wasOpen = false, sameContent = false): void {
     const panel = this.panelEl;
     if (!panel) return;
 
     if (!vm.open) {
+      this.anchorObserver?.disconnect();
+      this.anchorObserver = null;
       panel.hidden = true;
       // 关闭态的 VM 不带 anchorId，必须用打开时记下的那个——
       // 否则触发按钮的 aria-expanded 会永远停在 true。
@@ -114,10 +134,13 @@ export class AppPopoverHostElement extends HTMLElement {
     }
 
     panel.hidden = false;
+    if (!this.position(vm.anchorId)) return;
 
     // 按 kind 切换内容，并同步 aria-label——两种弹层用同一个 role="dialog"
     // 容器，标签不切换的话屏幕阅读器会把操作菜单读成「列设置」。
     const isColumns = vm.kind === 'column-settings';
+    const content = isColumns ? this.columnPanelEl : this.actionMenuEl;
+    const focused = sameContent && content ? this.captureFocus(content) : null;
     if (this.columnPanelEl) {
       this.columnPanelEl.hidden = !isColumns;
       if (isColumns && vm.columnPanel) this.columnPanelEl.viewModel = vm.columnPanel;
@@ -131,16 +154,43 @@ export class AppPopoverHostElement extends HTMLElement {
       isColumns ? '显示设置' : `${vm.stockActions?.name ?? ''} 操作菜单`.trim()
     );
 
-    this.position(vm.anchorId);
+    if (!this.position(vm.anchorId)) return;
     this.setAnchorExpanded(vm.anchorId, true);
+    // 虚拟列表可能在 scroll 的下一帧才移除锚点，不能只依赖 scroll 事件检查。
+    if (!this.anchorObserver) {
+      this.anchorObserver = new window.MutationObserver(() => this.reposition());
+      this.anchorObserver.observe(document.body, { childList: true, subtree: true });
+    }
 
-    if (!wasOpen) {
+    if (focused && content) {
+      const controls = [...content.querySelectorAll<HTMLElement>(CONTROLS)];
+      const match = controls.find((control) => {
+        const current = this.controlIdentity(control);
+        return current.column === focused.column && current.item === focused.item && current.action === focused.action;
+      });
+      (match ?? controls.find((control) => this.controlIdentity(control).item === focused.item) ?? controls[0])?.focus();
+    } else if (!sameContent) {
       // 打开时把焦点移入第一个可交互控件。
-      const first = panel.querySelector<HTMLElement>(
-        'input, button, [tabindex]:not([tabindex="-1"])'
-      );
+      const first = content?.querySelector<HTMLElement>(CONTROLS);
       first?.focus?.();
     }
+  }
+
+  private controlIdentity(control: HTMLElement): FocusedControl {
+    return {
+      column: control.dataset.column,
+      item: control.closest<HTMLElement>('[data-column-item]')?.dataset.columnItem,
+      action: control.dataset.action
+    };
+  }
+
+  private captureFocus(content: HTMLElement): FocusedControl | null {
+    const active = document.activeElement;
+    return active instanceof HTMLElement && content.contains(active) ? this.controlIdentity(active) : null;
+  }
+
+  private reposition(): void {
+    if (this._viewModel?.open && this.panelEl && !this.panelEl.hidden) this.position(this._viewModel.anchorId);
   }
 
   private setAnchorExpanded(anchorId: string | null, expanded: boolean): void {
@@ -154,16 +204,26 @@ export class AppPopoverHostElement extends HTMLElement {
   }
 
   /** 依锚点矩形定位，并夹在视口内（Popup 只有 420×560，很容易溢出）。 */
-  private position(anchorId: string | null): void {
+  private position(anchorId: string | null): boolean {
     const panel = this.panelEl;
-    if (!panel || !anchorId) return;
-    const anchor = document.getElementById(anchorId);
-    if (!anchor?.getBoundingClientRect) return;
-    this.setAttribute('data-last-anchor', anchorId);
+    if (!panel) return false;
+    const anchor = anchorId ? document.getElementById(anchorId) : null;
+    if (!anchor?.isConnected) {
+      panel.hidden = true;
+      this.anchorObserver?.disconnect();
+      this.anchorObserver = null;
+      this.setAnchorExpanded(this.getAttribute('data-last-anchor'), false);
+      emitPopupEvent(this, 'popover-close-request', {});
+      return false;
+    }
+    this.setAttribute('data-last-anchor', anchor.id);
 
     const rect = anchor.getBoundingClientRect();
     panel.style.position = 'fixed';
-    panel.style.top = `${rect.bottom + 4}px`;
+    const viewportHeight = document.documentElement.clientHeight || 560;
+    panel.style.maxHeight = `${Math.max(0, viewportHeight - 2 * VIEWPORT_MARGIN)}px`;
+    const height = panel.offsetHeight || 240;
+    panel.style.top = `${Math.min(Math.max(VIEWPORT_MARGIN, rect.bottom + 4), Math.max(VIEWPORT_MARGIN, viewportHeight - height - VIEWPORT_MARGIN))}px`;
 
     const width = panel.offsetWidth || 200;
     const viewportWidth = document.documentElement.clientWidth || 420;
@@ -172,5 +232,6 @@ export class AppPopoverHostElement extends HTMLElement {
       Math.max(VIEWPORT_MARGIN, viewportWidth - width - VIEWPORT_MARGIN)
     );
     panel.style.left = `${left}px`;
+    return true;
   }
 }

@@ -95,6 +95,53 @@ function setupGrid(stocks: StockCardViewModel[]): {
   return { el, spy };
 }
 
+test('reconnecting the board keeps exactly one working empty-state action', () => {
+  const { el, spy } = setupBoard(board({ empty: true }));
+  const parent = el.parentElement!;
+  for (let i = 0; i < 2; i++) { el.remove(); parent.append(el); }
+  el.querySelector<HTMLButtonElement>('[data-action="empty-add-stock"]')!.click();
+  assert.equal(spy.eventCount('dialog-open-request'), 1);
+});
+
+test('board resize updates the virtual viewport and reconnect replaces its observer', async () => {
+  resetDom();
+  const original = window.ResizeObserver;
+  const observers: TestObserver[] = [];
+  class TestObserver {
+    disconnected = false;
+    constructor(private callback: ResizeObserverCallback) { observers.push(this); }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void { this.disconnected = true; }
+    notify(): void { if (!this.disconnected) this.callback([], this as unknown as ResizeObserver); }
+  }
+  Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: TestObserver });
+  try {
+    const { el } = setupBoard(board({ stocks: [card('sh600519')] }));
+    let height = 300;
+    Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => height });
+    assert.equal(observers.length, 1);
+    observers[0].notify();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    const table = el.querySelector('stock-table') as HTMLElement & { viewport: { viewportExtent: number } };
+    assert.equal(table.viewport.viewportExtent, 300);
+    const parent = el.parentElement!;
+    el.remove();
+    assert.equal(observers[0].disconnected, true);
+    parent.append(el);
+    assert.equal(observers.length, 2);
+    height = 472;
+    observers[1].notify();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    assert.equal(table.viewport.viewportExtent, 472);
+    el.remove();
+    assert.equal(observers[1].disconnected, true);
+  } finally {
+    resetDom();
+    Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: original });
+  }
+});
+
 // ===== Board: view switching =====
 
 test('hover detail preference reaches both lazy views and newly rendered cards', () => {

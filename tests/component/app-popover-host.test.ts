@@ -170,3 +170,59 @@ test('disconnecting removes the document-level listeners', () => {
   document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
   assert.equal(spy.eventCount('popover-close-request'), 0, '断开后不得残留全局监听');
 });
+
+test('stock actions receive initial focus even after column settings were used', () => {
+  const { el } = setup();
+  el.viewModel = columnsVm();
+  el.viewModel = closedPopover();
+  el.viewModel = actionsVm();
+  assert.ok(document.activeElement === el.querySelector('stock-action-menu [data-action="pin"]'), 'focus must enter the visible stock menu');
+});
+
+test('column controls retain focus when the same popover receives fresh data', () => {
+  const { el } = setup();
+  el.viewModel = columnsVm();
+  el.querySelector<HTMLElement>('input[data-column="price"]')!.focus();
+  el.viewModel = columnsVm();
+  assert.ok(document.activeElement === el.querySelector('input[data-column="price"]'), 'column checkbox focus must survive refresh');
+  el.querySelector<HTMLElement>('[data-column-item="price"] [data-action="col-up"]')!.focus();
+  el.viewModel = columnsVm();
+  assert.ok(document.activeElement === el.querySelector('[data-column-item="price"] [data-action="col-up"]'), 'column action focus must survive refresh');
+});
+
+test('scroll and resize reposition the popover and keep its bottom inside the viewport', () => {
+  const { el, anchor } = setup();
+  let bottom = 100;
+  anchor.getBoundingClientRect = () => ({ left: 300, bottom, top: bottom - 20 } as DOMRect);
+  Object.defineProperty(panel(), 'offsetWidth', { configurable: true, value: 200 });
+  Object.defineProperty(panel(), 'offsetHeight', { configurable: true, value: 180 });
+  el.viewModel = actionsVm();
+  assert.equal(panel().style.top, '104px');
+  bottom = 200;
+  anchor.dispatchEvent(new Event('scroll'));
+  assert.equal(panel().style.top, '204px');
+  bottom = (document.documentElement.clientHeight || 560) - 10;
+  window.dispatchEvent(new Event('resize'));
+  assert.ok(Number.parseFloat(panel().style.top) + 180 <= (document.documentElement.clientHeight || 560) - 8);
+});
+
+test('removing an open popover anchor closes the orphaned panel on scroll', () => {
+  const { el, anchor, spy } = setup();
+  el.viewModel = actionsVm();
+  anchor.remove();
+  window.dispatchEvent(new Event('scroll'));
+  assert.equal(panel().hidden, true);
+  assert.equal(spy.eventCount('popover-close-request'), 1);
+});
+
+test('switching an open popover to another anchor clears the previous expanded state', () => {
+  const { el, anchor } = setup();
+  el.viewModel = columnsVm();
+  const next = document.createElement('button');
+  next.id = 'trigger-2';
+  document.body.append(next);
+  el.viewModel = { ...actionsVm(), anchorId: next.id };
+  assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+  assert.equal(next.getAttribute('aria-expanded'), 'true');
+  assert.ok(document.activeElement === el.querySelector('stock-action-menu [data-action="pin"]'), 'focus must enter the visible stock menu');
+});

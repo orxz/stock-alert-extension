@@ -376,6 +376,10 @@ stock-grid[hidden] {
   align-content: start;
 }
 
+/* 占位行已包含完整虚拟行高，抵消与卡片之间额外产生的 grid gap。 */
+.stock-grid-container > [data-spacer]:first-child { margin-bottom: calc(-1 * var(--sp-2)); }
+.stock-grid-container > [data-spacer]:last-child { margin-top: calc(-1 * var(--sp-2)); }
+
 stock-card {
   display: block;
   border-radius: var(--r-md);

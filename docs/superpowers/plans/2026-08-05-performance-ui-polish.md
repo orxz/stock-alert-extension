@@ -657,14 +657,18 @@ type MenuState =
 
 ```ts
 test('stock action menu selector exposes only the requested stock', () => {
-  const state = withStocks(createInitialState(), [stock('sh600519'), stock('sz000001')]);
+  // Reuse this file's existing mkStock/stateWith helpers.
+  const state = stateWith([
+    mkStock('sh600519', '贵州茅台'),
+    mkStock('sz000001', '平安银行')
+  ]);
   const opened = reducer(state, {
     type: 'overlay/menu',
     menu: { kind: 'stock-actions', anchorId: 'stock-actions-sh600519', code: 'sh600519' as StockCode }
   });
   const vm = selectPopover(opened);
   assert.equal(vm.kind, 'stock-actions');
-  assert.equal(vm.stock?.code, 'sh600519');
+  assert.equal(vm.stockActions?.code, 'sh600519');
 });
 ```
 

@@ -318,6 +318,7 @@ app-popover-host {
   min-width: 152px;
   max-width: calc(100vw - 2 * var(--sp-2));
   padding: var(--sp-1);
+  overflow: auto;
   color: var(--text-1);
   background: var(--ink-pop);
   border: 1px solid var(--line-strong);

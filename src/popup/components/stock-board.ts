@@ -1,7 +1,7 @@
 // src/popup/components/stock-board.ts
 // Task 16 Step 3 — 小型视图切换器。
-// 拥有稳定的 empty/loading/error 容器 + 一个 stock-grid + 一个 stock-table。
-// 根据 viewMode 设置 hidden；board region 有 aria-label，不对整个股票列表使用 aria-live。
+// 拥有稳定的 empty/loading/error 容器，仅挂载当前激活的 stock-grid 或 stock-table。
+// 看板统一管理滚动、尺寸变化与虚拟焦点；不对整个股票列表使用 aria-live。
 // 不含过滤、排序、RPC 或持久化逻辑。
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { BoardViewModel } from '../view-models.js';
@@ -50,6 +50,8 @@ export class StockBoardElement extends HTMLElement {
   /** list / grid 各自独立的滚动位置，切换视图时互不干扰。 */
   private readonly scrollOffsets: Record<ViewMode, number> = { list: 0, grid: 0 };
   private scheduler: RafScheduler | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private focusFrame: number | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -57,22 +59,28 @@ export class StockBoardElement extends HTMLElement {
     const signal = this.connection.signal;
 
     if (!this.skeletonBuilt) {
-      this.buildSkeleton(signal);
+      this.buildSkeleton();
       this.skeletonBuilt = true;
     }
 
     // 看板是唯一的滚动拥有者——滚动事件频率高于帧率，合并到每帧一次。
     this.scheduler = createRafScheduler(
-      (cb) => requestAnimationFrame(cb),
-      (id) => cancelAnimationFrame(id),
+      (cb) => window.requestAnimationFrame(cb),
+      (id) => window.cancelAnimationFrame(id),
       () => this.flushViewport()
     );
     this.addEventListener('scroll', () => this.scheduler?.schedule(), { signal, passive: true });
+    this.emptyEl?.querySelector('[data-action="empty-add-stock"]')?.addEventListener('click', () => {
+      emitPopupEvent(this, 'dialog-open-request', { kind: 'add-stock' });
+    }, { signal });
     this.addEventListener('virtual-focus-request', ((event: Event) => {
       this.handleVirtualFocus(
         event as CustomEvent<{ index: number; itemExtent: number; code: string }>
       );
     }) as EventListener, { signal });
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new window.ResizeObserver(() => this.scheduler?.schedule());
+    this.resizeObserver.observe(this);
 
     if (this._viewModel) this.applyViewModel(this._viewModel);
   }
@@ -82,6 +90,9 @@ export class StockBoardElement extends HTMLElement {
     this.connection = undefined;
     this.scheduler?.cancel();
     this.scheduler = null;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.cancelFocusFrame();
   }
 
   get viewModel(): BoardViewModel | null {
@@ -132,7 +143,7 @@ export class StockBoardElement extends HTMLElement {
     if ('selectionMode' in view) view.selectionMode = this._selectionMode;
   }
 
-  private buildSkeleton(signal: AbortSignal): void {
+  private buildSkeleton(): void {
     this.setAttribute('role', 'region');
     this.setAttribute('aria-label', '股票看板');
 
@@ -172,9 +183,6 @@ export class StockBoardElement extends HTMLElement {
     emptyCta.className = 'board-empty-cta';
     emptyCta.setAttribute('data-action', 'empty-add-stock');
     emptyCta.textContent = '添加股票';
-    emptyCta.addEventListener('click', () => {
-      emitPopupEvent(this, 'dialog-open-request', { kind: 'add-stock' });
-    }, { signal });
     emptyEl.append(emptyCta);
     this.emptyEl = emptyEl;
     this.emptyTextEl = emptyText;
@@ -191,6 +199,7 @@ export class StockBoardElement extends HTMLElement {
    */
   private mountView(mode: ViewMode | null): void {
     if (this.activeMode === mode) return;
+    this.cancelFocusFrame();
 
     // 记住离开视图的滚动位置，回来时恢复。
     if (this.activeMode !== null) {
@@ -248,6 +257,8 @@ export class StockBoardElement extends HTMLElement {
     event: CustomEvent<{ index: number; itemExtent: number; code: string }>
   ): void {
     const { index, itemExtent, code } = event.detail;
+    if (!Number.isFinite(index) || index < 0 || !Number.isFinite(itemExtent) || itemExtent <= 0) return;
+    this.cancelFocusFrame();
     const targetTop = index * itemExtent;
     this.scrollTop = targetTop;
     // 用计算出的目标位置刷新窗口，而不是读回 scrollTop。
@@ -268,7 +279,15 @@ export class StockBoardElement extends HTMLElement {
     };
     // 同步尝试一次（窗口刷新已同步完成），再在下一帧兜底一次以覆盖布局延迟。
     focusTarget();
-    requestAnimationFrame(focusTarget);
+    this.focusFrame = window.requestAnimationFrame(() => {
+      this.focusFrame = null;
+      if (this.isConnected) focusTarget();
+    });
+  }
+
+  private cancelFocusFrame(): void {
+    if (this.focusFrame !== null) window.cancelAnimationFrame(this.focusFrame);
+    this.focusFrame = null;
   }
 
   private applyViewModel(vm: BoardViewModel): void {
