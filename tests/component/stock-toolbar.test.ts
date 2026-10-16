@@ -142,7 +142,8 @@ test('column settings button has accessible label', () => {
   setup(mkToolbar());
   const btn = document.querySelector('button[data-action="column-settings"]') as HTMLElement;
   const label = btn.getAttribute('aria-label') ?? btn.textContent ?? '';
-  assert.ok(label.trim().length > 0);
+  assert.equal(label, '显示设置');
+  assert.equal(btn.textContent, '显示设置');
 });
 
 test('sort select has an accessible label', () => {

@@ -3,7 +3,7 @@
 // 纯数据——不含 DOM 节点 / Promise / timer / AbortController / class instance / 可变 Set/Map。
 // 唯一状态写入口是 reducer；Selector 只读派生。
 import type { GroupId, StockCode, UserDataRevision, UserData, QuoteSnapshot, StockSearchResult } from '../../domain/index.js';
-import { DEFAULT_UI_COLUMNS } from '../ui-preferences.js';
+import { DEFAULT_UI_COLUMNS, DEFAULT_UI_HOVER_DETAILS } from '../ui-preferences.js';
 import type { UiColumnPreferences } from '../ui-preferences.js';
 
 /**
@@ -70,6 +70,8 @@ export interface AppState {
     theme: 'dark' | 'light';
     /** 列显隐/顺序——纯展示偏好，不进 BoardConfig / schema v2 / RPC。 */
     columns: UiColumnPreferences;
+    /** 是否允许悬停显示指标与迷你图，默认关闭；不进入业务存储。 */
+    hoverDetails: boolean;
     /** 对话框内股票搜索（add-stock）：独立于工具栏过滤，避免互相干扰。 */
     dialogSearch: Readonly<{
       keyword: string;
@@ -106,7 +108,8 @@ const EMPTY_SNAPSHOT: QuoteSnapshot = {
 /** 安全的空初始态：g_all 计算视图打头，空 watchlist，所有 async idle，无 overlay。 */
 export function createInitialState(
   theme: 'dark' | 'light' = 'dark',
-  columns: UiColumnPreferences = DEFAULT_UI_COLUMNS
+  columns: UiColumnPreferences = DEFAULT_UI_COLUMNS,
+  hoverDetails: boolean = DEFAULT_UI_HOVER_DETAILS
 ): AppState {
   return {
     domain: {
@@ -128,6 +131,7 @@ export function createInitialState(
       selectedCodes: [],
       theme,
       columns,
+      hoverDetails,
       dialogSearch: { keyword: '', results: [] },
       detail: null
     },

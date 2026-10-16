@@ -11,9 +11,9 @@ import { resetDom } from '../helpers/dom-environment.js';
 import { stubCanvas2d } from '../helpers/canvas-stub.js';
 import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
-import { TABLE_ROW_EXTENT } from '../../src/popup/components/stock-table.js';
+import { TABLE_ROW_EXTENT, type StockTableElement } from '../../src/popup/components/stock-table.js';
 import type { StockCardViewModel } from '../../src/popup/view-models.js';
-import type { StockCode, GroupId, SortField, SortDirection } from '../../src/domain/index.js';
+import type { StockCode, GroupId, SortField, SortDirection, TrendPoint } from '../../src/domain/index.js';
 
 function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockCardViewModel {
   return {
@@ -47,6 +47,29 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
 }
 
 const GROUP_ID = 'g_all' as GroupId;
+
+test('row hover and focus stay quiet until hover details is enabled', async () => {
+  const { el } = setupTable([card('sh600519')]);
+  const table = el as unknown as StockTableElement;
+  let calls = 0;
+  table.setTrendsLoader(async () => { calls += 1; return []; });
+  const row = el.querySelector('tr[data-key]')!;
+  const hover = (): void => { row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); };
+  hover();
+  row.dispatchEvent(new Event('focusin', { bubbles: true }));
+  await Promise.resolve();
+  assert.equal(calls, 0);
+  assert.equal(table.hoverDetails, false);
+  table.hoverDetails = true;
+  assert.equal(el.hasAttribute('data-hover-details'), true);
+  hover();
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  table.hoverDetails = false;
+  assert.equal(el.hasAttribute('data-hover-details'), false);
+  hover();
+  assert.equal(calls, 1);
+});
 
 function setupTable(stocks: StockCardViewModel[], sortField: SortField = 'manual', sortDirection: SortDirection = 'asc'): {
   el: HTMLElement & { viewModel: StockCardViewModel[]; groupId: GroupId; sortField: SortField; sortDirection: SortDirection; columnOrder: readonly string[] };
@@ -413,7 +436,8 @@ test('clicking a row toggles selection only in selection mode', () => {
 });
 
 test('hovering a row triggers tooltip flip detection without errors', () => {
-  setupTable([card('sh600519')]);
+  const { el } = setupTable([card('sh600519')]);
+  (el as unknown as StockTableElement).hoverDetails = true;
   const row = document.querySelector('tbody tr[data-key="sh600519"]') as HTMLElement;
   assert.doesNotThrow(() => {
     row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
@@ -427,9 +451,66 @@ test('hovering a row triggers tooltip flip detection without errors', () => {
 
 // ===== v2.3 hover 迷你分时 =====（canvas 2d stub 见 tests/helpers/canvas-stub.ts）
 
+const MINI_TRENDS: readonly TrendPoint[] = [
+  { time: 0, price: 100, avgPrice: 100, high: 100, low: 100, volume: 0, amount: 0, volumeRatio: 0 },
+  { time: 60_000, price: 101, avgPrice: 100.5, high: 101, low: 100, volume: 0, amount: 0, volumeRatio: 0 }
+];
+
+async function settleMiniTrends(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+test('cached mini chart redraws when its row returns from virtual scrolling', async () => {
+  stubCanvas2d();
+  const { el } = setupTable(manyStocks(100));
+  const table = el as unknown as StockTableElement;
+  table.hoverDetails = true;
+  let calls = 0;
+  table.setTrendsLoader(async () => { calls++; return MINI_TRENDS; });
+  const firstRow = el.querySelector<HTMLElement>('tr[data-key="sh600000"]')!;
+  firstRow.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await settleMiniTrends();
+  assert.equal(firstRow.querySelector<HTMLElement>('.detail-mini-wrap')!.hidden, false);
+  table.viewport = { scrollOffset: TABLE_ROW_EXTENT * 50, viewportExtent: 390 };
+  assert.equal(el.querySelector('tr[data-key="sh600000"]'), null);
+  table.viewport = { scrollOffset: 0, viewportExtent: 390 };
+  const returned = el.querySelector<HTMLElement>('tr[data-key="sh600000"]')!;
+  returned.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await settleMiniTrends();
+  assert.equal(returned.querySelector<HTMLElement>('.detail-mini-wrap')!.hidden, false);
+  assert.equal(calls, 1, 'recreated rows use the existing series without another request');
+});
+
+test('replacing a table loader discards its old response and allows the hovered row to retry', async () => {
+  stubCanvas2d();
+  const { el } = setupTable([card('sh600519')]);
+  const table = el as unknown as StockTableElement;
+  table.hoverDetails = true;
+  let resolveOld!: (points: readonly TrendPoint[]) => void;
+  let resolveNew!: (points: readonly TrendPoint[]) => void;
+  table.setTrendsLoader(() => new Promise((resolve) => { resolveOld = resolve; }));
+  const row = el.querySelector<HTMLElement>('tr[data-key="sh600519"]')!;
+  const hover = (): void => { row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); };
+  hover();
+  table.setTrendsLoader(() => new Promise((resolve) => { resolveNew = resolve; }));
+  hover();
+  assert.equal(typeof resolveNew, 'function', 'same row can load from the replacement source');
+  resolveOld(MINI_TRENDS);
+  await settleMiniTrends();
+  assert.equal(row.querySelector<HTMLElement>('.detail-mini-wrap')!.dataset.state, 'loading');
+  assert.equal(row.querySelector<HTMLCanvasElement>('.detail-mini-trends')!.hidden, true);
+  resolveNew(MINI_TRENDS);
+  await settleMiniTrends();
+  assert.equal(row.querySelector<HTMLElement>('.detail-mini-wrap')!.hidden, false);
+  table.setTrendsLoader(null);
+  assert.equal(row.querySelector<HTMLElement>('.detail-mini-wrap')!.hidden, true, 'removing a source clears the existing chart');
+});
+
 test('hovering a row lazily loads its trends and draws the mini canvas', async () => {
   stubCanvas2d();
   const { el } = setupTable([card('sh600519')]);
+  (el as unknown as StockTableElement).hoverDetails = true;
   const tableEl = el as unknown as {
     setTrendsLoader?: (l: ((code: string) => Promise<readonly TrendPoint[]>) | null) => void;
   };
@@ -457,17 +538,22 @@ test('hovering a row lazily loads its trends and draws the mini canvas', async (
 
 test('trends loader failure keeps tooltip content without mini chart', async () => {
   const { el } = setupTable([card('sh600519')]);
+  (el as unknown as StockTableElement).hoverDetails = true;
   const tableEl = el as unknown as { setTrendsLoader?: (l: unknown) => void };
   tableEl.setTrendsLoader?.(async () => { throw new Error('offline'); });
   const row = el.querySelector('tr[data-key="sh600519"]') as HTMLElement;
   row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 20));
   const wrap = row.querySelector('.detail-mini-wrap') as HTMLElement | null;
-  assert.equal(wrap?.hidden, true, '失败时迷你图保持隐藏（浮层其余指标照常）');
+  assert.equal(wrap?.hidden, false, '失败保留状态区域，避免浮层忽然缩小');
+  assert.equal(wrap?.dataset.state, 'error');
+  assert.match(wrap?.textContent ?? '', /加载失败/);
+  assert.equal(wrap?.querySelector<HTMLCanvasElement>('.detail-mini-trends')!.hidden, true);
 });
 
 test('hover does not refetch after first load (cache)', async () => {
   const { el } = setupTable([card('sh600519')]);
+  (el as unknown as StockTableElement).hoverDetails = true;
   const tableEl = el as unknown as { setTrendsLoader?: (l: unknown) => void };
   const calls: string[] = [];
   tableEl.setTrendsLoader?.(async (code: string) => {

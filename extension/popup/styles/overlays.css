@@ -450,6 +450,36 @@ column-panel[hidden] {
   opacity: 0.3;
 }
 
+.column-panel-hover-setting {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  padding: var(--sp-3) var(--sp-2) var(--sp-2);
+  border-top: 1px solid var(--line);
+  color: var(--text-1);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.column-panel-hover-setting input {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.column-panel-hover-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.column-panel-description {
+  max-width: 24ch;
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+}
+
 /* ===== 行内 ••• 触发器 ===== */
 
 .stock-row-menu-trigger {

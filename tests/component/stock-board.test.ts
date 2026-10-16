@@ -52,6 +52,7 @@ function board(overrides: Partial<BoardViewModel> = {}): BoardViewModel {
     stocks: [],
     columns: ['name', 'price', 'changePercent', 'amount'],
     enabledColumns: ['name', 'code', 'status', 'price', 'changePercent', 'amount'],
+    hoverDetails: false,
     loading: false,
     error: null,
     empty: false,
@@ -95,6 +96,21 @@ function setupGrid(stocks: StockCardViewModel[]): {
 }
 
 // ===== Board: view switching =====
+
+test('hover detail preference reaches both lazy views and newly rendered cards', () => {
+  const stocks = [card('sh600519'), card('sz000001')];
+  const { el } = setupBoard(board({ stocks, viewMode: 'grid' }));
+  assert.equal(el.querySelector('stock-card')!.hasAttribute('data-hover-details'), false);
+  el.viewModel = board({ stocks, viewMode: 'grid', hoverDetails: true });
+  assert.equal(el.querySelectorAll('stock-card[data-hover-details]').length, 2);
+  el.viewModel = board({ stocks, viewMode: 'list', hoverDetails: true });
+  assert.ok(el.querySelector('stock-table[data-hover-details]'));
+  el.viewModel = board({ stocks, viewMode: 'list', hoverDetails: false });
+  assert.equal(el.querySelector('stock-table')!.hasAttribute('data-hover-details'), false);
+  el.viewModel = board({ stocks: [...stocks, card('sz300750')], viewMode: 'grid', hoverDetails: false });
+  assert.equal(el.querySelectorAll('stock-card').length, 3);
+  assert.equal(el.querySelectorAll('stock-card[data-hover-details]').length, 0);
+});
 
 test('board has aria-label and no aria-live on stock list container', () => {
   setupBoard(board({ stocks: [card('sh600519')], viewMode: 'list' }));

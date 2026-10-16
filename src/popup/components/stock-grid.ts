@@ -40,6 +40,7 @@ export class StockGridElement extends HTMLElement {
   private _groupId: GroupId = 'g_all' as GroupId;
   /** 列设置 enabled 集合（null = 未设置，卡片默认全部显示）。 */
   private _columns: readonly ColumnKey[] | null = null;
+  private _hoverDetails = false;
   private container: HTMLElement | null = null;
   private topSpacer: HTMLElement | null = null;
   private bottomSpacer: HTMLElement | null = null;
@@ -75,6 +76,14 @@ export class StockGridElement extends HTMLElement {
 
   get viewModel(): readonly StockCardViewModel[] {
     return this._viewModel;
+  }
+
+  set hoverDetails(value: boolean) {
+    if (this._hoverDetails === value) return;
+    this._hoverDetails = value;
+    for (const card of this.querySelectorAll<StockCardElement>('stock-card')) {
+      card.hoverDetails = value;
+    }
   }
 
   set viewModel(value: readonly StockCardViewModel[]) {
@@ -203,6 +212,7 @@ export class StockGridElement extends HTMLElement {
   private createCard(vm: StockCardViewModel, orderedCodes: readonly StockCode[]): HTMLElement {
     const card = document.createElement('stock-card') as StockCardElement;
     card.groupId = this._groupId;
+    card.hoverDetails = this._hoverDetails;
     card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;
@@ -215,6 +225,7 @@ export class StockGridElement extends HTMLElement {
   private updateCard(node: HTMLElement, vm: StockCardViewModel, orderedCodes: readonly StockCode[]): void {
     const card = node as unknown as StockCardElement;
     card.groupId = this._groupId;
+    card.hoverDetails = this._hoverDetails;
     card.columns = this._columns;
     card.orderedCodes = orderedCodes;
     card.viewModel = vm;

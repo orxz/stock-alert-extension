@@ -1,5 +1,5 @@
 // src/popup/ui-preferences.ts
-// 展示层偏好：列的启用集合与顺序。
+// 展示层偏好：列的启用集合与顺序、悬停详情。
 //
 // 为什么不进 BoardConfig：列显隐是纯展示偏好，不影响任何业务语义，
 // 也不该占用 RPC / schema v2 / userDataRevision —— 那条链路上的每次写入
@@ -18,6 +18,10 @@ export interface UiColumnPreferences {
 
 /** localStorage 键名。 */
 export const UI_COLUMNS_STORAGE_KEY = 'uiColumns:v1';
+
+/** 悬停详情是纯展示偏好；默认关闭，避免自动浮层遮挡看板。 */
+export const UI_HOVER_DETAILS_STORAGE_KEY = 'uiHoverDetails:v1';
+export const DEFAULT_UI_HOVER_DETAILS = false;
 
 /**
  * 锁定列——只有名称。名称是列表的语义锚点（详情 tooltip 的挂载点、
@@ -107,6 +111,26 @@ export function saveUiColumns(
   if (!storage) return;
   try {
     storage.setItem(UI_COLUMNS_STORAGE_KEY, JSON.stringify(normalizeUiColumns(columns)));
+  } catch {
+    /* 配额超限 / 隐私模式：偏好丢失可接受，不影响主流程 */
+  }
+}
+
+/** 只有持久化的布尔 true 才开启；缺失、损坏或无法读取时保持关闭。 */
+export function loadUiHoverDetails(storage: WebStorageLike | undefined): boolean {
+  if (!storage) return DEFAULT_UI_HOVER_DETAILS;
+  try {
+    return storage.getItem(UI_HOVER_DETAILS_STORAGE_KEY) === 'true';
+  } catch {
+    return DEFAULT_UI_HOVER_DETAILS;
+  }
+}
+
+/** 存储不可用时保留本次会话选择，不影响主流程。 */
+export function saveUiHoverDetails(storage: WebStorageLike | undefined, enabled: boolean): void {
+  if (!storage) return;
+  try {
+    storage.setItem(UI_HOVER_DETAILS_STORAGE_KEY, String(enabled === true));
   } catch {
     /* 配额超限 / 隐私模式：偏好丢失可接受，不影响主流程 */
   }

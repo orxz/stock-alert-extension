@@ -92,6 +92,7 @@ export function selectBoard(state: AppState): BoardViewModel {
     stocks,
     columns: columnOrder,
     enabledColumns: state.view.columns.enabled,
+    hoverDetails: state.view.hoverDetails,
     loading,
     error,
     empty: !loading && !error && stocks.length === 0,
@@ -289,7 +290,8 @@ export function selectColumnPanel(state: AppState): ColumnPanelViewModel {
       label: COLUMN_LABELS[key] ?? key,
       enabled: enabledSet.has(key)
     })),
-    columnOrder: displayKeys
+    columnOrder: displayKeys,
+    hoverDetails: state.view.hoverDetails
   };
 }
 

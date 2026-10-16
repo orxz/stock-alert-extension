@@ -8,6 +8,7 @@ import { createInitialState } from '../../../src/popup/store/state.js';
 import type { AppState } from '../../../src/popup/store/state.js';
 import {
   selectCurrentBoardConfig,
+  selectBoard,
   selectVisibleStocks,
   selectGroupTabs,
   selectToolbar,
@@ -653,6 +654,14 @@ test('selectLiveRegion is empty when no toast', () => {
 });
 
 // ===== selectColumnPanel =====
+
+test('hover preference projects consistently to the board and display settings', () => {
+  for (const enabled of [false, true]) {
+    const state = createInitialState('dark', undefined, enabled);
+    assert.equal(selectBoard(state).hoverDetails, enabled);
+    assert.equal(selectColumnPanel(state).hoverDetails, enabled);
+  }
+});
 
 test('selectColumnPanel excludes the locked name column', () => {
   const state = stateWith([mkStock('sh600519', '贵州茅台')]);

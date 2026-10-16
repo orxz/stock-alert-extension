@@ -25,6 +25,7 @@ const ALL_EVENT_TYPES = [
   'batch-select-all',
   'virtual-focus-request',
   'column-settings-change',
+  'hover-details-change',
   'popover-close-request',
   'stock-menu-open-request',
   'stock-remove-confirm-request'

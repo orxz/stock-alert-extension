@@ -177,6 +177,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'view/columns':
       return { ...state, view: { ...state.view, columns: action.columns } };
 
+    case 'view/hoverDetails':
+      return { ...state, view: { ...state.view, hoverDetails: action.enabled } };
+
     // 对话框搜索：独立于工具栏搜索，写 dialogSearch 而非 searchKeyword/searchResults。
     case 'view/dialogSearchKeyword':
       return {

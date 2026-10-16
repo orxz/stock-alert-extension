@@ -115,6 +115,9 @@ test('online: hovering a row shows tooltip; mini trends renders when network all
   });
   try {
     const row = launched.page.locator('tr[data-key="sh600519"]');
+    await launched.page.click('[data-action="column-settings"]');
+    await launched.page.getByRole('checkbox', { name: '悬停显示详情' }).check();
+    await launched.page.keyboard.press('Escape');
     await row.hover();
     await expect(row.locator('.stock-detail-tooltip')).toBeVisible({ timeout: 5_000 });
     // 等网络窗口：数据到位 → wrap 显示；否则保持 hidden（浮层指标在）——两者都是正确行为。

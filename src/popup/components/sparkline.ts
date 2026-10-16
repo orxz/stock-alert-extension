@@ -11,6 +11,10 @@ export const CHART_UP = '#ff5a5c';
 export const CHART_DOWN = '#16c79a';
 export const CHART_FLAT = '#8a8f98';
 
+// backing store 的 width/height 已乘 DPR，不能在隐藏容器的后续重绘中再次当成
+// CSS 尺寸。记录每块画布的逻辑尺寸；WeakMap 不延长虚拟滚动已移除画布的生命期。
+const logicalSizes = new WeakMap<HTMLCanvasElement, { width: number; height: number }>();
+
 /** hex 色 → rgba（渐变填充用）。 */
 export function hexToRgba(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -38,8 +42,12 @@ export interface SparklineOptions {
   readonly fillBottom?: number;
   /** 折线宽（默认 1.4）。 */
   readonly lineWidth?: number;
-  /** 中位虚线（昨收近似——归一化 0.5 处；序列实际触及 0.5 才画）。 */
+  /** 归一化区间中位虚线；它不代表昨收或任何真实价格基准。 */
   readonly midline?: boolean;
+  /** 图形内边距，避免极值/端点裁切。省略时保留指数条的现有几何。 */
+  readonly padding?: number;
+  /** 标记最后一个真实数据点（不外推）。 */
+  readonly endPoint?: boolean;
 }
 
 /**
@@ -57,8 +65,10 @@ export function drawSparkline(
   const ctx = canvas.getContext('2d');
   if (!ctx) return false;
   const rect = canvas.getBoundingClientRect();
-  const w = rect.width > 0 ? rect.width : canvas.width;
-  const h = rect.height > 0 ? rect.height : canvas.height;
+  const previousSize = logicalSizes.get(canvas);
+  const w = rect.width > 0 ? rect.width : previousSize?.width ?? canvas.width;
+  const h = rect.height > 0 ? rect.height : previousSize?.height ?? canvas.height;
+  logicalSizes.set(canvas, { width: w, height: h });
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   // 尺寸守卫：同尺寸跳过重设（避免重分配 backing store）。
   const targetW = Math.round(w * dpr);
@@ -71,15 +81,16 @@ export function drawSparkline(
   ctx.clearRect(0, 0, w, h);
 
   const color = options.color ?? trendColorOf(seq);
-  const baseY = h - 2;
-  const xOf = (i: number): number => (w * i) / (seq.length - 1);
-  const yOf = (v: number): number => h * (1 - v) - 1.5;
+  const padding = Math.max(0, Math.min(options.padding ?? 0, Math.max(0, Math.min(w, h) / 2 - 1)));
+  const baseY = padding > 0 ? h - padding : h - 2;
+  const xOf = (i: number): number => padding + ((w - padding * 2) * i) / (seq.length - 1);
+  const yOf = (v: number): number => padding > 0 ? padding + (h - padding * 2) * (1 - v) : h * (1 - v) - 1.5;
 
   // 面积渐变（顶部 → 底部淡出）。
   ctx.beginPath();
   seq.forEach((v, i) => (i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v))));
-  ctx.lineTo(w, baseY);
-  ctx.lineTo(0, baseY);
+  ctx.lineTo(xOf(seq.length - 1), baseY);
+  ctx.lineTo(xOf(0), baseY);
   ctx.closePath();
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, hexToRgba(color, options.fillTop ?? 0.22));
@@ -94,14 +105,19 @@ export function drawSparkline(
   seq.forEach((v, i) => (i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v))));
   ctx.stroke();
 
+  if (options.endPoint) {
+    ctx.fillStyle = color;
+    ctx.fillRect(xOf(seq.length - 1) - 2, yOf(seq[seq.length - 1]) - 2, 4, 4);
+  }
+
   // 中位虚线（可选——平走序列不画假线）。
   if (options.midline && seq.some((v) => v === 0.5)) {
     ctx.strokeStyle = 'rgba(138, 143, 152, 0.5)';
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 2]);
     ctx.beginPath();
-    ctx.moveTo(0, h * 0.5);
-    ctx.lineTo(w, h * 0.5);
+    ctx.moveTo(xOf(0), h * 0.5);
+    ctx.lineTo(xOf(seq.length - 1), h * 0.5);
     ctx.stroke();
     ctx.setLineDash([]);
   }

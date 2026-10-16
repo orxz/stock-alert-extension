@@ -24,6 +24,7 @@ function panel(overrides: Partial<ColumnPanelViewModel> = {}): ColumnPanelViewMo
   return {
     columns: DEFAULT_COLUMNS,
     columnOrder: DEFAULT_COLUMNS.map((c) => c.key),
+    hoverDetails: false,
     ...overrides
   };
 }
@@ -62,6 +63,27 @@ test('renders a checkbox for each column', () => {
   setup(panel());
   const checkboxes = document.querySelectorAll('input[type="checkbox"][data-column]');
   assert.equal(checkboxes.length, DEFAULT_COLUMNS.length);
+});
+
+test('hover details toggle defaults off and emits a separate preference event', () => {
+  const { el } = setup(panel());
+  const toggle = el.querySelector<HTMLInputElement>('input[data-action="hover-details"]');
+  assert.ok(toggle, 'display settings must expose the hover preference');
+  assert.equal(toggle.checked, false);
+  assert.equal(toggle.getAttribute('aria-label'), '悬停显示详情');
+  assert.ok(el.textContent?.includes('鼠标经过股票时显示指标与迷你走势图'));
+  const changes: boolean[] = [];
+  el.addEventListener('hover-details-change', (event) => {
+    changes.push((event as CustomEvent<{ enabled: boolean }>).detail.enabled);
+  });
+  toggle.checked = true;
+  toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.deepEqual(changes, [true]);
+  el.viewModel = panel({ hoverDetails: true });
+  assert.equal(toggle.checked, true, 'the persisted view model updates the existing input');
+  toggle.checked = false;
+  toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.deepEqual(changes, [true, false]);
 });
 
 test('checkbox checked state reflects enabled', () => {

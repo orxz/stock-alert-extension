@@ -81,7 +81,7 @@ export class AppPopoverHostElement extends HTMLElement {
     const panel = document.createElement('div');
     panel.className = 'app-popover';
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', '列设置');
+    panel.setAttribute('aria-label', '显示设置');
     panel.hidden = true;
     this.panelEl = panel;
 
@@ -128,7 +128,7 @@ export class AppPopoverHostElement extends HTMLElement {
     }
     panel.setAttribute(
       'aria-label',
-      isColumns ? '列设置' : `${vm.stockActions?.name ?? ''} 操作菜单`.trim()
+      isColumns ? '显示设置' : `${vm.stockActions?.name ?? ''} 操作菜单`.trim()
     );
 
     this.position(vm.anchorId);

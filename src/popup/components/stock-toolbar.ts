@@ -131,10 +131,10 @@ export class StockToolbarElement extends HTMLElement {
     columnBtn.className = 'toolbar-btn';
     columnBtn.setAttribute('data-action', 'column-settings');
     columnBtn.id = COLUMN_TRIGGER_ID;
-    columnBtn.setAttribute('aria-label', '列设置');
+    columnBtn.setAttribute('aria-label', '显示设置');
     columnBtn.setAttribute('aria-haspopup', 'dialog');
     columnBtn.setAttribute('aria-expanded', 'false');
-    columnBtn.textContent = '列设置';
+    columnBtn.textContent = '显示设置';
     this.columnBtn = columnBtn;
 
     toolbar.append(searchWrap, sortSelect, viewGroup, columnBtn);

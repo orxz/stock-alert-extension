@@ -7,7 +7,7 @@ import type { Store } from './store/store.js';
 import type { CommandController } from './commands/command-controller.js';
 import { selectAppViewModel, selectVisibleStocks } from './store/selectors.js';
 import type { AppViewModel, DialogViewModel, LiveRegionViewModel, PopoverViewModel } from './view-models.js';
-import { normalizeUiColumns, saveUiColumns } from './ui-preferences.js';
+import { normalizeUiColumns, saveUiColumns, saveUiHoverDetails } from './ui-preferences.js';
 import type { WebStorageLike } from './ui-preferences.js';
 import { friendlyErrorMessage } from './error-messages.js';
 import type { PopupEventMap, DialogSubmitDetail } from './components/events.js';
@@ -174,9 +174,10 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     store.dispatch({ type: 'view/selectionMode', enabled: d.enabled });
   });
   on('theme-change', (d) => {
+    // Canvas 图表在 Store 订阅中同步重绘，必须先应用主题再读取文字色。
+    document.documentElement.dataset.theme = d.theme;
     store.dispatch({ type: 'view/theme', theme: d.theme });
     try { localStorage.setItem('uiTheme', d.theme); } catch { /* 隐私模式 */ }
-    document.documentElement.dataset.theme = d.theme;
   });
 
   on('stock-toggle-select', (d) => {
@@ -250,6 +251,12 @@ export function createAppShell(deps: AppShellDeps): AppShell {
     const normalized = normalizeUiColumns(d.columns);
     store.dispatch({ type: 'view/columns', columns: normalized });
     saveUiColumns(safeLocalStorage(), normalized);
+  });
+
+  on('hover-details-change', (d) => {
+    const enabled = d.enabled === true;
+    store.dispatch({ type: 'view/hoverDetails', enabled });
+    saveUiHoverDetails(safeLocalStorage(), enabled);
   });
 
   // ===== 行情事件 =====

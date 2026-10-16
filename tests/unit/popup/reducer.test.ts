@@ -120,6 +120,17 @@ test('current preferences derive only from domain.boardConfig', () => {
   assert.equal('priceHidden' in state.view, false);
 });
 
+test('hover details default off and only change presentation state', () => {
+  const initial = deepFreeze(createInitialState());
+  assert.equal(initial.view.hoverDetails, false);
+  const enabled = reducer(initial, { type: 'view/hoverDetails', enabled: true });
+  assert.equal(enabled.view.hoverDetails, true);
+  assert.equal(initial.view.hoverDetails, false, 'the previous state stays immutable');
+  assert.equal(enabled.domain, initial.domain, 'presentation preference does not alter user data');
+  const disabled = reducer(enabled, { type: 'view/hoverDetails', enabled: false });
+  assert.equal(disabled.view.hoverDetails, false);
+});
+
 test('reducer replaces authoritative mutation state without mutating input', () => {
   const result = mkMutationResult();
   const frozen = deepFreeze(createInitialState());

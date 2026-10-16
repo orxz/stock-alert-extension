@@ -12,6 +12,7 @@ import { CommandController } from '../../../src/popup/commands/command-controlle
 import { createRpcClientError } from '../../../src/popup/rpc-client.js';
 import type { RpcClient } from '../../../src/popup/rpc-client.js';
 import type { AppViewModel } from '../../../src/popup/view-models.js';
+import { loadUiHoverDetails, UI_HOVER_DETAILS_STORAGE_KEY } from '../../../src/popup/ui-preferences.js';
 
 function mkController(): CommandController {
   return { bootstrap: mock.fn(() => Promise.resolve()), refreshQuotes: mock.fn(() => Promise.resolve()), dialogSearchStocks: mock.fn(() => Promise.resolve()), addStock: mock.fn(() => Promise.resolve()), removeStocks: mock.fn(() => Promise.resolve()), moveStocks: mock.fn(() => Promise.resolve()), setPinned: mock.fn(() => Promise.resolve()), setOrder: mock.fn(() => Promise.resolve()), createGroup: mock.fn(() => Promise.resolve()), renameGroup: mock.fn(() => Promise.resolve()), deleteGroup: mock.fn(() => Promise.resolve()), setGroupOrder: mock.fn(() => Promise.resolve()), patchPreferences: mock.fn(() => Promise.resolve()) } as unknown as CommandController;
@@ -50,6 +51,34 @@ test('stock-pin-request triggers setPinned', () => {
   const { stockApp, controller } = setup();
   stockApp.dispatchEvent(new CustomEvent('stock-pin-request', { bubbles: true, detail: { code: 'sh600519', pinned: true, orderedCodes: ['sh600519'] } }));
   assert.ok((controller.setPinned as unknown as { mock: { callCount: () => number } }).mock.callCount() >= 1);
+});
+
+test('hover details preference persists locally and never sends a business mutation', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); }
+  };
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  const { store, stockApp, controller, shell } = setup();
+  try {
+    const initialDomain = store.getState().domain;
+    for (const enabled of [true, false]) {
+      stockApp.dispatchEvent(new CustomEvent('hover-details-change', { bubbles: true, detail: { enabled } }));
+      assert.equal(store.getState().view.hoverDetails, enabled);
+      assert.equal(stockApp.viewModel.board.hoverDetails, enabled);
+      assert.equal(values.get(UI_HOVER_DETAILS_STORAGE_KEY), String(enabled));
+      const reopened = createInitialState('dark', undefined, loadUiHoverDetails(storage));
+      assert.equal(reopened.view.hoverDetails, enabled, 'a new popup restores the selection');
+      assert.equal(store.getState().domain, initialDomain);
+    }
+    assert.equal((controller.patchPreferences as unknown as { mock: { callCount: () => number } }).mock.callCount(), 0);
+  } finally {
+    shell.destroy();
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  }
 });
 
 // ===== 刷新结果播报：必须反映本次刷新的真实结局 =====

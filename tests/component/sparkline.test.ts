@@ -70,3 +70,65 @@ test('color constants match tokens (--up/--down)', () => {
   assert.equal(CHART_DOWN, '#16c79a');
   assert.equal(CHART_FLAT, '#8a8f98');
 });
+
+test('optional padding keeps extrema and endpoint markers inside the canvas', () => {
+  resetDom();
+  stubCanvas2d();
+  const canvas = document.createElement('canvas');
+  canvas.width = 280;
+  canvas.height = 88;
+  const ctx = canvas.getContext('2d')!;
+  const coords: readonly number[][] = [];
+  const points = coords as number[][];
+  const marks: number[][] = [];
+  const proxy = new Proxy(ctx, { get(target, key) {
+    if (key === 'moveTo' || key === 'lineTo') return (x: number, y: number) => { points.push([x, y]); };
+    if (key === 'fillRect') return (x: number, y: number, w: number, h: number) => { marks.push([x, y, w, h]); };
+    return Reflect.get(target, key);
+  } });
+  Object.defineProperty(canvas, 'getContext', { value: () => proxy });
+  assert.ok(drawSparkline(canvas, [0, 1, 0.5], { padding: 6, endPoint: true }));
+  assert.ok(points.every(([x, y]) => x >= 6 && x <= 274 && y >= 6 && y <= 82), 'max/min curves must not be clipped');
+  assert.equal(marks.length, 1, 'last actual price has a visible endpoint marker');
+  const [x, y, w, h] = marks[0];
+  assert.ok(x >= 0 && y >= 0 && x + w <= 280 && y + h <= 88);
+});
+
+test('hidden high-DPR redraws retain logical dimensions instead of multiplying the backing store', (t) => {
+  resetDom();
+  stubCanvas2d();
+  const previousDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+  Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
+  t.after(() => {
+    if (previousDpr) Object.defineProperty(window, 'devicePixelRatio', previousDpr);
+    else Reflect.deleteProperty(window, 'devicePixelRatio');
+  });
+  const canvas = document.createElement('canvas');
+  let width = 280;
+  let height = 88;
+  Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ width, height }) });
+  drawSparkline(canvas, [0, 0.5, 1]);
+  assert.deepEqual([canvas.width, canvas.height], [560, 176]);
+  width = 0; height = 0; // A display:none tooltip ancestor has no layout box.
+  for (let i = 0; i < 10; i++) drawSparkline(canvas, [0, 0.5, 1]);
+  assert.deepEqual([canvas.width, canvas.height], [560, 176], 'hidden quote updates must not grow the bitmap exponentially');
+  width = 300; height = 100;
+  drawSparkline(canvas, [0, 0.5, 1]);
+  assert.deepEqual([canvas.width, canvas.height], [600, 200], 'the next visible layout still updates its real resolution');
+});
+
+test('an initially hidden index strip uses its original attribute size only once at high DPR', (t) => {
+  resetDom();
+  stubCanvas2d();
+  const previousDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+  Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
+  t.after(() => {
+    if (previousDpr) Object.defineProperty(window, 'devicePixelRatio', previousDpr);
+    else Reflect.deleteProperty(window, 'devicePixelRatio');
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = 36;
+  canvas.height = 18;
+  for (let i = 0; i < 5; i++) drawSparkline(canvas, [0.5, 0.6]);
+  assert.deepEqual([canvas.width, canvas.height], [72, 36]);
+});

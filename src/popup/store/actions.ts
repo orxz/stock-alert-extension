@@ -38,6 +38,7 @@ export type AppAction =
   | { readonly type: 'view/clearSelection' }
   | { readonly type: 'view/theme'; readonly theme: 'dark' | 'light' }
   | { readonly type: 'view/columns'; readonly columns: UiColumnPreferences }
+  | { readonly type: 'view/hoverDetails'; readonly enabled: boolean }
   // 详情面板开关（纯 UI，图表数据由面板组件自治拉取）
   | { readonly type: 'view/detailOpen'; readonly code: StockCode; readonly name: string }
   | { readonly type: 'view/detailClose' }

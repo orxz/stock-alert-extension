@@ -5,9 +5,12 @@ import test from 'node:test';
 import {
   DEFAULT_UI_COLUMNS,
   UI_COLUMNS_STORAGE_KEY,
+  UI_HOVER_DETAILS_STORAGE_KEY,
   loadUiColumns,
+  loadUiHoverDetails,
   normalizeUiColumns,
-  saveUiColumns
+  saveUiColumns,
+  saveUiHoverDetails
 } from '../../../src/popup/ui-preferences.js';
 import type { WebStorageLike } from '../../../src/popup/ui-preferences.js';
 
@@ -125,4 +128,31 @@ test('round-trips through storage', () => {
   });
   saveUiColumns(storage, custom);
   assert.deepEqual(loadUiColumns(storage), custom);
+});
+
+test('hover details stay disabled unless storage explicitly contains true', () => {
+  const storage = memoryStorage();
+  assert.equal(loadUiHoverDetails(storage), false);
+  for (const raw of ['false', '"true"', '1', '{"enabled":true}', '{invalid', '']) {
+    storage.data.set(UI_HOVER_DETAILS_STORAGE_KEY, raw);
+    assert.equal(loadUiHoverDetails(storage), false, raw);
+  }
+  storage.data.set(UI_HOVER_DETAILS_STORAGE_KEY, 'true');
+  assert.equal(loadUiHoverDetails(storage), true);
+  assert.equal(loadUiHoverDetails(memoryStorage('get')), false);
+  assert.equal(loadUiHoverDetails(undefined), false);
+});
+
+test('hover details round-trip independently of column preferences', () => {
+  const storage = memoryStorage();
+  saveUiColumns(storage, DEFAULT_UI_COLUMNS);
+  const columns = storage.data.get(UI_COLUMNS_STORAGE_KEY);
+  saveUiHoverDetails(storage, true);
+  assert.equal(loadUiHoverDetails(storage), true);
+  assert.equal(storage.data.get(UI_HOVER_DETAILS_STORAGE_KEY), 'true');
+  saveUiHoverDetails(storage, false);
+  assert.equal(loadUiHoverDetails(storage), false);
+  assert.equal(storage.data.get(UI_COLUMNS_STORAGE_KEY), columns);
+  assert.doesNotThrow(() => saveUiHoverDetails(memoryStorage('set'), true));
+  assert.doesNotThrow(() => saveUiHoverDetails(undefined, true));
 });

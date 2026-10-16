@@ -6,13 +6,12 @@
 // 架构约束：仅 import domain + view-models + events；per-connection AbortController。
 import type { StockCode, GroupId } from '../../domain/brands.js';
 import type { TrendPoint } from '../../domain/index.js';
-import { buildIndexSparkline } from '../../domain/index.js';
 import { limitPctFor } from '../../domain/limit-rule.js';
 import type { StockCardViewModel } from '../view-models.js';
 import type { ColumnKey } from '../ui-preferences.js';
 import { emitPopupEvent } from './events.js';
-import { applyTooltipFlip, tooltipNeedsFlip } from './detail-tooltip.js';
-import { drawSparkline } from './sparkline.js';
+import { applyTooltipFlip, clearTooltipPosition } from './detail-tooltip.js';
+import { createMiniTrends, renderMiniTrends, setMiniTrendsStatus } from './mini-trends.js';
 
 /**
  * 纯函数：在有序代码列表中将 code 移动 delta 位，返回新数组。
@@ -55,6 +54,11 @@ export class StockCardElement extends HTMLElement {
   /** hover 迷你分时 loader（AppShell 经 stock-board 注入；null = 不显示）。 */
   private _trendsLoader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null = null;
   private _trendsDrawn = false;
+  private _trendsPending = false;
+  private _trendsPoints: readonly TrendPoint[] | null = null;
+  /** 股票或数据源切换后，使旧的异步响应失效。 */
+  private _trendsGeneration = 0;
+  private _hoverDetails = false;
   /** 列设置 enabled 集合（null = 未设置，默认全部显示）。 */
   private _columns: readonly ColumnKey[] | null = null;
 
@@ -90,14 +94,33 @@ export class StockCardElement extends HTMLElement {
   }
 
   set viewModel(value: StockCardViewModel) {
+    if (this._viewModel?.code !== value.code) this.resetMiniTrends();
     this._viewModel = value;
     if (this.isConnected) this.applyViewModel(value);
   }
 
+  get hoverDetails(): boolean {
+    return this._hoverDetails;
+  }
+
+  set hoverDetails(value: boolean) {
+    this._hoverDetails = value;
+    this.toggleAttribute('data-hover-details', value);
+    if (!value) this.clearTooltipFlip();
+  }
+
   /** 注入 hover 迷你分时数据源（AppShell 经 stock-board 递达；换源重置绘制标记）。 */
   setTrendsLoader(loader: ((code: StockCode) => Promise<readonly TrendPoint[]>) | null): void {
+    if (this._trendsLoader === loader) return;
     this._trendsLoader = loader;
+    this.resetMiniTrends();
+  }
+
+  private resetMiniTrends(): void {
+    this._trendsGeneration++;
     this._trendsDrawn = false;
+    this._trendsPending = false;
+    this._trendsPoints = null;
     const canvas = this.querySelector('.detail-mini-trends') as HTMLCanvasElement | null;
     const wrap = canvas?.closest('.detail-mini-wrap') as HTMLElement | null;
     canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
@@ -106,23 +129,41 @@ export class StockCardElement extends HTMLElement {
 
   /** hover 触发：未绘制过则惰性拉取一次并绘制迷你分时（失败重置标记，下次 hover 可重试）。 */
   private ensureMiniTrends(): void {
-    if (this._trendsDrawn || !this._trendsLoader || !this._viewModel) return;
-    this._trendsDrawn = true; // 防 hover 抖动重复请求（仅成功时才保留）
+    if (!this._hoverDetails || !this._viewModel) return;
+    if (this._trendsPoints) { this.paintMiniTrends(); return; }
+    if (this._trendsDrawn || !this._trendsLoader) return;
+    const generation = this._trendsGeneration;
+    this._trendsDrawn = true;
+    this._trendsPending = true;
+    const wrap = this.querySelector<HTMLElement>('.detail-mini-wrap');
+    if (wrap) setMiniTrendsStatus(wrap, 'loading');
+    this.refreshTooltipFlip();
     this._trendsLoader(this._viewModel.code)
       .then((points) => {
-        if (points.length < 2) return;
-        const canvas = this.querySelector('.detail-mini-trends') as HTMLCanvasElement | null;
-        const wrap = canvas?.closest('.detail-mini-wrap') as HTMLElement | null;
-        if (!canvas || !wrap) return;
-        // 委托公共绘制（单一真相）：面积渐变 + 容器实际分辨率 + 中位虚线。
-        if (drawSparkline(canvas, buildIndexSparkline(points), { midline: true })) {
-          wrap.hidden = false;
-        }
+        if (generation !== this._trendsGeneration) return;
+        this._trendsPoints = points.length >= 2 ? points : null;
+        if (this._trendsPoints) this.paintMiniTrends();
+        else if (wrap) setMiniTrendsStatus(wrap, 'empty');
+        this.refreshTooltipFlip();
       })
       .catch(() => {
-        // 失败：重置标记——下次 hover 重新尝试（网络偶发失败不该永久锁死迷你图）。
-        this._trendsDrawn = false;
+        if (generation !== this._trendsGeneration) return;
+        if (wrap) setMiniTrendsStatus(wrap, 'error');
+        this.refreshTooltipFlip();
+      })
+      .finally(() => {
+        if (generation !== this._trendsGeneration) return;
+        this._trendsPending = false;
+        // 离开时请求可能仍在途；失败/空结果落地后重新结算离开状态，允许下次进入重试。
+        if (!this._trendsPoints) this.clearTooltipFlip();
       });
+  }
+
+  private paintMiniTrends(): void {
+    const wrap = this.querySelector<HTMLElement>('.detail-mini-wrap');
+    if (wrap && this._trendsPoints) {
+      renderMiniTrends(wrap, this._trendsPoints, { priceHidden: this._viewModel?.displayPrice === '****' });
+    }
   }
 
   get orderedCodes(): readonly StockCode[] {
@@ -231,17 +272,7 @@ export class StockCardElement extends HTMLElement {
     tooltip.className = 'stock-detail-tooltip';
     tooltip.setAttribute('role', 'tooltip');
 
-    // v2.3 hover 迷你分时图（有数据才显示）。
-    const miniWrap = document.createElement('div');
-    miniWrap.className = 'detail-mini-wrap';
-    miniWrap.hidden = true;
-    const mini = document.createElement('canvas');
-    mini.className = 'detail-mini-trends';
-    mini.width = 148;
-    mini.height = 36;
-    mini.setAttribute('aria-hidden', 'true');
-    miniWrap.append(mini);
-    tooltip.append(miniWrap);
+    tooltip.append(createMiniTrends());
 
     const fields: ReadonlyArray<readonly [string, string]> = [
       ['今开', 'open'],
@@ -335,30 +366,23 @@ export class StockCardElement extends HTMLElement {
     }, { signal });
     this.addEventListener('focusin', () => {
       this.refreshTooltipFlip();
+      this.ensureMiniTrends();
     }, { signal });
     this.addEventListener('focusout', () => {
       this.clearTooltipFlip();
     }, { signal });
   }
 
-  /** 上次计算的翻转结论——mouseover 在卡片内高频触发，同一结论只应用一次。 */
-  private lastFlipApplied: boolean | null = null;
-
   private refreshTooltipFlip(): void {
-    const scroller = this.closest('stock-board') as HTMLElement | null;
-    const tooltip = this.querySelector('.stock-detail-tooltip') as HTMLElement | null;
-    if (!scroller || !tooltip) return;
-    const shouldFlip = tooltipNeedsFlip(tooltip, scroller);
-    if (shouldFlip === this.lastFlipApplied) return;
-    this.lastFlipApplied = shouldFlip;
-    applyTooltipFlip(this, scroller);
+    if (!this._hoverDetails) return;
+    const scroller = this.closest('stock-board');
+    if (scroller) applyTooltipFlip(this, scroller);
   }
 
-  /** 离开卡片/失焦时清理：翻转状态是悬停期装饰，卡片复用前必须复位。 */
   private clearTooltipFlip(): void {
-    this.lastFlipApplied = null;
-    const tooltip = this.querySelector('.stock-detail-tooltip');
-    if (tooltip) tooltip.classList.remove('is-flipped');
+    if (this._hoverDetails && (this.matches(':hover') || this.contains(document.activeElement))) return;
+    clearTooltipPosition(this);
+    if (!this._trendsPending && !this._trendsPoints) this._trendsDrawn = false;
   }
 
   private applyViewModel(vm: StockCardViewModel): void {
@@ -429,6 +453,7 @@ export class StockCardElement extends HTMLElement {
     // 列设置可能先于 viewModel 到达（board 每次 render 都会先推 columns）——
     // 每次应用 viewModel 时同步应用显隐，保证顺序无关。
     this.applyColumns();
+    if (this._trendsPoints) this.paintMiniTrends();
 
     // 悬停详情：16 个可读字段，文本由 view-model 保证（缺失 '--' / 掩码 '****'）。
     const detailValue = (key: string): string => {

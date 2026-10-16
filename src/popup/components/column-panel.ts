@@ -18,6 +18,7 @@ export class ColumnPanelElement extends HTMLElement {
   private skeletonBuilt = false;
   private _viewModel: ColumnPanelViewModel | null = null;
   private listEl: HTMLElement | null = null;
+  private hoverDetailsInput: HTMLInputElement | null = null;
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -48,13 +49,35 @@ export class ColumnPanelElement extends HTMLElement {
   private buildSkeleton(): void {
     this.className = 'column-panel';
     this.setAttribute('role', 'group');
-    this.setAttribute('aria-label', '列设置');
+    this.setAttribute('aria-label', '显示设置');
 
     const listEl = document.createElement('ul');
     listEl.className = 'column-panel-list';
     listEl.setAttribute('data-region', 'column-list');
     this.listEl = listEl;
     this.append(listEl);
+
+    const hoverLabel = document.createElement('label');
+    hoverLabel.className = 'column-panel-hover-setting';
+    const hoverInput = document.createElement('input');
+    hoverInput.type = 'checkbox';
+    hoverInput.className = 'column-panel-checkbox';
+    hoverInput.setAttribute('data-action', 'hover-details');
+    hoverInput.setAttribute('aria-label', '悬停显示详情');
+    hoverInput.setAttribute('aria-describedby', 'hover-details-description');
+    this.hoverDetailsInput = hoverInput;
+
+    const hoverText = document.createElement('span');
+    hoverText.className = 'column-panel-hover-text';
+    const hoverTitle = document.createElement('span');
+    hoverTitle.textContent = '悬停显示详情';
+    const hoverDescription = document.createElement('span');
+    hoverDescription.id = 'hover-details-description';
+    hoverDescription.className = 'column-panel-description';
+    hoverDescription.textContent = '鼠标经过股票时显示指标与迷你走势图';
+    hoverText.append(hoverTitle, hoverDescription);
+    hoverLabel.append(hoverInput, hoverText);
+    this.append(hoverLabel);
   }
 
   private bindEvents(signal: AbortSignal): void {
@@ -71,6 +94,10 @@ export class ColumnPanelElement extends HTMLElement {
 
     this.addEventListener('change', (e: Event) => {
       const target = e.target as HTMLElement;
+      if (target === this.hoverDetailsInput) {
+        emitPopupEvent(this, 'hover-details-change', { enabled: this.hoverDetailsInput.checked });
+        return;
+      }
       const cb = target.closest('input[type="checkbox"][data-column]') as HTMLInputElement | null;
       if (!cb) return;
       const colKey = cb.getAttribute('data-column')!;
@@ -113,6 +140,7 @@ export class ColumnPanelElement extends HTMLElement {
   }
 
   private applyViewModel(vm: ColumnPanelViewModel): void {
+    if (this.hoverDetailsInput) this.hoverDetailsInput.checked = vm.hoverDetails;
     if (!this.listEl) return;
     this.listEl.textContent = '';
 

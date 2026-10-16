@@ -4,12 +4,11 @@
 // 行内 pin/up/down 按钮复用 moveKey helper，与 stock-card 行为一致。
 // 架构约束：仅 import domain + view-models + events + keyed-update；per-connection AbortController。
 import type { StockCode, GroupId, SortField, SortDirection } from '../../domain/index.js';
-import { buildIndexSparkline } from '../../domain/index.js';
 import { limitPctFor } from '../../domain/limit-rule.js';
 import type { StockCardViewModel } from '../view-models.js';
 import { emitPopupEvent } from './events.js';
-import { applyTooltipFlip } from './detail-tooltip.js';
-import { drawSparkline } from './sparkline.js';
+import { applyTooltipFlip, clearTooltipPosition } from './detail-tooltip.js';
+import { createMiniTrends, renderMiniTrends, setMiniTrendsStatus } from './mini-trends.js';
 import { moveKey } from './stock-card.js';
 import { updateKeyedChildren } from './keyed-update.js';
 import { calculateVirtualWindow } from '../virtualization/virtual-window.js';
@@ -151,12 +150,15 @@ export class StockTableElement extends HTMLElement {
   private _columnOrder: readonly string[] = DEFAULT_COLUMN_ORDER;
   private _selectedCodes: readonly StockCode[] = [];
   private _selectionMode = false;
+  private _hoverDetails = false;
   /** 选中集的 Set 视图：逐行 includes() 在 500 行列表上是 O(n·m)。 */
   private _selectedSet: ReadonlySet<StockCode> = new Set();
   /** hover 迷你分时 loader（AppShell 注入；null = 不显示迷你图）。 */
   private _trendsLoader: TrendsLoader | null = null;
-  /** 分时缓存：code → 归一化纵坐标序列（popup 生命周期内不重复拉）。 */
-  private readonly _trendsCache = new Map<string, readonly number[]>();
+  private _trendsGeneration = 0;
+  /** 保留全部分钟点，避免 hover 图丢失盘中尖峰。 */
+  private readonly _trendsCache = new Map<string, readonly TrendPoint[]>();
+  private readonly _trendsPending = new Set<string>();
 
   connectedCallback(): void {
     this.connection?.abort();
@@ -182,6 +184,16 @@ export class StockTableElement extends HTMLElement {
   set viewModel(value: readonly StockCardViewModel[]) {
     this._viewModel = value;
     if (this.isConnected) this.render();
+  }
+
+  get hoverDetails(): boolean {
+    return this._hoverDetails;
+  }
+
+  set hoverDetails(value: boolean) {
+    this._hoverDetails = value;
+    this.toggleAttribute('data-hover-details', value);
+    if (!value) this.clearTooltipFlip();
   }
 
   get groupId(): GroupId {
@@ -242,12 +254,18 @@ export class StockTableElement extends HTMLElement {
 
   /** 注入 hover 迷你分时数据源（AppShell 创建时调用；换源清缓存）。 */
   setTrendsLoader(loader: TrendsLoader | null): void {
+    if (this._trendsLoader === loader) return;
     this._trendsLoader = loader;
+    this._trendsGeneration++;
     this._trendsCache.clear();
+    this._trendsPending.clear();
+    this.clearTooltipFlip();
     // 已挂载的 tooltip canvas 立即清空（数据源已换）。
     for (const canvas of this.querySelectorAll<HTMLCanvasElement>('.detail-mini-trends')) {
       const ctx = canvas.getContext('2d');
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      const wrap = canvas.closest<HTMLElement>('.detail-mini-wrap');
+      if (wrap) wrap.hidden = true;
     }
   }
 
@@ -518,6 +536,14 @@ export class StockTableElement extends HTMLElement {
     this.addEventListener('mouseleave', () => {
       this.clearTooltipFlip();
     }, { signal });
+    this.addEventListener('mouseout', (event) => {
+      const row = (event.target as HTMLElement).closest<HTMLElement>('tr[data-key]');
+      if (!row || (event.relatedTarget instanceof Node && row.contains(event.relatedTarget))) return;
+      if (!row.contains(document.activeElement)) {
+        if (this.lastHoveredRow === row) this.lastHoveredRow = null;
+        clearTooltipPosition(row);
+      }
+    }, { signal });
     // 键盘可达性：focus-within 同样触发浮层，底部行聚焦时也要翻转。
     this.addEventListener('focusin', (e) => {
       const row = (e.target as HTMLElement).closest('tr[data-key]') as HTMLElement | null;
@@ -532,52 +558,64 @@ export class StockTableElement extends HTMLElement {
   private lastHoveredRow: HTMLElement | null = null;
 
   private refreshTooltipFlip(row: HTMLElement): void {
+    if (!this._hoverDetails) return;
+    const scroller = this.closest('stock-board');
+    if (scroller) applyTooltipFlip(row, scroller);
     if (this.lastHoveredRow === row) return;
     this.lastHoveredRow = row;
-    const scroller = this.closest('stock-board') as HTMLElement | null;
-    if (scroller) applyTooltipFlip(row, scroller);
     // v2.3：hover 该行时若分时数据未缓存则惰性拉取（一次；成功后绘制迷你图）。
     const code = row.getAttribute('data-key') as StockCode | null;
-    if (code && !this._trendsCache.has(String(code))) {
-      this.ensureTrends(code);
+    if (code) {
+      if (this._trendsCache.has(String(code))) this.drawMiniTrends(String(code));
+      else this.ensureTrends(code);
     }
   }
 
   /** 惰性拉取分时并绘制该行的迷你曲线（失败不缓存——下次 hover 重试，浮层指标照常）。 */
   private ensureTrends(code: StockCode): void {
-    if (!this._trendsLoader || this._trendsCache.has(String(code))) return;
+    if (!this._trendsLoader || this._trendsCache.has(code) || this._trendsPending.has(code)) return;
+    const generation = this._trendsGeneration;
+    this._trendsPending.add(code);
+    this.showMiniStatus(code, 'loading');
     this._trendsLoader(code)
       .then((points) => {
-        if (points.length < 2) return;
-        this._trendsCache.set(String(code), this.normalizeTrends(points));
-        this.drawMiniTrends(String(code));
+        if (generation !== this._trendsGeneration) return;
+        if (points.length < 2) { this.showMiniStatus(code, 'empty'); return; }
+        this._trendsCache.set(code, points);
+        this.drawMiniTrends(code);
       })
       .catch(() => {
-        /* 分时失败：不写缓存，下次 hover 重试；迷你图暂不显示，指标浮层照常 */
+        if (generation === this._trendsGeneration) this.showMiniStatus(code, 'error');
+      })
+      .finally(() => {
+        if (generation === this._trendsGeneration) this._trendsPending.delete(code);
       });
   }
 
-  /** 归一化分时点纵坐标（委托 domain buildIndexSparkline——单一真相，不重复实现）。 */
-  private normalizeTrends(points: readonly TrendPoint[]): readonly number[] {
-    return buildIndexSparkline(points);
+  private showMiniStatus(code: string, status: 'loading' | 'error' | 'empty'): void {
+    const row = this.querySelector<HTMLElement>(`tr[data-key="${code}"]`);
+    const wrap = row?.querySelector<HTMLElement>('.detail-mini-wrap');
+    if (wrap) setMiniTrendsStatus(wrap, status);
+    const scroller = this.closest('stock-board');
+    if (row && scroller && this._hoverDetails) applyTooltipFlip(row, scroller);
   }
 
-  /** 绘制某行的迷你分时到其 tooltip canvas（委托公共 drawSparkline——单一真相）。 */
   private drawMiniTrends(code: string): void {
-    const seq = this._trendsCache.get(code);
-    if (!seq || seq.length < 2) return;
-    const canvas = this.querySelector(`tr[data-key="${code}"] .detail-mini-trends`) as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const wrap = canvas.closest('.detail-mini-wrap') as HTMLElement | null;
-    if (!wrap) return;
-    if (drawSparkline(canvas, seq, { midline: true })) wrap.hidden = false;
+    const points = this._trendsCache.get(code);
+    const row = this.querySelector<HTMLElement>(`tr[data-key="${code}"]`);
+    const wrap = row?.querySelector<HTMLElement>('.detail-mini-wrap');
+    if (!wrap || !points) return;
+    const vm = this._viewModel.find((item) => item.code === code);
+    renderMiniTrends(wrap, points, { priceHidden: vm?.displayPrice === '****' });
+    const scroller = this.closest('stock-board');
+    if (row && scroller && this._hoverDetails) applyTooltipFlip(row, scroller);
   }
 
-  /** 离开行/失焦时清理：翻转状态是悬停期装饰，行复用给其他股票前必须复位。 */
   private clearTooltipFlip(): void {
     this.lastHoveredRow = null;
-    for (const tooltip of this.querySelectorAll('.stock-detail-tooltip.is-flipped')) {
-      tooltip.classList.remove('is-flipped');
+    for (const row of this.querySelectorAll<HTMLElement>('tr[data-key]')) {
+      if (this._hoverDetails && (row.matches(':hover') || row.contains(document.activeElement))) continue;
+      clearTooltipPosition(row);
     }
   }
 
@@ -742,17 +780,7 @@ export class StockTableElement extends HTMLElement {
     tooltip.className = 'stock-detail-tooltip';
     tooltip.setAttribute('role', 'tooltip');
 
-    // v2.3 hover 迷你分时图（有数据才显示 canvas；无 loader/无数据保持隐藏占位）。
-    const miniWrap = document.createElement('div');
-    miniWrap.className = 'detail-mini-wrap';
-    miniWrap.hidden = true;
-    const mini = document.createElement('canvas');
-    mini.className = 'detail-mini-trends';
-    mini.width = 148;
-    mini.height = 36;
-    mini.setAttribute('aria-hidden', 'true');
-    miniWrap.append(mini);
-    tooltip.append(miniWrap);
+    tooltip.append(createMiniTrends());
 
     const fields: ReadonlyArray<readonly [string, string]> = [
       ['今开', 'open'],
@@ -833,6 +861,7 @@ export class StockTableElement extends HTMLElement {
     }
 
     setText(cell('amount'), vm.displayAmount);
+    if (this._trendsCache.has(vm.code)) this.drawMiniTrends(vm.code);
 
     // 悬停详情：16 个可读字段，文本由 view-model 保证（缺失 '--' / 掩码 '****'）。
     const detailValue = (key: string): string => {

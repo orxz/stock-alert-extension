@@ -310,11 +310,13 @@ export class StockBoardElement extends HTMLElement {
     const view = this.activeView();
     if (!view) return;
     if (this.activeMode === 'list' && this.tableEl) {
+      this.tableEl.hoverDetails = vm.hoverDetails;
       this.tableEl.groupId = vm.groupId;
       this.tableEl.columnOrder = vm.columns;
       this.tableEl.columns = vm.enabledColumns;
       this.tableEl.viewModel = vm.stocks;
     } else if (this.activeMode === 'grid' && this.gridEl) {
+      this.gridEl.hoverDetails = vm.hoverDetails;
       this.gridEl.groupId = vm.groupId;
       this.gridEl.columns = vm.enabledColumns;
       this.gridEl.viewModel = vm.stocks;

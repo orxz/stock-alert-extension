@@ -6,10 +6,14 @@ import '../helpers/dom-environment.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resetDom } from '../helpers/dom-environment.js';
+import { stubCanvas2d } from '../helpers/canvas-stub.js';
 import { spyPopupEvents, type PopupEventSpy } from '../helpers/popup-events.js';
 import { definePopupElements } from '../../src/popup/components/define-elements.js';
 import type { StockCardViewModel } from '../../src/popup/view-models.js';
 import type { StockCode, GroupId } from '../../src/domain/index.js';
+import type { StockCardElement } from '../../src/popup/components/stock-card.js';
+import type { StockGridElement } from '../../src/popup/components/stock-grid.js';
+import type { TrendPoint } from '../../src/domain/index.js';
 
 function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockCardViewModel {
   return {
@@ -44,6 +48,152 @@ function card(code: string, overrides: Partial<StockCardViewModel> = {}): StockC
 
 const ORDERED_CODES: StockCode[] = ['sh600519' as StockCode, 'sz000001' as StockCode];
 const GROUP_ID = 'g_all' as GroupId;
+
+const MINI_TRENDS: readonly TrendPoint[] = [
+  { time: 0, price: 100, avgPrice: 100, high: 100, low: 100, volume: 0, amount: 0, volumeRatio: 0 },
+  { time: 60_000, price: 101, avgPrice: 100.5, high: 101, low: 100, volume: 0, amount: 0, volumeRatio: 0 }
+];
+
+async function settleMiniTrends(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function miniWrap(el: HTMLElement): HTMLElement {
+  const wrap = el.querySelector<HTMLElement>('.detail-mini-wrap');
+  assert.ok(wrap);
+  return wrap;
+}
+
+test('enabled card keyboard focus loads the mini chart', async () => {
+  stubCanvas2d();
+  const { el } = setup(card('sh600519'));
+  const stockCard = el as unknown as StockCardElement;
+  stockCard.hoverDetails = true;
+  let calls = 0;
+  stockCard.setTrendsLoader(async () => { calls++; return MINI_TRENDS; });
+  el.focus();
+  await settleMiniTrends();
+  assert.equal(calls, 1);
+  assert.equal(miniWrap(el).hidden, false);
+});
+
+test('grid refresh preserves an already drawn card mini chart and its request', async () => {
+  stubCanvas2d();
+  resetDom();
+  definePopupElements();
+  const grid = document.createElement('stock-grid') as StockGridElement;
+  grid.hoverDetails = true;
+  let calls = 0;
+  grid.setTrendsLoader(async () => { calls++; return MINI_TRENDS; });
+  grid.viewModel = [card('sh600519')];
+  document.body.append(grid);
+  const stockCard = grid.querySelector<StockCardElement>('stock-card')!;
+  stockCard.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await settleMiniTrends();
+  assert.equal(miniWrap(stockCard).hidden, false);
+  grid.viewModel = [card('sh600519', { displayPrice: '101.00' })];
+  assert.equal(grid.querySelector('stock-card'), stockCard);
+  assert.equal(miniWrap(stockCard).hidden, false, 'ordinary quote updates keep the loaded chart');
+  stockCard.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await settleMiniTrends();
+  assert.equal(calls, 1, 'the unchanged loader does not invalidate cached drawing');
+});
+
+test('changing a card stock clears its mini chart and rejects the previous response', async () => {
+  stubCanvas2d();
+  const { el } = setup(card('sh600519'));
+  const stockCard = el as unknown as StockCardElement;
+  stockCard.hoverDetails = true;
+  const responses = new Map<string, (points: readonly TrendPoint[]) => void>();
+  stockCard.setTrendsLoader((code) => new Promise((resolve) => { responses.set(code, resolve); }));
+  const hover = (): void => { el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); };
+  hover();
+  el.viewModel = card('sz000001');
+  hover();
+  assert.equal(responses.size, 2, 'new stock needs its own request even with the same loader');
+  responses.get('sh600519')!(MINI_TRENDS);
+  await settleMiniTrends();
+  assert.equal(miniWrap(el).dataset.state, 'loading', 'late old-stock response must not replace current loading state');
+  assert.equal(el.querySelector<HTMLCanvasElement>('.detail-mini-trends')!.hidden, true);
+  responses.get('sz000001')!(MINI_TRENDS);
+  await settleMiniTrends();
+  assert.equal(miniWrap(el).hidden, false);
+  el.viewModel = card('sh600519');
+  assert.equal(miniWrap(el).hidden, true, 'reusing a card for another stock clears existing drawing');
+});
+
+test('replacing a card loader discards its previous in-flight response', async () => {
+  stubCanvas2d();
+  const { el } = setup(card('sh600519'));
+  const stockCard = el as unknown as StockCardElement;
+  stockCard.hoverDetails = true;
+  let resolveOld!: (points: readonly TrendPoint[]) => void;
+  let resolveNew!: (points: readonly TrendPoint[]) => void;
+  stockCard.setTrendsLoader(() => new Promise((resolve) => { resolveOld = resolve; }));
+  el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  stockCard.setTrendsLoader(() => new Promise((resolve) => { resolveNew = resolve; }));
+  el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  resolveOld(MINI_TRENDS);
+  await settleMiniTrends();
+  assert.equal(miniWrap(el).dataset.state, 'loading');
+  assert.equal(el.querySelector<HTMLCanvasElement>('.detail-mini-trends')!.hidden, true);
+  resolveNew(MINI_TRENDS);
+  await settleMiniTrends();
+  assert.equal(miniWrap(el).hidden, false);
+});
+
+test('hover details default off and only load after explicitly enabling them', async () => {
+  const { el } = setup(card('sh600519'));
+  const stockCard = el as unknown as StockCardElement;
+  let calls = 0;
+  stockCard.setTrendsLoader(async () => { calls += 1; return []; });
+  const hover = (): void => { el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); };
+  hover();
+  el.dispatchEvent(new Event('focusin', { bubbles: true }));
+  await Promise.resolve();
+  assert.equal(calls, 0, '默认不因悬停或聚焦请求迷你图');
+  assert.equal(stockCard.hoverDetails, false);
+  stockCard.hoverDetails = true;
+  assert.equal(el.hasAttribute('data-hover-details'), true);
+  hover();
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  stockCard.hoverDetails = false;
+  assert.equal(el.hasAttribute('data-hover-details'), false);
+  hover();
+  assert.equal(calls, 1, '关闭后不再请求');
+});
+
+for (const outcome of ['error', 'empty'] as const) {
+  test(`card retries after leaving while its pending mini request ends in ${outcome}`, async () => {
+    stubCanvas2d();
+    const { el } = setup(card('sh600519'));
+    const stockCard = el as unknown as StockCardElement;
+    stockCard.hoverDetails = true;
+    let resolveFirst!: (points: readonly TrendPoint[]) => void;
+    let rejectFirst!: (error: Error) => void;
+    let calls = 0;
+    stockCard.setTrendsLoader(() => {
+      calls++;
+      if (calls > 1) return Promise.resolve(MINI_TRENDS);
+      return new Promise((resolve, reject) => { resolveFirst = resolve; rejectFirst = reject; });
+    });
+    const hover = (): void => { el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); };
+    hover();
+    hover();
+    assert.equal(calls, 1, 'pointer movement must not duplicate a pending request');
+    el.dispatchEvent(new MouseEvent('mouseleave'));
+    if (outcome === 'error') rejectFirst(new Error('offline'));
+    else resolveFirst([]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(miniWrap(el).dataset.state, outcome);
+    hover();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(calls, 2, 'returning after a failed or empty response starts a new request');
+    assert.equal(miniWrap(el).dataset.state, 'ready');
+  });
+}
 
 function setup(vm?: StockCardViewModel): {
   el: HTMLElement & { viewModel: StockCardViewModel; orderedCodes: StockCode[]; groupId: GroupId; columns: string[] | null };
@@ -240,6 +390,7 @@ test('reconnecting the card does not duplicate listeners', () => {
 
 test('hovering the card triggers tooltip flip detection without errors', () => {
   const { el } = setup(card('sh600519'));
+  (el as unknown as StockCardElement).hoverDetails = true;
   assert.doesNotThrow(() => {
     el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     el.dispatchEvent(new Event('focusin', { bubbles: true }));

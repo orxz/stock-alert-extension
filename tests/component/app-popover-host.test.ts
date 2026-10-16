@@ -22,7 +22,8 @@ function columnsVm(): PopoverViewModel {
         { key: 'name', label: '股票', enabled: true },
         { key: 'price', label: '现价', enabled: true }
       ],
-      columnOrder: ['name', 'price']
+      columnOrder: ['name', 'price'],
+      hoverDetails: false
     },
     stockActions: null
   };
@@ -99,7 +100,7 @@ test('accessible name follows the popover kind', () => {
   // 屏幕阅读器会把股票操作菜单读成「列设置」。
   const { el } = setup();
   el.viewModel = columnsVm();
-  assert.equal(panel().getAttribute('aria-label'), '列设置');
+  assert.equal(panel().getAttribute('aria-label'), '显示设置');
   el.viewModel = actionsVm();
   assert.ok(panel().getAttribute('aria-label')?.includes('贵州茅台'));
 });

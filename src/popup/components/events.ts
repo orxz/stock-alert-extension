@@ -33,7 +33,7 @@ export interface PopupEventMap {
    * 否则会回落到「当前分组」，在右键非激活标签时改错分组（右键不激活标签）。
    */
   'dialog-open-request': { readonly kind: 'add-stock' | 'create-group' | 'rename-group' | 'move-stocks' | 'confirm-remove'; readonly groupId?: GroupId };
-  /** 工具栏「列设置」触发；detail 带触发元素 id 以便定位与焦点归还。 */
+  /** 工具栏「显示设置」触发；detail 带触发元素 id 以便定位与焦点归还。 */
   'column-panel-open-request': { readonly anchorId: string };
   /** 行/卡片点击打开详情面板（分时/K线/指标）。 */
   'detail-open-request': { readonly code: StockCode; readonly name: string };
@@ -41,6 +41,8 @@ export interface PopupEventMap {
   'detail-close-request': Record<never, never>;
   /** 列设置面板提交完整的最终态（非增量 patch）。 */
   'column-settings-change': { readonly columns: UiColumnPreferences };
+  /** 展示偏好：是否允许悬停显示详情，不进入 BoardConfig / RPC。 */
+  'hover-details-change': { readonly enabled: boolean };
   /** 请求关闭当前 popover。 */
   'popover-close-request': Record<never, never>;
   /** 行/卡片的 ••• 触发器请求打开该股票的操作菜单。 */

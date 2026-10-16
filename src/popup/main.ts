@@ -9,7 +9,7 @@ import { createInitialState } from './store/state.js';
 import { CallbackRpcClient } from './rpc-client.js';
 import { CommandController } from './commands/command-controller.js';
 import { createAppShell } from './app-shell.js';
-import { loadUiColumns } from './ui-preferences.js';
+import { loadUiColumns, loadUiHoverDetails } from './ui-preferences.js';
 import type { WebStorageLike } from './ui-preferences.js';
 
 /** 隐私模式下访问 localStorage 会抛错。 */
@@ -41,7 +41,8 @@ const rpc = new CallbackRpcClient((message: unknown, cb: (r: unknown) => void) =
   chrome.runtime.sendMessage(message, cb);
 });
 const initialColumns = loadUiColumns(safeStorage());
-const store = createStore(reducer, createInitialState(initialTheme, initialColumns));
+const initialHoverDetails = loadUiHoverDetails(safeStorage());
+const store = createStore(reducer, createInitialState(initialTheme, initialColumns, initialHoverDetails));
 const controller = new CommandController(rpc, store);
 
 const stockApp = document.querySelector<HTMLElement>('#stock-app');

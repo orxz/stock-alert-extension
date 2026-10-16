@@ -110,6 +110,8 @@ export interface BoardViewModel {
   readonly columns: readonly ColumnKey[];
   /** 启用的列集合——列表/卡片视图据此显隐字段。 */
   readonly enabledColumns: readonly ColumnKey[];
+  /** 是否允许鼠标悬停自动显示指标与迷你走势图。 */
+  readonly hoverDetails: boolean;
   readonly loading: boolean;
   readonly error: string | null;
   readonly empty: boolean;
@@ -127,6 +129,7 @@ export interface ColumnConfig {
 export interface ColumnPanelViewModel {
   readonly columns: readonly ColumnConfig[];
   readonly columnOrder: readonly string[];
+  readonly hoverDetails: boolean;
 }
 
 /** 单只股票的操作菜单视图模型（纯数据，含可用性判定）。 */
