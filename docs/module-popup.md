@@ -139,7 +139,7 @@ pending → call → RpcUncertainError → uncertain → bootstrap/confirmed（�
 - **语义事件**：子组件通过 `emitPopupEvent(target, type, detail)` 发出 `CustomEvent`（`bubbles: true, composed: true`），冒泡到 `stock-app` 根，由 `AppShell` 监听并路由。`PopupEventMap` 穷举全部事件：`group-select` / `group-order-request` / `stock-pin-request` / `stock-remove-request` / `stock-order-request` / `batch-move-request` / `view-mode-change` / `preferences-change` / `selection-mode-change` / `stock-toggle-select` / `search-keyword-change` / `dialog-open-request` / `column-panel-open-request` / `dialog-submit` / `dialog-close-request` / `stock-search-select` / `quote-refresh-request`。
 - **AbortController 生命周期**：每个组件持有 per-connection `AbortController`，`connectedCallback` 中 `abort()` 旧连接再建新的，所有 `addEventListener` 传 `{ signal }`，`disconnectedCallback` 后监听器自动清理。
 - **keyed update**：`updateKeyedChildren(container, values, keyOf, create, update)` 用 `data-key` 属性做最小化 DOM diff——按 key 复用已存在节点并 `update`，新增节点 `create` 并 `insertBefore` 维持顺序，未出现在新列表的旧节点 `remove`。列表组件（grid/table/tabs）统一用它。
-- **canvas 图表组件**（v2.2+）：`chart-detail-panel`（详情面板分时/K线，canvas 自绘 + 按容器实际分辨率 + 十字光标）、`sparkline.ts`（迷你走势公共绘制单一真相——面积渐变 + 涨跌色，被 stock-table / stock-card / index-strip 三处复用）、`detail-tooltip.ts`（悬停浮层翻转辅助）；图表数据经 AppShell 注入的 loader 直通 `chart:load` RPC，组件自治 loading/error/data 三态。
+- **canvas 图表组件**（v2.2+）：`chart-detail-panel`（详情面板分时/K线，canvas 自绘 + 按容器实际分辨率 + 十字光标）、`sparkline.ts`（迷你走势公共绘制单一真相——面积渐变 + 涨跌色，被 stock-table / stock-card / index-strip 三处复用）、`mini-trends.ts`（共享悬停图骨架/状态/分钟点/价格掩码）、`detail-tooltip.ts`（浮层 fixed 定位与 Popup 边界约束）；图表数据经 AppShell 注入的 loader 直通 `chart:load` RPC，组件自治 loading/error/data 三态。
 - **无 innerHTML**：所有用户可见文本通过 `textContent` / 文本节点注入，价格掩码改变文本为 `****` 但保留 accessible name；`fresh/cached/missing` 有文本标签。
 
 ### app-shell.ts（应用外壳）
@@ -224,3 +224,9 @@ reducer 对 `confirmed/failed` 也比对 `action.generation`，双重保险。�
 - `prefers-reduced-motion`：动画降级为即时切换。
 - 焦点恢复：`overlay/focusReturnId` 在对话框/面板关闭后恢复原焦点元素；`app-dialog-host` 内置焦点陷阱。
 - 实时区域：`app-live-region` 承载 toast / 状态播报（`aria-live`），看板 `role="region"` 不对整个股票列表使用 `aria-live`，避免过度播报。
+
+### v2.7 展示偏好与生命周期
+
+- 「显示设置 → 悬停显示详情」默认关闭；`uiHoverDetails:v1` 通过 `view.hoverDetails` → selectors → board/table/grid/card 下发，独立于业务存储与 RPC。关闭时 hover/focus 不触发迷你图请求。
+- `chart-detail-panel` 用请求版本隔离标的/周期/关闭后的迟到响应，行情刷新保留选中周期；图例与读数为 DOM，canvas 只画图形。
+- `stock-board` 的 ResizeObserver 更新虚拟视口，离开视图取消待执行焦点任务；`app-popover-host` 保留设置焦点、跟随滚动并在锚点移除后关闭。

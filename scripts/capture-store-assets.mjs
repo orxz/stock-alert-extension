@@ -114,7 +114,7 @@ const SHOTS = [
 ];
 
 /** 宣传图块的功能标签——逐条对应源码中真实存在的能力。 */
-const FEATURE_CHIPS = ['分组看板', '实时行情', '列表 · 网格', '列设置', '价格隐藏'];
+const FEATURE_CHIPS = ['分组看板', '实时行情', '列表 · 网格', '显示设置', '价格隐藏'];
 
 const TAGLINE = '自选股分组 · 实时行情看板 · 数据仅存本地';
 
@@ -263,18 +263,20 @@ async function main() {
     // 关闭过渡/动画，保证像素确定（确定性素材便于 review diff）。
     await page.addStyleTag({ content: '* { transition: none !important; animation: none !important; }' });
 
-    // 1) 先取三张真实 popup 截图（内存中，不落盘）。
+    // 1) 先取三张真实 popup 截图，同时刷新 README 使用的原始界面图。
     const popupShots = {};
+    const docFiles = { grid: 'screenshot2-grid.png', list: 'screenshot1-list.png', add: 'screenshot3-add.png' };
     for (const shot of SHOTS) {
       if (shot.preAction === 'toggleList') {
-        await page.locator('[data-action="view-list"]').first().click().catch(() => {});
+        await page.locator('[data-action="view-list"]').first().click();
       }
       if (shot.preAction === 'openAddDialog') {
-        await page.locator('[data-action="add-stock"]').first().click().catch(() => {});
+        await page.locator('[data-action="add-stock"]').first().click();
       }
       await page.waitForTimeout(350);
-      popupShots[shot.key] =
-        'data:image/png;base64,' + (await page.screenshot()).toString('base64');
+      const popupImage = await page.screenshot();
+      popupShots[shot.key] = 'data:image/png;base64,' + popupImage.toString('base64');
+      await writeFile(join(ROOT, 'docs/screenshots', docFiles[shot.key]), popupImage);
     }
 
     // 2) 合成到商店画布。stage 页不需要扩展权限，用普通空白页即可。

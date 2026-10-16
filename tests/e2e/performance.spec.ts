@@ -7,15 +7,12 @@
 //   p95(selectorMs)     ≤ 100ms
 //   p95(domUpdateMs)    ≤ 100ms
 //
-// 沙箱说明：Chrome MV3 扩展在无头沙箱下无法加载，测试条件跳过。
+// 发布门禁始终运行；浏览器不可用必须失败，不能把未执行当作验收通过。
 // 本测试需要 `npm run test:performance --project=performance`。
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { launchBuiltExtension, stock, baseSeed } from './extension-fixture.js';
-
-const SKIP_REASON = 'performance gate needs a Chrome build with --load-extension (skipped in sandbox/headless-no-ext)';
-const canRunPerf = !process.env.CI || process.env.RUN_PERF === '1';
 
 /** 加载容量夹具（20 组 / 500 股）。 */
 function loadCapacitySeed(): Record<string, unknown> {
@@ -117,8 +114,6 @@ async function measureOnce(seed: Record<string, unknown>): Promise<{
 }
 
 test.describe.configure({ mode: 'serial' });
-
-test.skip(!canRunPerf, SKIP_REASON);
 
 test('p95 bootstrap ≤200ms / interactive ≤500ms / selector ≤100ms / domUpdate ≤80ms + bounded nodes (20 groups / 500 stocks)', async () => {
   test.setTimeout(60_000);

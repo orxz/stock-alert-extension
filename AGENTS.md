@@ -1,4 +1,4 @@
-# AGENTS.md — 股票提醒助手（Chrome 扩展，Manifest V3，v2.6.0 TypeScript/ESM）
+# AGENTS.md — 股票提醒助手（Chrome 扩展，Manifest V3，v2.7.0 TypeScript/ESM）
 
 新会话从本文件起步。本文档是 **Qoder / 通用 Agent** 的入口，也是**开发规范（核心边界 / 不变量 / 风险路由 / 命令面 / 验证纪律）的唯一权威**；整体架构概览（分层图 / 数据流）见 [docs/项目架构.md](docs/项目架构.md)；Claude Code 用户入口见 [CLAUDE.md](CLAUDE.md)。
 

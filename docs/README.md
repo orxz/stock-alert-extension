@@ -59,6 +59,7 @@ stock-alert-extension/
 |------|------|
 | [branch-protection.md](branch-protection.md) | 分支保护策略 |
 | [multi-browser-publishing.md](multi-browser-publishing.md) | Edge / Chromium 系跨浏览器上架流程 |
+| [release/RELEASE-v2.7.0.md](release/RELEASE-v2.7.0.md) | v2.7.0 图表交互与可选悬停详情发布验收 |
 | [release/](release/) | 发布说明快照（`RELEASE-vX.Y.Z.md`），完整流水见根目录 CHANGELOG.md |
 | [design-v1.1.0-multi-market.md](design-v1.1.0-multi-market.md) | 历史设计快照（v1.1.0 多市场支持，归档参考） |
 

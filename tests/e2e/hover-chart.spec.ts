@@ -313,3 +313,43 @@ test('a chart request failing after pointer exit can recover on the next hover',
     await launched.close();
   }
 });
+
+test('focused card tooltip follows scrolling without covering its anchor', async () => {
+  const launched = await launchBuiltExtension({ offline: true, seed: baseSeed({
+    boardConfig: gridBoardConfig(),
+    watchlist: Array.from({ length: 30 }, (_, i) => stock(`sh${600000 + i}`, i))
+  }) });
+  try {
+    const { page } = launched;
+    await page.setViewportSize({ width: 420, height: 560 });
+    await installLoader(page);
+    await setHoverDetails(page, true);
+    const card = page.locator('stock-card[data-key="sh600004"]');
+    await card.focus();
+    const tooltip = card.locator('.stock-detail-tooltip');
+    await expectMiniChart(tooltip);
+    await expectStable(tooltip);
+    const initial = (await tooltip.boundingBox())!;
+    await page.locator('stock-board').evaluate((element) => { element.scrollTop += 35; });
+    await expect(card).toBeFocused();
+    await expect.poll(async () => (await tooltip.boundingBox())!.y).toBeCloseTo(initial.y - 35, 0);
+    const anchor = (await card.boundingBox())!;
+    const bounds = (await tooltip.boundingBox())!;
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(anchor.y - 4);
+    await expectWithinPopup(tooltip);
+    // Hover takes priority over focus. The hidden focus tooltip must reposition
+    // when pointer exit reveals it after scrolling another card.
+    const adjacent = page.locator('stock-card[data-key="sh600005"]');
+    await adjacent.hover({ position: { x: 20, y: 20 } });
+    await expect(tooltip).toBeHidden();
+    await page.locator('stock-board').evaluate(async (element) => {
+      element.scrollTop += 20;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+    await page.mouse.move(405, 20);
+    await expect(card).toBeFocused();
+    await expect(tooltip).toBeVisible();
+    await expect.poll(async () => (await tooltip.boundingBox())!.y).toBeCloseTo(initial.y - 55, 0);
+    expect(launched.errors).toEqual([]);
+  } finally { await launched.close(); }
+});

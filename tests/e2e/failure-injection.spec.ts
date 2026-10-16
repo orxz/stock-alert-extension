@@ -4,14 +4,9 @@
 // SW 终止、Router 双完成尝试、Popup 关闭中断 RPC、渲染异常等场景。
 // 断言：可恢复的 UI/状态、精确一次诊断、未来 Alarm 存在、无伪造行情。
 //
-// 沙箱说明：Chrome MV3 扩展在无头沙箱下无法加载，测试条件跳过。
+// 发布门禁始终运行；浏览器不可用必须失败，不能把未执行当作验收通过。
 import { expect, test } from '@playwright/test';
 import { launchBuiltExtension, stock, cache, baseSeed, getStorage } from './extension-fixture.js';
-
-const SKIP_REASON = 'failure-injection needs a Chrome build with --load-extension (skipped in sandbox/headless-no-ext)';
-const canRunFailure = !process.env.CI || process.env.RUN_FAILURE === '1';
-
-test.skip(!canRunFailure, SKIP_REASON);
 
 // ===== 1. local-storage get/set/remove 拒绝 =====
 test('storage.local.get rejection leaves popup in recoverable state', async () => {

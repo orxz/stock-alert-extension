@@ -8,6 +8,7 @@ import type { BoardViewModel } from '../view-models.js';
 import type { StockCode } from '../../domain/brands.js';
 import type { TrendPoint } from '../../domain/index.js';
 import { emitPopupEvent } from './events.js';
+import { applyTooltipFlip } from './detail-tooltip.js';
 import './stock-grid.js';
 import './stock-table.js';
 import type { StockGridElement } from './stock-grid.js';
@@ -70,6 +71,13 @@ export class StockBoardElement extends HTMLElement {
       () => this.flushViewport()
     );
     this.addEventListener('scroll', () => this.scheduler?.schedule(), { signal, passive: true });
+    this.addEventListener('mouseout', (event) => {
+      if (!this._viewModel?.hoverDetails || !(event.target instanceof Element)) return;
+      const from = event.target.closest('stock-card, .stock-table-row');
+      const to = event.relatedTarget instanceof Element ? event.relatedTarget.closest('stock-card, .stock-table-row') : null;
+      // 悬停优先项离开后，CSS 可能恢复另一张焦点卡片的浮层；下一帧按新显隐状态定位。
+      if (from && from !== to) this.scheduler?.schedule();
+    }, { signal });
     this.emptyEl?.querySelector('[data-action="empty-add-stock"]')?.addEventListener('click', () => {
       emitPopupEvent(this, 'dialog-open-request', { kind: 'add-stock' });
     }, { signal });
@@ -247,6 +255,10 @@ export class StockBoardElement extends HTMLElement {
       scrollOffset: Math.max(0, top - headerOffset),
       viewportExtent: this.clientHeight || FALLBACK_VIEWPORT_EXTENT
     };
+    // 等虚拟窗口完成节点移动/移除后再测量，fixed 浮层才能跟随最终锚点位置。
+    for (const anchor of this.querySelectorAll<HTMLElement>(
+      'stock-card[data-hover-details]:is(:hover, :focus-within), stock-table[data-hover-details] .stock-table-row:is(:hover, :focus-within)'
+    )) applyTooltipFlip(anchor, this);
   }
 
   /**

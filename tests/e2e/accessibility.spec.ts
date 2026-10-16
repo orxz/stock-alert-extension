@@ -3,16 +3,10 @@
 // 覆盖所有关键 UI 状态（empty/grid/list/add-dialog/group-dialog/move-dialog/error），
 // 测量主交互元素的 getBoundingClientRect 并要求 ≥44px，计算前景/背景对比度 ≥4.5/3。
 //
-// 沙箱环境说明：Chrome MV3 扩展测试需要 --load-extension 权限。若环境不支持
-// （如 CI 无头无扩展），测试将通过 SKIP_REASON 条件跳过。
+// 发布门禁始终运行；浏览器不可用必须失败，不能把未执行当作验收通过。
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { launchBuiltExtension, stock, baseSeed, CODES, cache, type LaunchedExtension } from './extension-fixture.js';
-
-const SKIP_REASON = 'axe scan needs a Chrome build with --load-extension (skipped in sandbox/headless-no-ext)';
-
-// CI 无头模式下加载扩展可能失败；仅在明确请求时运行（或本地有头）。
-const canRunA11y = !process.env.CI || process.env.RUN_A11Y === '1';
 
 /** 进入指定 UI 状态的辅助函数。 */
 async function enterState(launched: LaunchedExtension, state: string): Promise<void> {
@@ -86,7 +80,6 @@ const STATES = ['empty', 'grid', 'list', 'add-dialog', 'group-dialog', 'move-dia
 
 // ===== axe-core 无严重违规扫描 =====
 for (const state of STATES) {
-  test.skip(!canRunA11y, SKIP_REASON);
   test(`axe has no critical/serious violation in ${state}`, async () => {
     const needsStocks = ['grid', 'list', 'move-dialog'].includes(state);
     const launched = await launchBuiltExtension({
@@ -113,7 +106,6 @@ for (const state of STATES) {
 }
 
 // ===== 浅色主题 axe 扫描：切换主题后再扫描，确保双主题均无 critical/serious 违规 =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('axe has no critical/serious violation in light theme (grid)', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
@@ -144,7 +136,6 @@ test('axe has no critical/serious violation in light theme (grid)', async () => 
 });
 
 // ===== 键盘旅程：Tab 焦点循环 =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('keyboard Tab journey reaches all primary controls without mouse', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
@@ -173,7 +164,6 @@ test('keyboard Tab journey reaches all primary controls without mouse', async ()
 });
 
 // ===== 键盘旅程：对话框 Escape 关闭并恢复焦点 =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('Escape closes add-stock dialog and restores focus', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
@@ -197,7 +187,6 @@ test('Escape closes add-stock dialog and restores focus', async () => {
 });
 
 // ===== 触控目标尺寸：主交互元素 ≥44px =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('primary interactive elements meet 44px touch target', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
@@ -274,7 +263,6 @@ test('primary interactive elements meet 44px touch target', async () => {
 });
 
 // ===== 对比度：前景/背景计算 ≥4.5(普通文本) / ≥3(大文本/UI) =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('text and UI boundaries meet WCAG contrast ratios', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
@@ -339,7 +327,6 @@ test('text and UI boundaries meet WCAG contrast ratios', async () => {
 });
 
 // ===== 缩放：90%/100%/125%/150% 主控件不被裁切 =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('page zoom 90-150% does not clip primary controls', async () => {
   const launched = await launchBuiltExtension({
     offline: true,
@@ -364,7 +351,6 @@ test('page zoom 90-150% does not clip primary controls', async () => {
 });
 
 // ===== reduced-motion 偏好 =====
-test.skip(!canRunA11y, SKIP_REASON);
 test('reduced motion preference disables animations', async () => {
   const launched = await launchBuiltExtension({
     offline: true,

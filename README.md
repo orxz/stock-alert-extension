@@ -3,7 +3,7 @@
 [![CI](https://github.com/orxz/stock-alert-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/ci.yml)
 [![Release](https://github.com/orxz/stock-alert-extension/actions/workflows/release.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/release.yml)
 [![CodeQL](https://github.com/orxz/stock-alert-extension/actions/workflows/codeql.yml/badge.svg)](https://github.com/orxz/stock-alert-extension/actions/workflows/codeql.yml)
-[![Version](https://img.shields.io/badge/version-v2.6.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.6.0)
+[![Version](https://img.shields.io/badge/version-v2.7.0-blue)](https://github.com/orxz/stock-alert-extension/releases/tag/v2.7.0)
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-orange)](extension/manifest.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -30,12 +30,12 @@ A 股自选股看板 Chrome 扩展：大盘指数条、分组管理、实时行�
 ### Chrome 商店（推荐）
 
 <a href="https://chromewebstore.google.com/detail/fmaalgiagnaeihdeninmdmohleangggh" target="_blank">
-  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-v2.6.0-blue?logo=google-chrome" alt="Chrome Web Store">
+  <img src="https://img.shields.io/badge/Chrome%20Web%20Store-安装-blue?logo=google-chrome" alt="Chrome Web Store">
 </a>
 
 ### 开发者模式
 
-1. 下载发行包 `stock-alert-extension-v2.6.0.zip` 并解压
+1. 下载发行包 `stock-alert-extension-v2.7.0.zip` 并解压
 2. 打开 `chrome://extensions`，启用「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压目录
 
@@ -55,9 +55,9 @@ A 股自选股看板 Chrome 扩展：大盘指数条、分组管理、实时行�
 |------|------|
 | 切换网格 / 列表 | 工具栏视图按钮 |
 | 排序 | 工具栏下拉，或列表视图点击列标题 |
-| 置顶 / 拖拽排序 | 点击卡片或行；非批量模式下拖拽 |
+| 置顶 / 拖拽排序 | 行 / 卡片的「⋯」菜单 → 置顶；非批量模式下拖拽 |
 | 重命名 / 删除分组 | 右键分组名称 |
-| 自定义列 | 工具栏 ⚙（勾选 + 拖拽调序） |
+| 自定义列 | 工具栏「显示设置」（勾选 + ↑↓ 调序） |
 | 隐藏价格 | 工具栏 👁 |
 | 手动刷新 | 底部状态栏 🔄 |
 | 看分时 / K线 | 点击任意股票行 / 卡片 / 指数条 |
@@ -77,6 +77,7 @@ A 股自选股看板 Chrome 扩展：大盘指数条、分组管理、实时行�
 
 | 版本 | 要点 |
 |------|------|
+| **v2.7.0** | 悬停详情默认关闭，可在显示设置开启；完整分时/K线图表与键盘读数、清晰迷你分时；修复虚拟布局和弹层焦点/定位 |
 | **v2.6.0** | 大盘指数条（上证/深成/创业板/科创50 + 迷你走势，点击进详情）；指数可进自选；详情面板分时 + 日/周/月K线（量能副图、十字光标、MA 均线，canvas 自绘零依赖）；hover 迷你分时；涨跌停规则推导（真值优先 + 板块幅度归一）；技术债清偿（迷你图绘制单一真相） |
 | **v2.0.1** | 列设置修复（排序/卡片视图生效/取消弹回）、详情面板丰富（5→16 项双栏）、「多选」改名「管理持仓」、成交额以亿为主、行情字段扩展（换手率/振幅/量比/市盈率/市净率/市值/涨跌停）；实网核对修正东财 f51/f52 非涨跌停，备源改为腾讯 |
 | **v2.0.0** | 基础架构重建：TypeScript + 原生 ESM + Light DOM Web Components；单一 StorageCoordinator 串行临界区 + 内容 revision 乐观并发；版本化 RPC v2（requestId / expectedRevision / 结构化错误）；可重试初始化屏障 + 持久化退避；不可变 Store + 语义 Commands + uncertain 对账；架构边界 / 无障碍 / 性能 / 容量门禁 |
